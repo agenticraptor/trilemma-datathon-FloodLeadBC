@@ -6,11 +6,13 @@ Every material external input has known provenance and documented usage rights, 
 
 | # | Source | Role | Freshness | Licence | Light |
 |---|---|---|---|---|---|
-| 1 | ECCC real-time hydrometric | Core feature + ground truth | ~5-min observations, pushed by AMQP | OGL – Canada | 🟢 |
+| 1 | ECCC real-time hydrometric (Datamart hourly CSV) | Core feature + ground truth (BC gauges) | 5-min observations; files refreshed hourly, ~1 h behind real time | OGL – Canada | 🟢 |
 | 2 | ECCC historical daily hydrometric | Training history | Daily, decades | OGL – Canada | 🟢 |
 | 3 | ECCC MSC HRDPS precipitation | Model feature | 4 runs/day | ECCC Data Servers End-use Licence | 🟢 |
 | 4 | BC River Forecast Centre advisories, CLEVER/COFFEE | Scoring baseline only | Irregular | Province of BC website terms (pending) | 🟡 |
 | 5 | Google Flood Hub | Scoring baseline only | Daily | Google terms (pending) | 🟡 |
+| 6 | USGS water data (Nooksack and Sumas gauges, Washington) | Core feature + ground truth (the river that floods Sumas Prairie) | 15-min, ~45 min behind; history since 2004–2007 | US public domain | 🟢 |
+| 7 | NOAA NWS National Water Prediction Service (official forecasts, flood stages) | Official baseline + official thresholds | Forecast issued ~daily, 6-hourly points to 7 days | US public domain (NWS) | 🟢 |
 
 Yellow sources are never core dependencies. If their terms do not allow the intended use, we only link to them and compare against what any member of the public can see.
 
@@ -21,7 +23,7 @@ Yellow sources are never core dependencies. If their terms do not allow the inte
   url: https://open.canada.ca/data/dataset/65d3a88b-eb09-4fd9-ac44-cf42dc1f7444
   license: OGL-Canada-2.0
   license_url: https://open.canada.ca/en/open-government-licence-canada
-  access_method: AMQP (dd.weather.gc.ca, topic hydrometric.csv.#), HTTPS CSV, OGC API (api.weather.gc.ca)
+  access_method: HTTPS polling of Datamart hourly and 30-day CSVs (dd.weather.gc.ca/today/hydrometric/csv/BC/), OGC API (api.weather.gc.ca) for station metadata and daily history
   commercial_use: true
   redistribution: true
   attribution_required: true
@@ -74,6 +76,35 @@ Yellow sources are never core dependencies. If their terms do not allow the inte
   share_alike: false
   terms_reviewed: pending
   notes: Baseline only, at gauges it covers.
+
+- source: USGS water data (instantaneous and daily values)
+  url: https://api.waterdata.usgs.gov/ogcapi/v0/
+  license: US Public Domain
+  license_url: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+  access_method: USGS Water Data OGC API (continuous, daily); legacy waterservices.usgs.gov NWIS as fallback
+  commercial_use: true
+  redistribution: true
+  attribution_required: false   # credit requested: "U.S. Geological Survey"
+  share_alike: false
+  terms_reviewed: 2026-10-07
+  notes: >-
+    "USGS-authored or produced data and information are considered to be in the U.S. Public Domain."
+    Recent values are provisional (qualifier P) and may be revised; store revisions.
+
+- source: NOAA NWS National Water Prediction Service (NWPS) gauges, forecasts and flood categories
+  url: https://api.water.noaa.gov/nwps/v1/
+  license: US Public Domain (NWS)
+  license_url: https://www.weather.gov/disclaimer
+  access_method: NWPS REST API (gauges/{lid}, gauges/{lid}/stageflow)
+  commercial_use: true
+  redistribution: true
+  attribution_required: true    # credit NOAA/NWS; required by our own honesty rules
+  share_alike: false
+  terms_reviewed: 2026-10-07
+  notes: >-
+    Public domain "unless specifically noted otherwise". Conditions: do not claim it as our own,
+    do not imply NOAA/NWS endorsement or affiliation, do not modify it and present it as official,
+    do not use NWS logos. We show official forecasts unmodified and clearly labelled, next to ours.
 ```
 
 ## Freshness and lineage
@@ -112,4 +143,4 @@ No personal data ever enters the public ledger.
 
 ## Attribution
 
-Contains information licensed under the Open Government Licence – Canada. Contains data from Environment and Climate Change Canada.
+Contains information licensed under the Open Government Licence – Canada. Contains data from Environment and Climate Change Canada. Credit: U.S. Geological Survey. Official forecasts and flood categories: NOAA National Weather Service (not affiliated with or endorsed by NOAA/NWS).

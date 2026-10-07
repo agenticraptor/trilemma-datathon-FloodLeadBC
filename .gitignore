@@ -1,3 +1,7 @@
 evidence/08*.json
 __pycache__/
 .env
+data/
+spool/
+.venv/
+*.pyc
