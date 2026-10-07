@@ -29,23 +29,24 @@ data_architecture:
     - ECCC Datamart 30-day CSVs (backfill) and ECCC OGC API hydrometric-stations (station metadata only;
       its real-time collection is ~4 h behind)
     - USGS Water Data OGC API v1 (continuous 15-min stage 00065 and discharge 00060, 10 Nooksack/Sumas sites)
+    - USGS legacy NWIS IV (history backfill 2004-10 onward, and live fallback while the keyless OGC quota is exhausted)
     - NOAA NWS NWPS (official forecasts for NRKW1/NKSW1, flood categories for 6 gauges)
     - planned, not yet ingested: ECCC HRDPS precipitation (GRIB2), ECCC historical daily (HYDAT), BC RFC advisory level
   volume:
-    realtime_eccc: 429 hourly files rewritten every ~30 min (observed 20:31 and 21:01 UTC); ~235k rows/day
+    realtime_eccc: 429 hourly files rewritten every 30 min (Last-Modified ~:01/~:31, visible 2-6 min later); ~227k rows/day measured (4,634-4,700 rows per refresh)
       (estimate: 429 stations x 288 five-minute rows x ~1.9 params)
     realtime_usgs: 10 sites x 96 x 2 params ~= 1.9k rows/day
     official_forecasts: 29 points (NRKW1) + 40 (NKSW1) per issuance, about daily
     stored_oct7: 7.37M observation rows (6.93M ECCC incl. 30-day backfill, 0.44M USGS so far), 2.0 GB incl. indexes
       (~286 B/row)
     archive_oct7: gzip payloads, ECCC CSV compresses ~15x (21.0 MB -> 1.41 MB)
-    growth_per_day: see the AC-12 table in the Stage 1 doc (database + archive, measured over the first live hours)
+    growth_per_day: ~113 MB/day disk (archive ~48 MB + database ~65 MB, estimate from a 25-min steady-state window); WAL ~14 GB/day of writes (recycled); stored_oct7_end: 15.1M rows, 4.7 GB DB, 65 MB archive (2,115 files)
   freshness (measured Oct 7):
     eccc: newest row 22-47 min old just after a rewrite, 107 min worst case before the next; station-lag p50 ~49 min
-    usgs: 14-52 min
+    usgs: 14-52 min (OGC API v1; NWIS IV fallback when the keyless OGC quota is exhausted)
     nwps: forecasts issued ~daily (15:36 UTC on Oct 7); observed series ~37 min
   ingestion: >-
-    One Python scheduler container polls ECCC every 10 min (:03/:13/...; only changed files, If-Modified-Since),
+    One Python scheduler container polls ECCC every 5 min (:02/:07/...; only changed files, If-Modified-Since, plus a probe file when the listing looks stale),
     USGS every 15 min (rolling 6 h window), NWPS every 30 min, station metadata daily. At most 4 parallel requests
     per source. USGS keyless limit is 1,000 requests/hour per IP; backfills are paced to <= 500/h and honour
     Retry-After. Set-based idempotent upserts (COPY to staging), revision capture, out-of-order guard on

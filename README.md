@@ -124,7 +124,7 @@ Every material input has documented rights below. Full records live in [`data-co
   url: https://open.canada.ca/data/dataset/65d3a88b-eb09-4fd9-ac44-cf42dc1f7444
   license: OGL-Canada-2.0
   license_url: https://open.canada.ca/en/open-government-licence-canada
-  access_method: HTTPS polling of Datamart CSVs every 10 min with conditional GETs (dd.weather.gc.ca/today/hydrometric/csv/BC/) + OGC API for station metadata
+  access_method: HTTPS polling of Datamart CSVs every 5 min with conditional GETs (dd.weather.gc.ca/today/hydrometric/csv/BC/) + OGC API for station metadata
   commercial_use: true
   redistribution: true
   attribution_required: true
@@ -162,7 +162,7 @@ Every material input has documented rights below. Full records live in [`data-co
 
 ```text
 ECCC Datamart (BC) · USGS Water Data (Nooksack, Sumas) · NOAA NWPS (official forecasts)
-        │  HTTPS polling: every 10 / 15 / 30 min
+        │  HTTPS polling: every 5 / 15 / 30 min
         ▼
   Ingestor (dedupe, schema checks) ──► Raw archive (gzip + sha256, read-only, VM disk in Toronto)
         │

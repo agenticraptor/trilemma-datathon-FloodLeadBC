@@ -234,12 +234,14 @@ def live_sites(meta: dict[tuple[str, str], Series], now: datetime) -> list[str]:
 
 
 def ingest_live_nwis(pool: ConnectionPool, conn: psycopg.Connection, c: httpx.Client, run: store.Run,
-                     start: datetime, end: datetime, reason: str) -> None:
-    """Fallback for live ingestion while the OGC API is rate-limited: one NWIS IV request for all live sites."""
+                     start: datetime, end: datetime, reason: str, sites: list[str] | None = None) -> None:
+    """Fallback for live ingestion while the OGC API is rate-limited: one NWIS IV request for the given
+    sites (default: all live sites from the newest archived metadata)."""
     s = get_settings()
     meta, meta_src = archived_series_metadata(conn, s.archive_dir)
-    sites = live_sites(meta, end)
-    run.items_total = len(sites)
+    if sites is None:
+        sites = live_sites(meta, end)
+        run.items_total = len(sites)
     f = http.fetch(c, NWIS_IV_URL, params={
         "format": "json", "sites": ",".join(sites), "parameterCd": ",".join(PARAMS), "siteStatus": "all",
         "startDT": f"{start:%Y-%m-%dT%H:%MZ}", "endDT": f"{end:%Y-%m-%dT%H:%MZ}",
@@ -253,8 +255,8 @@ def ingest_live_nwis(pool: ConnectionPool, conn: psycopg.Connection, c: httpx.Cl
         return rows
 
     ingest.process_payload(conn, run, SOURCE, f"nwis-iv_live_{end:%Y%m%dT%H%M}", f, parse)
-    run.details = {"api": "nwis-iv (fallback)", "reason": reason, "sites": sites,
-                   "sites_with_data": box[0] if box else 0, "metadata_raw_object_id": meta_src}
+    run.details["nwis_fallback"] = {"reason": reason, "sites": sites, "sites_with_data": box[0] if box else 0,
+                                    "metadata_raw_object_id": meta_src}
 
 
 def ingest_live(pool: ConnectionPool, hours: int = 6) -> int:
@@ -268,6 +270,7 @@ def ingest_live(pool: ConnectionPool, hours: int = 6) -> int:
                 mf, meta = fetch_series_metadata(c, list(SITES))
             except http.RateLimited as e:
                 _note_rate_limited(e)
+                run.details = {"api": "nwis-iv (fallback)"}
                 ingest_live_nwis(pool, conn, c, run, now - timedelta(hours=hours), now,
                                  f"OGC API rate-limited (retry after {e.retry_after_s} s)")
                 return run.run_id
@@ -293,6 +296,7 @@ def ingest_live(pool: ConnectionPool, hours: int = 6) -> int:
                         run.items_fetched += sub.items_fetched
                         run.rows.add(sub.rows)
 
+            limited_sites: list[str] = []
             with ThreadPoolExecutor(max_workers=s.http_max_parallel) as ex:
                 futs = {ex.submit(work, site): site for site in sites}
                 for fut in as_completed(futs):
@@ -301,9 +305,18 @@ def ingest_live(pool: ConnectionPool, hours: int = 6) -> int:
                     except http.RateLimited as e:
                         limited.append(e)
                         _note_rate_limited(e)
-                        run.fail(futs[fut], e)
+                        limited_sites.append(futs[fut])
                     except Exception as e:  # noqa: BLE001 - one site never stops the others
                         run.fail(futs[fut], e)
+            if limited_sites:
+                # Sites the OGC API refused mid-run get one NWIS IV request in the same run.
+                try:
+                    ingest_live_nwis(pool, conn, c, run, start, now,
+                                     f"OGC API rate-limited mid-run (retry after {limited[0].retry_after_s} s)",
+                                     sites=sorted(limited_sites))
+                except Exception as e:  # noqa: BLE001 - record each site as failed
+                    for site in limited_sites:
+                        run.fail(site, e)
             return run.run_id
 
 

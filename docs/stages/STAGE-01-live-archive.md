@@ -6,9 +6,9 @@
 |---|---|
 | Branch | `stage-01-live-archive` |
 | Started | 2026-10-07 13:34 PT |
-| Finished | (fill at end) |
+| Finished | 2026-10-07 15:45 PT |
 | Prompt | `docs/build/prompts/STAGE-01-live-archive.md` |
-| Status | in progress |
+| Status | ready for QA |
 
 ## Goal
 
@@ -351,6 +351,10 @@ Every raw payload is archived immutably on local disk with its sha256. The ECCC 
     - 12214500 flow 170,894 from 2011-01-14; level 67,934 from 2022-10-28
   - Every site's newest row is between 21:00 and 21:45Z on Oct 7.
 - `15:13` — Steady-state baseline for growth (no backfill running) at 22:13:19: WAL LSN `2/1A259750`, `pg_database_size` 4,678,573,079 B, `hypertable_size` 4,627,062,784 B, archive 65,414,338 B, `/` used 20,084,744,192 B of 102,888,095,744 B.
+- `15:24` — AC-1 captured (public health green). AC-10: ruff clean, `pytest -q` 44 passed. AC-11: 10 commits on the branch, all touching this doc; 20 decisions.
+- `15:27` — **Real revision captured.** `observation_revisions` went from 2 to 733 at 22:08 (run 75). All 731 new rows are `eccc:08EE012` flow, ts 2026-10-05 08:00Z → 2026-10-07 20:50Z. `new/old` ratio mean 1.0223, min 1.0174, max 1.0297; quality unchanged; `level` rows unchanged. Old payload raw object 61 (`…/20/BC_08EE012_hourly_hydrometric.csv.c22d8a37.gz`, Last-Modified 20:31:18); new payload 1879 (`…/22/….d2628254.gz`, Last-Modified 22:01:25). This looks like a discharge recomputation (rating shift) by the Water Survey on provisional data: exactly what the revision log exists to capture, and evidence that features must use values as first seen (Stage 2/3). Full-table counts: observations eccc 6,935,228 and usgs 8,145,489 rows; 0 USGS sentinels.
+- `15:38` — 22:31 rewrite: the 22:32 poll did not see it yet; the 22:37 poll (run 88) fetched 429 files, 4,700 inserted, 577,399 unchanged, 60.3 s. Growth window closed (AC-12 table): WAL +290,665,936 B; DB +786,432 B; archive +832,063 B; hourly payloads with new content in this rewrite: 247 of 429.
+- `15:40` — USGS live runs 64/72/77 were `partial`: the OGC metadata call succeeded, then 6–9 sites got 429 mid-run. Now sites refused mid-run get one NWIS IV request in the same run (D-01.19 extended). Deployed; run 92 → `ok`, 2 sites via OGC + 8 via NWIS, 8 rows inserted, 387 unchanged. `pytest` → 44 passed. Run totals so far: 57+ `ok`, 3 `partial` (the runs above), 24 `error`. The errors are 15 USGS rate-limit aborts and 9 interrupted runs that later runs marked "abandoned".
 
 ## Measurements
 
@@ -363,6 +367,22 @@ Every raw payload is archived immutably on local disk with its sha256. The ECCC 
 | gzip ratio, ECCC hourly CSV | 21,007,854 B → 1,411,813 B (14.9×) | `raw_objects` sums | 21:06 UTC |
 | ECCC newest-row lag (all stations) | 46 min at 21:06 UTC (max ts 20:20) | SQL `now() - max(ts)` | 21:06 UTC |
 | USGS newest-row lag | 21 min at 21:06 UTC (max ts 20:45) | SQL | 21:06 UTC |
+| ECCC 30-day backfill | 442 files, 5,980,015 rows inserted, 406,916 unchanged, 13,073 stale, 9 min 44 s | ingest_runs run 17 | 21:10–21:20 UTC |
+| USGS history backfill (NWIS IV) | 285 chunks, 7,643,117 rows, 0 failed, 0 updated, 14 min 48 s | ingest_runs run 66 | 21:56–22:11 UTC |
+| Stored observations | ECCC 6,935,228 rows (442 stations); USGS 8,145,489 rows (10 sites) | `count(*)` per source | 22:25 UTC |
+| Database size | 4,678,573,079 B (`hypertable_size` 4,627,062,784 B) | `pg_database_size` | 22:13 UTC |
+| Bytes per observation row | ≈ 286 B incl. indexes | 2,109,620,224 B / 7,369,690 rows | 21:27 UTC |
+| Raw archive | 2,115 files; 65,417,925 B on disk (1,221,273,593 B raw, 18.7×); 0 write failures | `/v1/health` archive block | 22:24 UTC |
+| ECCC rewrite cadence | every 30 min (Last-Modified 20:31:17–23, 21:01:24–30, 21:31:14–20, 22:01:25–28, 22:31:17) | `raw_objects.last_modified` | 20:31–22:31 UTC |
+| ECCC publication lag after Last-Modified | 2–6 min (22:01:28 file not visible at 22:03:00; visible by 22:07:21) | listing + conditional GET | 22:03–22:07 UTC |
+| ECCC refresh run time | 54–103 s for 429 files (60.3 s with no backfill running) | ingest_runs 3, 46, 75, 88 | 21:03–22:38 UTC |
+| ECCC newest-row lag p50 / p90 | 63.6 / 83.6 min (21:28:33, just before a rewrite); 59.6 / 79.6 min (22:24:36) | SQL / `/v1/health` | 21:28, 22:24 UTC |
+| USGS OGC keyless limit | `x-ratelimit-limit: 1000`; 429s with `retry-after` 88–3,601 s after ≈ 250 requests | response headers | 21:11–21:51 UTC |
+| Real revision observed | 08EE012 flow, 731 rows revised by +1.7 % to +3.0 % (mean +2.2 %) | `observation_revisions` | 22:08 UTC |
+| Steady-state WAL | 290,665,936 B over 24.8 min (one ECCC refresh) | `pg_wal_lsn_diff` | 22:13–22:38 UTC |
+| Archive growth | 832,063 B over 24.8 min → ≈ 48 MB/day | `du -sb` | 22:13–22:38 UTC |
+| Public API latency | `/v1/health` 0.05–0.06 s (cached), `/v1/stations?region=BC&limit=5` 0.37 s | `curl -w` | 21:30 UTC |
+| Tests | 44 passed, 4 live deselected; live: 3 passed, 1 skipped (OGC 429) | `pytest` | 22:25 UTC |
 
 ### AC-12 — Monthly cost (ESTIMATE) and disk runway
 
@@ -372,17 +392,42 @@ Every raw payload is archived immutably on local disk with its sha256. The ECCC 
 |---|---|---|
 | VM e2-standard-2 (2 vCPU, 8 GB) | ≈ US$0.074/h × 730 h (us-central1 list is US$0.067/h; Toronto about 10 % higher) | ≈ 54 |
 | Boot disk pd-balanced 100 GB | ≈ US$0.11/GB-month | ≈ 11 |
-| Daily snapshots (not yet attached) | ≈ US$0.05/GB-month × ~20 GB first full + ~1–2 GB/day changed blocks × 14-day retention ≈ 35–50 GB | ≈ 2–3 |
+| Daily snapshots (not yet attached) | ≈ US$0.05/GB-month × (~20 GB first full + ~1–3 GB/day changed blocks × 14-day retention) ≈ 35–60 GB | ≈ 2–3 |
 | Static external IPv4 in use | US$0.005/h | ≈ 3.7 |
 | Network egress (API responses only; ingest is ingress) | small | < 1 |
 | **Total** | | **≈ US$71–73/month ≈ CA$97–100** (FX 1.37 assumed) |
 
-Disk runway: see the growth measurement in the work log (filled at the end of the stage).
+Disk runway, from the steady-state window 22:13:19 → 22:38:07 UTC (24.8 min, no backfill, one ECCC refresh plus USGS/NWPS live runs):
+
+| Quantity | Measured | Per day | Note |
+|---|---|---|---|
+| Raw archive | +832,063 B | **≈ 48 MB/day** (× 58) | `du -sb` before and after |
+| Observation rows | ECCC refreshes insert 4,634–4,700 rows each, every 30 min; USGS ≈ 80 rows/h | ≈ 227k rows/day | `ingest_runs` runs 12, 46, 75, 88 |
+| Database | 286 B/row incl. indexes (2,109,620,224 B / 7,369,690 rows) | **≈ 65 MB/day** (estimate: rows × bytes/row) | `pg_database_size` grew only 0.79 MB in the window, because inserts reuse vacuumed space, so the row-based estimate is used |
+| WAL (recycled, not stored; `max_wal_size 2GB`) | +290,665,936 B, almost all from one refresh's 577k `last_seen_at` bumps | ≈ 14 GB/day of writes | counts against disk I/O and snapshot changed blocks, not disk space |
+| Docker logs | capped at 5 × 20 MB per container | bounded ≤ 400 MB | compose `logging` options |
+| **Total disk growth** | | **≈ 113 MB/day** (≈ 170 MB/day with a 1.5× bloat margin) | estimate |
+
+`/` used 20,084,744,192 B of 102,888,095,744 B (19.5 %). 80 % is 82,310,476,595 B, so the headroom is 62.2 GB. **Days until 80 %: ≈ 550 at 113 MB/day, ≈ 370 with the 1.5× margin (estimate).** Further backfills would come out of this headroom (for example the USGS 1987–2004 history).
+
+Snapshot cost refinement: with about 14 GB/day of WAL rewriting the hot chunk's pages, a daily snapshot's changed blocks are likely a few GB. 20 GB base + 14 × ~3 GB ≈ 60 GB ≈ US$3/month (estimate), within the range above.
 
 ## Acceptance criteria
 
 | AC | Result | Evidence |
 |---|---|---|
+| AC-1 health green for ECCC, USGS, NWPS | **PASS** | `curl https://<host>/v1/health` at 22:24:36Z → `"status":"green"`. eccc green: lag 34.6 min, station p50 59.6 / p90 79.6, 426 of 431 within 3 h. usgs green: lag 24.6 min, 10 stations (live via the NWIS fallback, D-01.19). nwps green: issuance 6.81 h old. Disk green (19.5 %). Archive 2,115 files, 0 write failures |
+| AC-2 ≥ 400 stations < 3 h; ECCC lag p50 ≤ 90 min | **PASS** | SQL at 21:28:33Z (just before a rewrite, near worst case): 427 stations newer than 3 h; newest-row lag p50 63.6 min, p90 83.6 min |
+| AC-3 ≥ 400 stations with ≥ 25 days of 5-min data | **PASS** | 30-day backfill run 17 `ok`, 442 files, 5,980,015 rows. SQL: 428 stations span ≥ 25 days, 428 have data on ≥ 25 days, 417 also have ≥ 90 % of 5-min level rows over 25 days |
+| AC-4 latest stored row = live file's last row (08MH001, 08MH029, 08MH103) | **PASS** | Two checks (21:29:43Z on the 21:01 files and 21:38:22Z on the 21:31 files). All 3 MATCH both times, including a new 08MH103 row `21:05Z 0.538 m / 10.3 m3/s` (work log) |
+| AC-5 USGS backfilled; 12210700 stage from 2007-10-01 with per-year completeness; Everson peak 52,300 cfs | **PASS** | Backfill run 66 `ok` 285 of 285 chunks, 7,643,117 rows (plus OGC chunks). 12210700 stage from 2007-10-01 08:00Z; per-year completeness 92.5–100 % (table in the work log). `usgs:12211200 flow 2021-11-15 13:40 PST = 52300 ft3/s Approved`. All 10 live sites from their record start or 2004-10-01; 12210500 has no data after 2005 and is excluded (D-01.8) |
+| AC-6 NWPS forecast stored with issued_at; categories as official thresholds | **PASS** | `/v1/official-forecasts/NRKW1` → `issued_at 2026-10-07T15:36:00Z`, 29 points to Oct 14. Categories on `usgs:12210700`: action 144.8, minor 146.5, moderate 148, major 150 ft (also NKSW1, NREW1, NOEW1) |
+| AC-7 archive complete, sha256-verified, hourly count, growth | **PASS** | 1,289 raw objects = 1,289 files at 21:29Z: 0 missing, 0 orphans, all 0444, 0 errors; 1,289 written in the last hour; 5 random files re-verified OK. Growth per day: AC-12 table |
+| AC-8 sentinel and revision counts; sentinels excluded by default | **PASS** | Sentinels: 2 (ECCC level `99999`; 0 in USGS). Revisions: **733**. 731 are a **real** ECCC revision: all 08EE012 discharge values in the 22:01 file were raised by +1.7 % to +3.0 % versus the 20:31 file (raw objects 61 → 1879; levels unchanged). The other 2 are boundary artefacts from the OGC/NWIS overlap (same value, provenance only; D-01.19). Stale (older values refused): 13,073. API: default `count 2` vs `include_sentinels=true` `count 3` |
+| AC-9 survives `docker compose restart` and a VM reboot | **PARTIAL** | `docker compose restart` and `systemctl restart docker` both: all services back, health green, new runs started automatically within seconds (work log). Docker and containerd are `enabled` at boot. **The real VM reboot was not run:** it would end this session. Left for the human (open issue 3) |
+| AC-10 ruff and pytest pass; test count | **PASS** | `ruff check .` → `All checks passed!`; `pytest -q` → **44 passed**, 4 deselected (live); `pytest -m live` → 3 passed, 1 skipped (OGC rate-limited) |
+| AC-11 ≥ 10 decisions; doc updated across ≥ 4 commits; contracts updated | **PASS** | 20 decisions (D-01.1–D-01.20); the stage doc is touched in every one of the branch's commits (10 before the final one); architecture.md, data-contract.md, README.md and product.yaml updated |
+| AC-12 monthly cost estimate; days to 80 % disk | **PASS (estimate)** | Cost ≈ US$71–73/month (≈ CA$97–100), labelled as an estimate. Disk runway from measured growth: see the table below |
 
 ## Contract files changed
 
@@ -392,6 +437,7 @@ Disk runway: see the growth measurement in the work log (filled at the end of th
 | `data-contract.md` | Freshness for records 1, 6, 7 replaced with measured latencies and the observed 30-min ECCC rewrite. USGS access method set to OGC API v1 with the keyless 1,000 req/h limit. Lineage diagram set to the real pipeline. SLO table aligned with `/v1/health` thresholds | Prompt: "replace estimated freshness with the latencies you measure" |
 | `README.md` | Data/rights table gains USGS and NOAA NWPS (🟢). ECCC access method changed from AMQP to polling. "How it works" diagram and table (ingestion, storage, serving, deployment), go/no-go "Data access" status, attribution lines, repository layout, a "Run it" section | Prompt: README "How it works" and data table; Parquet/object-storage line replaced |
 | `product.yaml` | `inputs` gains USGS water data and NOAA NWPS | Two new core inputs since Stage 0 |
+| `architecture.md`, `data-contract.md`, `README.md` (end of stage) | ECCC polling every 5 min (D-01.20) and the 30-min rewrite with 2–6 min publication lag; NWIS IV named as the USGS history and live fallback (D-01.19); measured growth per day | Facts changed after the first contract update |
 
 ## Open issues and handoff to next stage
 
@@ -409,5 +455,5 @@ Disk runway: see the growth measurement in the work log (filled at the end of th
 7. USGS instantaneous history is backfilled from **2004-10-01**. Older 15-min data exists for 12205000 (1987), 12208000 (1995) and 12213100 (1989) if Stage 3 wants it (`floodlead backfill usgs --since 1987-10-01`). 12210500 (Deming) has no data after 2005 and is not ingested.
 8. `last_seen_at` bumps rewrite about 566k observation rows per ECCC refresh, mostly non-HOT updates (measured in the work log). This is fine for now, but it adds WAL and table bloat, and makes snapshots larger. A coarser `last_seen_at` or a lower fillfactor is a Stage 8 candidate.
 9. (fixed at the end of the stage: GET routes also accept `HEAD`.)
-10. Revisions: 0 so far, since no published value changed during the stage. The out-of-order guard has been exercised (13,073 stale rows from the 30-day files).
+10. Revisions are real and frequent enough to matter. 08EE012's discharge was revised by about +2 % across 2.5 days in one refresh. Training features in Stage 3 must use `observation_revisions` and `first_seen_at` (value as first published), never only the latest value. 2 provenance-only artefact revisions exist (D-01.19).
 11. Stage 2 should key forecasts on the namespaced station IDs, and use `published_at` / `first_seen_at` for leakage-safe features.

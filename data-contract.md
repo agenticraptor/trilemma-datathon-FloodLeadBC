@@ -6,7 +6,7 @@ Every material external input has known provenance and documented usage rights, 
 
 | # | Source | Role | Freshness | Licence | Light |
 |---|---|---|---|---|---|
-| 1 | ECCC real-time hydrometric (Datamart hourly CSV) | Core feature + ground truth (BC gauges) | 5-min observations; all 429 BC files rewritten about every 30 min (observed 20:31 and 21:01 UTC, Oct 7); newest row 22–47 min old just after a rewrite, up to 107 min just before one; station-lag p50 ~49 min (measured Oct 7) | OGL – Canada | 🟢 |
+| 1 | ECCC real-time hydrometric (Datamart hourly CSV) | Core feature + ground truth (BC gauges) | 5-min observations; all 429 BC files rewritten every 30 min (Last-Modified ~:01 and ~:31; observed 20:31–22:31 UTC, Oct 7) and visible on the server 2–6 min later; newest row 22–47 min old just after a rewrite, up to 107 min just before one; station-lag p50 ~49 min (measured Oct 7) | OGL – Canada | 🟢 |
 | 2 | ECCC historical daily hydrometric | Training history | Daily, decades | OGL – Canada | 🟢 |
 | 3 | ECCC MSC HRDPS precipitation | Model feature | 4 runs/day | ECCC Data Servers End-use Licence | 🟢 |
 | 4 | BC River Forecast Centre advisories, CLEVER/COFFEE | Scoring baseline only | Irregular | Province of BC website terms (pending) | 🟡 |
@@ -23,7 +23,7 @@ Yellow sources are never core dependencies. If their terms do not allow the inte
   url: https://open.canada.ca/data/dataset/65d3a88b-eb09-4fd9-ac44-cf42dc1f7444
   license: OGL-Canada-2.0
   license_url: https://open.canada.ca/en/open-government-licence-canada
-  access_method: HTTPS polling (every 10 min, conditional GETs) of Datamart hourly and 30-day CSVs (dd.weather.gc.ca/today/hydrometric/csv/BC/), OGC API (api.weather.gc.ca) for station metadata and daily history
+  access_method: HTTPS polling (every 5 min, conditional GETs) of Datamart hourly and 30-day CSVs (dd.weather.gc.ca/today/hydrometric/csv/BC/), OGC API (api.weather.gc.ca) for station metadata and daily history
   commercial_use: true
   redistribution: true
   attribution_required: true
@@ -81,7 +81,7 @@ Yellow sources are never core dependencies. If their terms do not allow the inte
   url: https://api.waterdata.usgs.gov/ogcapi/v0/
   license: US Public Domain
   license_url: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
-  access_method: USGS Water Data OGC API v1 (api.waterdata.usgs.gov/ogcapi/v1; collections continuous, time-series-metadata, monitoring-locations); legacy waterservices.usgs.gov NWIS as fallback. Keyless limit 1,000 requests/hour per IP (an API key from api.waterdata.usgs.gov/signup raises it)
+  access_method: USGS Water Data OGC API v1 (api.waterdata.usgs.gov/ogcapi/v1; collections continuous, time-series-metadata, monitoring-locations); legacy waterservices.usgs.gov NWIS IV as fallback (used for the 2004-10 → present history backfill and for live data while the OGC quota is exhausted). Keyless OGC limit 1,000 requests/hour per IP (an API key from api.waterdata.usgs.gov/signup raises it)
   commercial_use: true
   redistribution: true
   attribution_required: false   # credit requested: "U.S. Geological Survey"
