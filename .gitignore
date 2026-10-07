@@ -1,0 +1,3 @@
+evidence/08*.json
+__pycache__/
+.env
