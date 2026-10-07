@@ -63,7 +63,7 @@ For each URL below, report the HTTP status, total time (`curl -s -o /dev/null -w
 
 **8. Repository**
 - Location of the clone, `git remote -v`, current branch, `git log -1 --oneline`, and whether `main` is up to date with `origin/main`.
-- Push and PR rights: `gh repo view agenticraptor/trilemma-datathon --json viewerPermission,visibility`.
+- Push and PR rights: `gh repo view agenticraptor/trilemma-datathon-FloodLeadBC --json viewerPermission,visibility`.
 - `.env`: list key names only, and confirm it is gitignored (`git check-ignore .env`).
 
 ## The stage doc (`docs/stages/STAGE-00-environment.md`)

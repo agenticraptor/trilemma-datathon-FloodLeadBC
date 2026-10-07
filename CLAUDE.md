@@ -35,8 +35,8 @@ Read these before doing anything in a stage, in this order:
 ## Production safety (the VM is production)
 
 - Long-running services run under `docker compose` with `restart: unless-stopped`, never inside your interactive session, so they keep running after you exit.
-- Never run `docker compose down -v`, drop tables, delete volumes, or delete objects in the archive bucket.
-- Schema changes are additive SQL migrations. Take a `pg_dump` to the archive bucket before any migration that touches existing tables.
+- Never run `docker compose down -v`, drop tables, delete volumes, or delete or overwrite files in the raw archive (`ARCHIVE_DIR`, default `/srv/floodlead/archive`).
+- Schema changes are additive SQL migrations. Take a `pg_dump` to `/srv/floodlead/backups/` before any migration that touches existing tables.
 - Secrets live only in `.env` on the VM (gitignored) or GCP Secret Manager. Never print secrets in logs, docs, commits or the STAGE REPORT.
 - Messaging (from Stage 7): never send to any phone number without its recorded opt-in, and never to anyone except the human's own test numbers until the supervisor approves.
 

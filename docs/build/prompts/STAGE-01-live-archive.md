@@ -12,7 +12,23 @@ Build Session 2 is today at 18:00 PT. Get the live ECCC ingestion and raw archiv
 
 ## Read first
 
-`CLAUDE.md`, `AGENTS.md`, `docs/build/PLAN.md` (especially "Facts the supervisor verified"), `docs/stages/STAGE-00-environment.md` (what this VM is and what already runs on it), `data-contract.md` (records 1, 6, 7), `architecture.md`, `evidence/` (earlier pull scripts and `station_summary.csv`). The VM's `.env` holds `PUBLIC_HOSTNAME`, `ACME_EMAIL`, `POSTGRES_PASSWORD`, `ARCHIVE_DIR`. Anything already running on this VM that is not FloodLead must be left untouched; avoid its ports.
+`CLAUDE.md`, `AGENTS.md`, `docs/build/PLAN.md` (especially "Facts the supervisor verified"), `docs/stages/STAGE-00-environment.md` (what this VM is and what already runs on it), `data-contract.md` (records 1, 6, 7), `architecture.md`, `evidence/` (earlier pull scripts and `station_summary.csv`). The VM's `.env` holds `PUBLIC_HOSTNAME`, `POSTGRES_PASSWORD`, `ARCHIVE_DIR` and possibly `ACME_EMAIL`. Anything already running on this VM that is not FloodLead must be left untouched; avoid its ports.
+
+## Stage 0 findings you must design for
+
+From `docs/stages/STAGE-00-environment.md` (QA passed):
+
+- **Machine:** e2-standard-2 — 2 vCPU, 7.7 GiB RAM, no swap; Ubuntu 24.04; 100 GB pd-balanced disk, 92 GB free; Toronto (Canada).
+  - Create a **4 GiB swapfile** first (`fallocate`, `chmod 600`, `mkswap`, `swapon`, add to `/etc/fstab`), and log it as a decision.
+  - Set compose memory limits and record them: `db` ≤ 2.5 GiB (`shared_buffers` ≈ 512 MB, `work_mem` modest, TimescaleDB `timescaledb.max_background_workers` low), `ingest` ≤ 1 GiB, `api` ≤ 512 MiB, `caddy` ≤ 256 MiB. Leave room for the Claude Code session itself.
+  - Limit concurrency: at most 4 parallel HTTP requests per source during backfills.
+- **Docker** was installed by the human before this stage (Ubuntu `docker.io` + `docker-compose-v2`). Verify `docker run --rm hello-world` works **without sudo** before anything else. If it does not, stop and report.
+- **Nothing else runs on this VM.** Ports 80, 443, 5432 and 8000 are free. Do not touch other login accounts or the project's existing firewall rules.
+- **External IP** is (or is about to be) reserved by the human; `PUBLIC_HOSTNAME` in `.env` is `<ip-with-dashes>.sslip.io`. HTTP-01 certificate issuance by Caddy is the first real proof that inbound 80/443 works: report it.
+- **`ACME_EMAIL`** may be absent from `.env`. Caddy works without it; use it only if present.
+- **Repository renamed** to `agenticraptor/trilemma-datathon-FloodLeadBC` (the old URL redirects). Use the new URL. If `git config user.name` is unset, keep passing the identity via environment variables as in Stage 0.
+- **Datamart timestamps** carry a fixed `-08:00` offset (standard time) all year. Parse the offset; never assume local time.
+- **Measured latencies (Oct 7, 20:06 UTC):** ECCC 71 min at file write, 107 min just before the next rewrite; USGS 52 min; NOAA observed 37 min; NOAA forecast issued 4.5 h earlier.
 
 ## Priorities and time boxes
 

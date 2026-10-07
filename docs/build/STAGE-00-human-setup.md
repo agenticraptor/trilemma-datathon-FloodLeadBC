@@ -65,7 +65,7 @@ Then reconnect and:
 
 ```bash
 gh auth login                      # GitHub.com → HTTPS → log in with a browser code
-git clone https://github.com/agenticraptor/trilemma-datathon.git ~/trilemma-datathon
+git clone https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC.git ~/trilemma-datathon
 cd ~/trilemma-datathon
 cat > .env <<'EOF'
 GCS_BUCKET=YOUR_PROJECT_ID-archive
