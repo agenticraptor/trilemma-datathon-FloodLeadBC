@@ -109,6 +109,11 @@ def test_official_forecasts(client: TestClient) -> None:
     assert client.get("/v1/official-forecasts/XXXX1").status_code == 404
 
 
+def test_head_is_allowed(client: TestClient) -> None:
+    r = client.head("/v1/health")
+    assert r.status_code == 200 and r.content == b""
+
+
 def test_cors_allows_any_origin_for_get(client: TestClient) -> None:
     r = client.get("/v1/stations", headers={"Origin": "https://example.org"})
     assert r.headers["access-control-allow-origin"] == "*"

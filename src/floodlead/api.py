@@ -250,13 +250,13 @@ def _health() -> dict[str, Any]:
                   "archive": arch, "notice": NOT_A_WARNING})
 
 
-@app.get("/", include_in_schema=False)
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
 def index() -> dict[str, Any]:
     return _wrap({"name": "FloodLead BC public read API", "docs": "/docs", "health": "/v1/health",
                   "stations": "/v1/stations", "source": REPO_URL, "notice": NOT_A_WARNING})
 
 
-@app.get("/v1/health")
+@app.api_route("/v1/health", methods=["GET", "HEAD"])
 def health() -> dict[str, Any]:
     """Per-source freshness (green/amber/red), disk use and archive size. Cached for 30 s."""
     return _cached("health", 30, _health)
@@ -284,7 +284,7 @@ def _latest(station_ids: list[str] | None = None) -> dict[str, dict[str, Any]]:
     return out
 
 
-@app.get("/v1/stations")
+@app.api_route("/v1/stations", methods=["GET", "HEAD"])
 def stations(
     source: str | None = Query(None, description="eccc | usgs"),
     region: str | None = Query(None, description="province/state code, e.g. BC, WA"),
@@ -315,7 +315,7 @@ def stations(
     return _wrap({"count": len(rows), "total": total, "limit": limit, "offset": offset, "stations": rows})
 
 
-@app.get("/v1/stations/{station_id}")
+@app.api_route("/v1/stations/{station_id}", methods=["GET", "HEAD"])
 def station(station_id: str) -> dict[str, Any]:
     """One station, including official thresholds (NOAA NWS flood categories where they exist)."""
     rows = _q(f"SELECT {_STATION_COLS}, meta, first_seen_at, updated_at FROM stations WHERE station_id = %s",
@@ -337,7 +337,7 @@ def _parse_time(v: str | None, name: str) -> datetime | None:
     return t if t.tzinfo else t.replace(tzinfo=UTC)
 
 
-@app.get("/v1/stations/{station_id}/observations")
+@app.api_route("/v1/stations/{station_id}/observations", methods=["GET", "HEAD"])
 def observations(
     station_id: str,
     param: str | None = Query(None, pattern="^(level|flow)$"),
@@ -368,7 +368,7 @@ def observations(
                   "include_sentinels": include_sentinels, "count": len(rows), "observations": rows})
 
 
-@app.get("/v1/official-forecasts/{lid}")
+@app.api_route("/v1/official-forecasts/{lid}", methods=["GET", "HEAD"])
 def official_forecasts(
     lid: str,
     issued_after: str | None = Query(None, description="ISO 8601 UTC; default: latest issuance only"),

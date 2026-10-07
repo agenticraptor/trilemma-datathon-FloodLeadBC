@@ -300,6 +300,7 @@ Every raw payload is archived immutably on local disk with its sha256. The ECCC 
 - `14:38` — **AC-4 second check** after the 21:31 rewrite (files Last-Modified 21:31:18, fetched 21:38:22–23): 08MH001 `20:20Z 1.537 / 17.7` MATCH; 08MH029 `20:35Z 1.252 / 0.806` MATCH; 08MH103 **new row** `13:05-08:00` → `21:05Z 0.538 / 10.3` MATCH.
 - `14:38` — Found the stale listing (D-01.18) and implemented the probe. `pytest` → 41 passed. Rebuilt, redeployed ingest.
 - `14:39` — Relaunched the USGS backfill (6-month chunks): plan **297 tasks** (12205000: 34 of 45 left, since monthly chunks already cover part). Metadata request `200`; first data request `429`, `retry_after_s 594`, so all workers pause until about 21:49 UTC.
+- `14:41` — `HEAD` support: every GET route is registered for GET and HEAD (uvicorn drops the body), plus a test. `pytest` → **42 passed**. Redeployed api. `curl -sI https://<host>/v1/health` → `HTTP/2 200`. WAL baseline at 21:40:17: LSN `1/195BDA28`, DB 2,112 MB, `hypertable_size` 2,193,645,568 B. On the current chunk, 2,564,954 updates of which only 21,583 were HOT.
 
 ## Measurements
 
@@ -344,4 +345,19 @@ Disk runway: see the growth measurement in the work log (filled at the end of th
 
 ## Open issues and handoff to next stage
 
-- (filled at end)
+**Needs the human**
+
+1. **USGS API key.** The keyless limit is 1,000 requests/hour per IP, and we hit 429 after a burst. Sign up at `https://api.waterdata.usgs.gov/signup/` and add `USGS_API_KEY=<key>` to `.env`, then `docker compose up -d ingest`. Backfills then pace at 1 s instead of 7.2 s. Until then, live USGS and the backfill share the keyless quota.
+2. **Snapshot schedule.** None is attached to the boot disk (`resourcePolicies` empty). The raw archive and the database have **no off-machine copy** until one is. Suggested: a daily snapshot schedule in `northamerica-northeast2` with `--storage-location=northamerica-northeast2`, attached to disk `datathon`.
+3. **Real VM reboot test** (second half of AC-9). Run `sudo reboot`; about 2 min later, `curl https://<host>/v1/health` should be green with new `ingest_runs` after the boot time. The Docker-daemon restart already passed.
+4. Optional: `ACME_EMAIL` in `.env` (expiry notices only).
+5. Decide whether to publish the public hostname in `README.md`. It encodes the VM's IP, so it is kept out of committed docs for now and appears only in the PR/STAGE REPORT.
+
+**For the next stages**
+
+6. **Datamart rewrites every 30 min** (20:31, 21:01, 21:31 UTC observed), not hourly as PLAN.md says. The listing can lag by more than 5 min (D-01.18).
+7. USGS instantaneous history is backfilled from **2004-10-01**. Older 15-min data exists for 12205000 (1987), 12208000 (1995) and 12213100 (1989) if Stage 3 wants it (`floodlead backfill usgs --since 1987-10-01`). 12210500 (Deming) has no data after 2005 and is not ingested.
+8. `last_seen_at` bumps rewrite about 566k observation rows per ECCC refresh, mostly non-HOT updates (measured in the work log). This is fine for now, but it adds WAL and table bloat, and makes snapshots larger. A coarser `last_seen_at` or a lower fillfactor is a Stage 8 candidate.
+9. (fixed at the end of the stage: GET routes also accept `HEAD`.)
+10. Revisions: 0 so far, since no published value changed during the stage. The out-of-order guard has been exercised (13,073 stale rows from the 30-day files).
+11. Stage 2 should key forecasts on the namespaced station IDs, and use `published_at` / `first_seen_at` for leakage-safe features.
