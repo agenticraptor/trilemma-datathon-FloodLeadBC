@@ -346,7 +346,13 @@ def backfill(
     with pool.connection() as conn, http.client() as c:
         conn.autocommit = True
         with store.Run(conn, SOURCE, job) as run:
-            mf, meta = fetch_series_metadata(c, list(SITES))
+            while True:
+                try:
+                    mf, meta = fetch_series_metadata(c, list(SITES))
+                    break
+                except http.RateLimited as e:
+                    L.warning("usgs rate limited before start; waiting", **log.kv(retry_after_s=e.retry_after_s))
+                    time.sleep(e.retry_after_s + 5)
             with conn.transaction():
                 archive.store(conn, s.archive_dir, SOURCE, "time-series-metadata", mf)
             wanted = sites or live_sites(meta, datetime.now(UTC))

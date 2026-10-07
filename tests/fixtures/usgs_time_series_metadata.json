@@ -1,0 +1,415 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "1946b499b3034ba2981aa4d2249a1134",
+    "unit_of_measure": "ft",
+    "parameter_name": "Gage height",
+    "parameter_code": "00065",
+    "statistic_id": null,
+    "last_modified": "2026-10-01T08:34:13.768453",
+    "begin": "2004-11-25T08:00:00+00:00",
+    "end": "2024-10-20T07:00:00+00:00",
+    "computation_period_identifier": "Water Year",
+    "computation_identifier": "Max At Event Time",
+    "thresholds": [],
+    "sublocation_identifier": null,
+    "primary": "Primary",
+    "monitoring_location_id": "USGS-12210700",
+    "web_description": null,
+    "parameter_description": "Gage height, feet",
+    "parent_time_series_id": "1fd347f7fda04be0b9fe0740438bfa43",
+    "data_gap_interval": null,
+    "statistics_begin": null
+   },
+   "id": "1946b499b3034ba2981aa4d2249a1134",
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "1fd347f7fda04be0b9fe0740438bfa43",
+    "unit_of_measure": "ft",
+    "parameter_name": "Gage height",
+    "parameter_code": "00065",
+    "statistic_id": "00011",
+    "last_modified": "2026-10-07T04:30:49.452824",
+    "begin": "2007-10-01T08:00:00+00:00",
+    "end": "2026-10-07T04:15:00+00:00",
+    "computation_period_identifier": "Points",
+    "computation_identifier": "Instantaneous",
+    "thresholds": [
+     {
+      "Name": "Flood Stage",
+      "Type": "None",
+      "Periods": [
+       {
+        "EndTime": "2020-01-01T00:00:00.0000000-08:00",
+        "StartTime": "2016-10-11T00:00:00.0000000-08:00",
+        "AppliedTime": "0001-01-01T00:00:00Z",
+        "SuppressData": false,
+        "ReferenceValue": 146.5,
+        "SecondaryReferenceValue": 146
+       }
+      ],
+      "Severity": 0,
+      "Description": "Display reference value",
+      "DisplayColor": "#00CCFF",
+      "ReferenceCode": "NWISWeb ref level - Public",
+      "ProcessingOrder": "Suppression"
+     },
+     {
+      "Name": "Operational Limit High",
+      "Type": "ThresholdAbove",
+      "Periods": [
+       {
+        "EndTime": "2020-01-01T00:00:00.0000000-08:00",
+        "Comments": "Obtained from RTK point (rock 1) near gage.",
+        "StartTime": "2018-05-21T00:01:00.0000000-08:00",
+        "AppliedTime": "2018-06-08T16:49:41.0533877Z",
+        "SuppressData": true,
+        "ReferenceValue": 160,
+        "SecondaryReferenceValue": 159
+       }
+      ],
+      "Severity": 0,
+      "Description": "Values above a specified threshold limit",
+      "DisplayColor": "#990600",
+      "ReferenceCode": "Operational limit - high-Public",
+      "ProcessingOrder": "Suppression"
+     },
+     {
+      "Name": "VHI",
+      "Type": "ThresholdAbove",
+      "Periods": [
+       {
+        "EndTime": "9999-12-31T23:59:59.9999999+00:00",
+        "StartTime": "2020-01-01T00:01:00.0000000-08:00",
+        "AppliedTime": "2020-01-09T15:19:40.1869684Z",
+        "SuppressData": true,
+        "ReferenceValue": 160
+       }
+      ],
+      "Severity": 0,
+      "Description": "Values above a specified threshold limit",
+      "DisplayColor": "#990600",
+      "ReferenceCode": "Operational limit - high-Public",
+      "ProcessingOrder": "Suppression"
+     },
+     {
+      "Name": "Operational limit (minimum)",
+      "Type": "ThresholdBelow",
+      "Periods": [
+       {
+        "EndTime": "9999-12-31T23:59:59.9999999+00:00",
+        "StartTime": "2025-09-01T00:00:00.0000000-08:00",
+        "AppliedTime": "2025-09-15T16:28:30.6553351Z",
+        "SuppressData": true,
+        "ReferenceValue": 137
+       },
+       {
+        "EndTime": "2025-09-01T00:00:00.0000000-08:00",
+        "StartTime": "2016-10-11T00:00:00.0000000-08:00",
+        "AppliedTime": "2017-03-13T20:07:02.64072Z",
+        "SuppressData": true,
+        "ReferenceValue": 138,
+        "SecondaryReferenceValue": 138.2
+       }
+      ],
+      "Severity": 0,
+      "Description": "Values below a specified threshold limit",
+      "DisplayColor": "#666666",
+      "ReferenceCode": "Operational limit - low-Public",
+      "ProcessingOrder": "Suppression"
+     },
+     {
+      "Name": "Operational limit (maximum)",
+      "Type": "ThresholdAbove",
+      "Periods": [
+       {
+        "EndTime": "2018-05-21T00:00:00.0000000-08:00",
+        "StartTime": "2016-10-11T00:00:00.0000000-08:00",
+        "AppliedTime": "2017-03-13T20:07:02.3536648Z",
+        "SuppressData": true,
+        "ReferenceValue": 155,
+        "SecondaryReferenceValue": 145
+       }
+      ],
+      "Severity": 0,
+      "Description": "Values above a specified threshold limit",
+      "DisplayColor": "#CCCCCC",
+      "ReferenceCode": "Operational limit - high-Public",
+      "ProcessingOrder": "Suppression"
+     }
+    ],
+    "sublocation_identifier": null,
+    "primary": "Primary",
+    "monitoring_location_id": "USGS-12210700",
+    "web_description": null,
+    "parameter_description": "Gage height, feet",
+    "parent_time_series_id": "d70814dc8c74416981d79e7e37255658",
+    "data_gap_interval": "PT1H12M",
+    "statistics_begin": "2001"
+   },
+   "id": "1fd347f7fda04be0b9fe0740438bfa43",
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "2a4bb8458adf423e86e5ed72ec8404b7",
+    "unit_of_measure": "ft^3/s",
+    "parameter_name": "Discharge",
+    "parameter_code": "00060",
+    "statistic_id": "00003",
+    "last_modified": "2026-10-07T08:35:09.444885",
+    "begin": "2004-10-15T07:00:00+00:00",
+    "end": "2026-10-05T07:00:00+00:00",
+    "computation_period_identifier": "Daily",
+    "computation_identifier": "Mean",
+    "thresholds": [],
+    "sublocation_identifier": null,
+    "primary": "Primary",
+    "monitoring_location_id": "USGS-12210700",
+    "web_description": null,
+    "parameter_description": "Discharge, cubic feet per second",
+    "parent_time_series_id": "b71b9f070f7d4468a6153921fa19bd6d",
+    "data_gap_interval": null,
+    "statistics_begin": null
+   },
+   "id": "2a4bb8458adf423e86e5ed72ec8404b7",
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "316d3ca1ac664765a4a4c910654d8c39",
+    "unit_of_measure": "ft^3/s",
+    "parameter_name": "Discharge",
+    "parameter_code": "00060",
+    "statistic_id": "00003",
+    "last_modified": "2017-03-13T20:07:23.013065",
+    "begin": "1935-07-01T08:00:00+00:00",
+    "end": "2005-09-29T07:00:00+00:00",
+    "computation_period_identifier": "Daily",
+    "computation_identifier": "Mean",
+    "thresholds": [],
+    "sublocation_identifier": null,
+    "primary": "Primary",
+    "monitoring_location_id": "USGS-12210500",
+    "web_description": null,
+    "parameter_description": "Discharge, cubic feet per second",
+    "parent_time_series_id": null,
+    "data_gap_interval": null,
+    "statistics_begin": null
+   },
+   "id": "316d3ca1ac664765a4a4c910654d8c39",
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "41ed2ffc25e54c46a6ee3c3abe82efaf",
+    "unit_of_measure": "ft",
+    "parameter_name": "Gage height",
+    "parameter_code": "00065",
+    "statistic_id": "00003",
+    "last_modified": "2026-10-07T08:34:26.287699",
+    "begin": "2002-10-01T07:00:00+00:00",
+    "end": "2026-10-05T07:00:00+00:00",
+    "computation_period_identifier": "Daily",
+    "computation_identifier": "Mean",
+    "thresholds": [],
+    "sublocation_identifier": null,
+    "primary": "Primary",
+    "monitoring_location_id": "USGS-12210700",
+    "web_description": null,
+    "parameter_description": "Gage height, feet",
+    "parent_time_series_id": "1fd347f7fda04be0b9fe0740438bfa43",
+    "data_gap_interval": null,
+    "statistics_begin": null
+   },
+   "id": "41ed2ffc25e54c46a6ee3c3abe82efaf",
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "468291cdd80b4ea18a1ea3f3fd3583be",
+    "unit_of_measure": "ft^3/s",
+    "parameter_name": "Discharge",
+    "parameter_code": "00060",
+    "statistic_id": "00011",
+    "last_modified": "2017-11-29T23:26:37.545708",
+    "begin": "1989-10-01T08:00:00+00:00",
+    "end": "2005-09-30T06:45:00+00:00",
+    "computation_period_identifier": "Points",
+    "computation_identifier": "Instantaneous",
+    "thresholds": [],
+    "sublocation_identifier": null,
+    "primary": "Primary",
+    "monitoring_location_id": "USGS-12210500",
+    "web_description": null,
+    "parameter_description": "Discharge, cubic feet per second",
+    "parent_time_series_id": null,
+    "data_gap_interval": "PT1H12M",
+    "statistics_begin": null
+   },
+   "id": "468291cdd80b4ea18a1ea3f3fd3583be",
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "62ad50fdfdd344a2957b34192969c2e3",
+    "unit_of_measure": "ft^3/s",
+    "parameter_name": "Discharge",
+    "parameter_code": "00060",
+    "statistic_id": null,
+    "last_modified": "2019-06-24T01:32:11.112474",
+    "begin": "1932-02-27T08:00:00+00:00",
+    "end": "2004-11-25T08:00:00+00:00",
+    "computation_period_identifier": "Water Year",
+    "computation_identifier": "Max At Event Time",
+    "thresholds": [],
+    "sublocation_identifier": null,
+    "primary": "Primary",
+    "monitoring_location_id": "USGS-12210500",
+    "web_description": null,
+    "parameter_description": "Discharge, cubic feet per second",
+    "parent_time_series_id": "468291cdd80b4ea18a1ea3f3fd3583be",
+    "data_gap_interval": null,
+    "statistics_begin": null
+   },
+   "id": "62ad50fdfdd344a2957b34192969c2e3",
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "723ee1271f1f414a9d070853c449e370",
+    "unit_of_measure": "ft^3/s",
+    "parameter_name": "Discharge",
+    "parameter_code": "00060",
+    "statistic_id": null,
+    "last_modified": "2026-10-01T08:35:07.701879",
+    "begin": "2004-11-25T08:00:00+00:00",
+    "end": "2024-10-20T07:00:00+00:00",
+    "computation_period_identifier": "Water Year",
+    "computation_identifier": "Max At Event Time",
+    "thresholds": [],
+    "sublocation_identifier": null,
+    "primary": "Primary",
+    "monitoring_location_id": "USGS-12210700",
+    "web_description": null,
+    "parameter_description": "Discharge, cubic feet per second",
+    "parent_time_series_id": "b71b9f070f7d4468a6153921fa19bd6d",
+    "data_gap_interval": null,
+    "statistics_begin": null
+   },
+   "id": "723ee1271f1f414a9d070853c449e370",
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "8e2dac4bebd74ee49123655528ecb8f0",
+    "unit_of_measure": "ft",
+    "parameter_name": "Gage height",
+    "parameter_code": "00065",
+    "statistic_id": "00003",
+    "last_modified": "2017-10-15T03:18:13.001601",
+    "begin": "1997-10-02T07:00:00+00:00",
+    "end": "2005-09-29T07:00:00+00:00",
+    "computation_period_identifier": "Daily",
+    "computation_identifier": "Mean",
+    "thresholds": [],
+    "sublocation_identifier": null,
+    "primary": "Primary",
+    "monitoring_location_id": "USGS-12210500",
+    "web_description": null,
+    "parameter_description": "Gage height, feet",
+    "parent_time_series_id": null,
+    "data_gap_interval": null,
+    "statistics_begin": null
+   },
+   "id": "8e2dac4bebd74ee49123655528ecb8f0",
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "a63384ab6b5c435fac3f3f7ed3c1b5f2",
+    "unit_of_measure": "ft",
+    "parameter_name": "Gage height",
+    "parameter_code": "00065",
+    "statistic_id": null,
+    "last_modified": "2019-06-24T01:29:56.397446",
+    "begin": "1908-03-15T08:00:00+00:00",
+    "end": "2004-11-25T08:00:00+00:00",
+    "computation_period_identifier": "Water Year",
+    "computation_identifier": "Max At Event Time",
+    "thresholds": [],
+    "sublocation_identifier": null,
+    "primary": "Primary",
+    "monitoring_location_id": "USGS-12210500",
+    "web_description": null,
+    "parameter_description": "Gage height, feet",
+    "parent_time_series_id": null,
+    "data_gap_interval": null,
+    "statistics_begin": null
+   },
+   "id": "a63384ab6b5c435fac3f3f7ed3c1b5f2",
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "b71b9f070f7d4468a6153921fa19bd6d",
+    "unit_of_measure": "ft^3/s",
+    "parameter_name": "Discharge",
+    "parameter_code": "00060",
+    "statistic_id": "00011",
+    "last_modified": "2026-10-07T06:31:20.524339",
+    "begin": "2004-10-15T07:00:00+00:00",
+    "end": "2026-10-07T06:15:00+00:00",
+    "computation_period_identifier": "Points",
+    "computation_identifier": "Instantaneous",
+    "thresholds": [
+     {
+      "Name": "VERY LOW",
+      "Type": "ThresholdBelow",
+      "Periods": [
+       {
+        "EndTime": "2019-03-18T00:00:00.0000000-08:00",
+        "StartTime": "2016-10-11T00:00:00.0000000-08:00",
+        "AppliedTime": "2017-03-13T20:07:10.7627495Z",
+        "SuppressData": true,
+        "ReferenceValue": 150
+       }
+      ],
+      "Severity": 0,
+      "Description": "Unspecified threshold value",
+      "DisplayColor": "#800000",
+      "ReferenceCode": "AQUARIUS only",
+      "ProcessingOrder": "Suppression"
+     }
+    ],
+    "sublocation_identifier": null,
+    "primary": "Primary",
+    "monitoring_location_id": "USGS-12210700",
+    "web_description": null,
+    "parameter_description": "Discharge, cubic feet per second",
+    "parent_time_series_id": "1fd347f7fda04be0b9fe0740438bfa43",
+    "data_gap_interval": "PT1H12M",
+    "statistics_begin": "2005"
+   },
+   "id": "b71b9f070f7d4468a6153921fa19bd6d",
+   "geometry": null
+  }
+ ],
+ "numberReturned": 11,
+ "timeStamp": "2026-10-07T21:07:27.033570Z"
+}

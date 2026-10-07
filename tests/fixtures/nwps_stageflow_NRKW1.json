@@ -1,0 +1,68 @@
+{
+ "observed": {
+  "pedts": "HGIRG",
+  "issuedTime": "2026-10-07T20:30:00Z",
+  "wfo": "SEW",
+  "timeZone": "PST8PDT",
+  "primaryName": "Stage",
+  "primaryUnits": "ft",
+  "secondaryName": "Flow",
+  "secondaryUnits": "kcfs",
+  "data": [
+   {
+    "validTime": "2026-10-07T20:00:00Z",
+    "generatedTime": "2026-10-07T20:41:23Z",
+    "primary": 138,
+    "secondary": 0.678
+   },
+   {
+    "validTime": "2026-10-07T20:15:00Z",
+    "generatedTime": "2026-10-07T20:41:23Z",
+    "primary": 138.03,
+    "secondary": 0.711
+   },
+   {
+    "validTime": "2026-10-07T20:30:00Z",
+    "generatedTime": "2026-10-07T20:41:23Z",
+    "primary": 138.02,
+    "secondary": 0.7
+   }
+  ]
+ },
+ "forecast": {
+  "pedts": "HGIFZ",
+  "issuedTime": "2026-10-07T15:36:00Z",
+  "wfo": "SEW",
+  "timeZone": "PST8PDT",
+  "primaryName": "Stage",
+  "primaryUnits": "ft",
+  "secondaryName": "Flow",
+  "secondaryUnits": "kcfs",
+  "data": [
+   {
+    "validTime": "2026-10-07T18:00:00Z",
+    "generatedTime": "2026-10-07T15:56:31Z",
+    "primary": 138.05,
+    "secondary": 0.734
+   },
+   {
+    "validTime": "2026-10-08T00:00:00Z",
+    "generatedTime": "2026-10-07T15:56:31Z",
+    "primary": 138.04,
+    "secondary": 0.722
+   },
+   {
+    "validTime": "2026-10-08T06:00:00Z",
+    "generatedTime": "2026-10-07T15:56:31Z",
+    "primary": 138.02,
+    "secondary": 0.7
+   },
+   {
+    "validTime": "2026-10-08T12:00:00Z",
+    "generatedTime": "2026-10-07T15:56:31Z",
+    "primary": 138.01,
+    "secondary": 0.689
+   }
+  ]
+ }
+}
