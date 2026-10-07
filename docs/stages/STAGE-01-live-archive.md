@@ -226,6 +226,14 @@ Every raw payload is archived immutably on local disk with its sha256. The ECCC 
 - **Reversibility / cost:** with a key, re-run `floodlead backfill usgs` and it continues from the coverage table.
 - **Follow-ups:** "Needs human": a USGS API key.
 
+### D-01.18 — Probe a file when the Datamart listing shows no change
+
+- **Context:** the directory listing can lag the files. `raw_objects.last_modified` shows the hourly files were rewritten at 20:31:17–23, 21:01:24–30 and **21:31:14–20** UTC: every 30 min, not hourly as PLAN.md says. Yet `curl` of the listing at 21:36:15 still showed every file at `21:01`, so the 21:33 poll skipped all files (run 44: `fetched 0, unchanged 429`). Listing-only change detection can therefore add one or more 10-min cycles of latency.
+- **Options considered:** (a) trust the listing; (b) conditional GET on all 429 files every 10 min (≈ 62k requests/day, mostly 304s); (c) when the listing shows nothing new, one conditional GET on a probe file (`BC_08MH001_hourly_hydrometric.csv`); if it changed, re-check every file with conditional GETs.
+- **Choice:** (c). One extra request per poll; a missed rewrite is detected on the next poll (≤ 10 min) instead of waiting for the listing. Run details record `listing_stale_probe_changed`.
+- **Reversibility / cost:** trivial.
+- **Follow-ups:** verify at the next rewrite (logged below).
+
 ## Work log
 
 - `13:33` — `git remote set-url origin https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC.git` (the new URL the human gave), `git checkout main && git pull origin main` → fast-forward `b7b263e..939495f` ("Fold Stage 0 findings into Stage 1; fix repo name and archive wording"). `docker run --rm hello-world` → `Hello from Docker!` without sudo. `git checkout -b stage-01-live-archive`.
@@ -282,6 +290,16 @@ Every raw payload is archived immutably on local disk with its sha256. The ECCC 
   - AC-4 (first check, 21:29:43 UTC, files Last-Modified 21:01:28): 08MH001 live last line `08MH001,2026-10-07T12:20:00-08:00,1.537,,,1,17.7,,,1` vs DB `20:20Z {level 1.537, flow 17.7}` → MATCH. 08MH029 `12:35-08:00, 1.252, 0.806` → MATCH. 08MH103 `12:05-08:00, 0.543, 10.4` → MATCH.
   - Public latency: `/v1/health` 0.05–0.06 s (cached), `/v1/stations?region=BC&limit=5` 0.37 s, `/docs` 0.05 s. A `HEAD` request returns 405 (routes are GET only; use GET). CORS `access-control-allow-origin: *` and HSTS present.
   - Idle resources: db 538 MiB / 2.5 GiB, ingest 52 MiB / 1 GiB, api 44 MiB / 512 MiB, caddy 13 MiB / 256 MiB; host 6.0 GiB available, swap used 64 KiB. `systemctl is-enabled docker containerd` → `enabled enabled`.
+- `14:31` — Committed and pushed `697942f`.
+- `14:36–14:38` — **Docker daemon restart (AC-9 stand-in for a reboot).**
+  - Health before (21:36:52): green for all three sources.
+  - `sudo systemctl restart docker` at 21:37:05. Within 2 s all four `floodlead-*` containers were `Up` again (restart policy `unless-stopped`); `api` and `db` healthy within about 60 s.
+  - Health after (21:38:13): green. New runs began at 21:37:08 without manual steps: eccc live 46 `ok` (fetched 428, 4,697 rows inserted, 566,583 unchanged, 0 stale, 56.4 s), nwps live 48 `ok`, eccc stations 50 `ok`. USGS runs 47/49 → `error` (rate-limited, expected).
+  - The one-off `fl-backfill-usgs` container exited (137) as expected for `restart: "no"`, and was relaunched by hand (resumable).
+  - `systemctl is-enabled docker containerd` → `enabled enabled`, so the daemon and containers also come back after a VM reboot. **A real VM reboot was not done:** it would end this worker session mid-stage, so it is left for the human.
+- `14:38` — **AC-4 second check** after the 21:31 rewrite (files Last-Modified 21:31:18, fetched 21:38:22–23): 08MH001 `20:20Z 1.537 / 17.7` MATCH; 08MH029 `20:35Z 1.252 / 0.806` MATCH; 08MH103 **new row** `13:05-08:00` → `21:05Z 0.538 / 10.3` MATCH.
+- `14:38` — Found the stale listing (D-01.18) and implemented the probe. `pytest` → 41 passed. Rebuilt, redeployed ingest.
+- `14:39` — Relaunched the USGS backfill (6-month chunks): plan **297 tasks** (12205000: 34 of 45 left, since monthly chunks already cover part). Metadata request `200`; first data request `429`, `retry_after_s 594`, so all workers pause until about 21:49 UTC.
 
 ## Measurements
 

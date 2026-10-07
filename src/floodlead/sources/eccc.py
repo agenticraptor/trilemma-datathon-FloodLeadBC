@@ -25,6 +25,7 @@ from floodlead.config import get_settings
 L = log.get(__name__)
 
 SOURCE = "eccc"
+PROBE_FILE = "BC_08MH001_hourly_hydrometric.csv"  # Chilliwack R. at Vedder Crossing, reports year-round
 _LISTING_RE = re.compile(
     r'href="(BC_(?P<station>[0-9A-Z]+)_(?P<kind>hourly|daily)_hydrometric\.csv)">[^<]*</a>\s+'
     r"(?P<date>\d{4}-\d{2}-\d{2} \d{2}:\d{2})"
@@ -112,8 +113,21 @@ def ingest_files(
                     run.items_unchanged += 1
                     continue
                 todo.append((name, known))
+            # The directory listing can lag the files: on Oct 7 the files were rewritten at 21:31:14-20 but the
+            # listing still showed 21:01 at 21:36. So when the listing shows nothing new, one conditional GET on a
+            # probe file decides; if it changed, every file is re-checked with conditional GETs (304s are cheap).
+            probe_changed = False
+            if not todo and files and not force:
+                probe = PROBE_FILE if PROBE_FILE in files else sorted(files)[0]
+                probe_url = base + probe
+                pf = http.fetch(c, probe_url, if_modified_since=state.get(probe_url))
+                if not pf.not_modified:
+                    probe_changed = True
+                    run.items_unchanged = 0
+                    todo = [(name, state.get(base + name)) for name in sorted(files)]
             run.items_total = len(files)
-            run.details.update({"listing_files": len(files), "to_fetch": len(todo), "force": force})
+            run.details.update({"listing_files": len(files), "to_fetch": len(todo), "force": force,
+                                "listing_stale_probe_changed": probe_changed})
             lock = threading.Lock()
 
             def work(name: str, known: datetime | None) -> None:
