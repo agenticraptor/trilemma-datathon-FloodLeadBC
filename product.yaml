@@ -1,0 +1,38 @@
+# Machine-readable mirror of https://build.trilemma.foundation/schemas/product.schema.json
+id: floodlead-bc
+name: FloodLead BC
+status: spec
+maturity: 1
+maturity_label: Spec
+scope: external
+archetype: forecasting-product
+category: natural-hazards
+problem: >-
+  BC flood advisories describe whole basins in m3/s and return periods; a farmer cannot tell
+  how many hours remain before their own river gauge reaches the level at which they must act.
+target_users:
+  - Livestock and crop farmers on BC floodplains (Fraser Valley first)
+  - Riverside households and campgrounds
+  - Local emergency volunteers coordinating animal moves
+primary_decision: >-
+  Start the flood action plan now (move animals, check pumps, leave), or wait for the next hourly forecast.
+inputs:
+  - ECCC Water Survey of Canada real-time hydrometric data (OGL-Canada)
+  - ECCC historical daily hydrometric data (OGL-Canada)
+  - ECCC MSC HRDPS precipitation forecasts (ECCC Data Servers End-use Licence)
+  - BC River Forecast Centre advisories (comparison baseline only, link-only)
+outputs:
+  - Per-gauge, per-threshold probability of crossing within 6/12/24/48 hours
+  - P10/P50/P90 peak level and median hours-to-crossing
+  - Voice and SMS alerts with user approval before contacts are notified
+  - Public append-only, SHA-256 chained forecast ledger with live scores
+repo: https://github.com/agenticraptor/trilemma-datathon
+tags:
+  - floods
+  - hydrology
+  - forecasting
+  - calibration
+  - agents
+  - british-columbia
+  - open-data
+  - datathon-season-2026
