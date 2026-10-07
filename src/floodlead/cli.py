@@ -1,0 +1,110 @@
+"""`floodlead` command line: migrate, ingest (scheduler), run one job, backfills, api."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from datetime import UTC, datetime
+
+from floodlead import db, log
+from floodlead.config import get_settings
+
+
+def _pool(max_size: int = 6):  # type: ignore[no-untyped-def]
+    return db.pool(max_size=max_size)
+
+
+def _jobs(pool):  # type: ignore[no-untyped-def]
+    from floodlead.scheduler import Job
+    from floodlead.sources import eccc, nwps, usgs
+
+    return [
+        # ECCC rewrites all hourly files at ~:31; polling every 10 min at :03/:13/.../:33 means the
+        # :33 run picks up each refresh within ~2 min of publication.
+        Job("eccc-hourly", 600, 180, lambda: eccc.ingest_files(pool, "hourly", "live")),
+        Job("usgs-live", 900, 120, lambda: usgs.ingest_live(pool)),
+        Job("nwps-live", 1800, 300, lambda: nwps.ingest_live(pool)),
+        # Station metadata daily (and at start).
+        Job("eccc-stations", 86400, 9 * 3600 + 600, lambda: eccc.refresh_stations(pool)),
+        Job("usgs-stations", 86400, 9 * 3600 + 900, lambda: usgs.refresh_stations(pool)),
+    ]
+
+
+def main(argv: list[str] | None = None) -> int:
+    log.setup()
+    ap = argparse.ArgumentParser(prog="floodlead")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("migrate", help="apply pending SQL migrations")
+    sub.add_parser("ingest", help="run the live ingestion scheduler (foreground)")
+    r = sub.add_parser("run", help="run one live job once")
+    r.add_argument("job", choices=["eccc-hourly", "usgs-live", "nwps-live", "eccc-stations", "usgs-stations"])
+    r.add_argument("--force", action="store_true", help="eccc-hourly: re-download every file (ignore Last-Modified)")
+    b = sub.add_parser("backfill", help="idempotent, resumable backfills")
+    bsub = b.add_subparsers(dest="what", required=True)
+    bsub.add_parser("eccc-30d", help="all BC 30-day (Datamart 'daily') files")
+    bu = bsub.add_parser("usgs", help="USGS continuous (15-min) history, chunked by month")
+    bu.add_argument("--sites", default="all", help="comma-separated USGS site numbers, or 'all'")
+    bu.add_argument("--since", default="2004-10-01", help="ISO date (UTC)")
+    bu.add_argument("--until", default=None, help="ISO date (UTC); default now")
+    bsub.add_parser("nwps", help="NWPS gauge metadata, flood categories and current forecasts")
+    a = sub.add_parser("api", help="serve the read-only API")
+    a.add_argument("--host", default="0.0.0.0")
+    a.add_argument("--port", type=int, default=8000)
+    args = ap.parse_args(argv)
+
+    if args.cmd == "migrate":
+        print(db.migrate())
+        return 0
+    if args.cmd == "api":
+        import uvicorn
+
+        db.migrate()
+        uvicorn.run("floodlead.api:app", host=args.host, port=args.port, proxy_headers=True,
+                    forwarded_allow_ips="*", access_log=False, log_config=None)
+        return 0
+
+    db.migrate()
+    pool = _pool()
+    if args.cmd == "ingest":
+        from floodlead.scheduler import run_forever
+
+        get_settings().archive_dir.mkdir(parents=True, exist_ok=True)
+        # Live jobs only run inside this scheduler, so any live run still marked 'running' was
+        # interrupted by a restart. Backfills (other containers) are left alone.
+        with pool.connection() as conn:
+            n = conn.execute(
+                "UPDATE ingest_runs SET status = 'error', finished_at = now(),"
+                " error_text = 'abandoned: process stopped before the run finished'"
+                " WHERE status = 'running' AND job IN ('live', 'stations')"
+            ).rowcount
+            conn.commit()
+        log.get(__name__).info("marked abandoned runs", **log.kv(count=n))
+        run_forever(_jobs(pool))
+        return 0
+    if args.cmd == "run":
+        if args.job == "eccc-hourly" and args.force:
+            from floodlead.sources import eccc
+
+            eccc.ingest_files(pool, "hourly", "live", force=True)
+            return 0
+        jobs = {j.name: j for j in _jobs(pool)}
+        jobs[args.job].fn()
+        return 0
+    if args.cmd == "backfill":
+        from floodlead.sources import eccc, nwps, usgs
+
+        if args.what == "eccc-30d":
+            eccc.ingest_files(pool, "daily", "backfill-eccc-30d")
+        elif args.what == "usgs":
+            sites = None if args.sites == "all" else [s.strip() for s in args.sites.split(",") if s.strip()]
+            since = datetime.fromisoformat(args.since).replace(tzinfo=UTC)
+            until = datetime.fromisoformat(args.until).replace(tzinfo=UTC) if args.until else datetime.now(UTC)
+            usgs.backfill(pool, sites, since, until)
+        elif args.what == "nwps":
+            nwps.ingest_live(pool, job="backfill-nwps")
+        return 0
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
