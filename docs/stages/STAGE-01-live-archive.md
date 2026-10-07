@@ -274,6 +274,14 @@ Every raw payload is archived immutably on local disk with its sha256. The ECCC 
   - `df -h /` → 17 G used of 96 G (includes the 4 G swapfile, 3.2 G images, 4.3 G volumes).
 - `14:27` — The Cloud Billing catalog API is disabled in the project (`403 … has not been used in project …`). Enabling it would change the project, so the cost estimate uses list prices and is labelled as an estimate.
 - `14:28` — Contract files updated (table below).
+- `14:28–14:31` — **AC evidence collected (non-USGS).**
+  - AC-2 SQL at 21:28:33 UTC: **427** ECCC stations newer than 3 h (429 with data in 48 h). Newest-row lag **p50 63.6 min**, p90 83.6 min, min 38.6 min. Measured 2.5 min before the 21:31 rewrite, so close to the daily worst case.
+  - AC-7: 1,289 `raw_objects` and 1,289 `.gz` files. `comm` of DB paths vs disk paths: 0 missing, 0 orphans. 0 temp files, 0 files without mode 0444, 0 archive errors. 1,289 files written in the last 60 min. 5 random files re-verified with `zcat | sha256sum`: all `OK`. Total HTTP-200 payloads fetched (sum of `items_fetched`) 1,804, so 515 were byte-identical repeats stored once.
+  - AC-8: sentinels **2** (`eccc:08HB029` 2026-10-06 22:00Z and `eccc:08NJ026` 23:50Z, level `99999`, `value NULL`); revisions **0** (`observation_revisions` empty; no published value changed between fetches yet); stale **13,073** (backfill). Public API for `eccc:08NJ026` 23:40–00:01Z: default → `count 2` (sentinel excluded); `include_sentinels=true` → `count 3` with `{"ts":"2026-10-06T23:50:00Z","raw_value":99999.0,"value":null,"is_sentinel":true}`.
+  - AC-6: `GET /v1/official-forecasts/NRKW1` → `issued_at 2026-10-07T15:36:00Z`, 29 points, first `{"valid_at":"2026-10-07T18:00:00Z","stage_ft":138.05,"flow_kcfs":0.734}`, last `2026-10-14T18:00:00Z 138.2 ft`; station `usgs:12210700` with categories action 144.8 / minor 146.5 / moderate 148 / major 150 ft. NKSW1 thresholds (15 / 18 / 20.5 / 23 ft) on `usgs:12213100`.
+  - AC-4 (first check, 21:29:43 UTC, files Last-Modified 21:01:28): 08MH001 live last line `08MH001,2026-10-07T12:20:00-08:00,1.537,,,1,17.7,,,1` vs DB `20:20Z {level 1.537, flow 17.7}` → MATCH. 08MH029 `12:35-08:00, 1.252, 0.806` → MATCH. 08MH103 `12:05-08:00, 0.543, 10.4` → MATCH.
+  - Public latency: `/v1/health` 0.05–0.06 s (cached), `/v1/stations?region=BC&limit=5` 0.37 s, `/docs` 0.05 s. A `HEAD` request returns 405 (routes are GET only; use GET). CORS `access-control-allow-origin: *` and HSTS present.
+  - Idle resources: db 538 MiB / 2.5 GiB, ingest 52 MiB / 1 GiB, api 44 MiB / 512 MiB, caddy 13 MiB / 256 MiB; host 6.0 GiB available, swap used 64 KiB. `systemctl is-enabled docker containerd` → `enabled enabled`.
 
 ## Measurements
 
@@ -286,6 +294,21 @@ Every raw payload is archived immutably on local disk with its sha256. The ECCC 
 | gzip ratio, ECCC hourly CSV | 21,007,854 B → 1,411,813 B (14.9×) | `raw_objects` sums | 21:06 UTC |
 | ECCC newest-row lag (all stations) | 46 min at 21:06 UTC (max ts 20:20) | SQL `now() - max(ts)` | 21:06 UTC |
 | USGS newest-row lag | 21 min at 21:06 UTC (max ts 20:45) | SQL | 21:06 UTC |
+
+### AC-12 — Monthly cost (ESTIMATE) and disk runway
+
+**All prices below are estimates** from GCP public list prices as recalled for Toronto (`northamerica-northeast2`), on-demand and without discounts. They were **not** read from billing data: the Cloud Billing API is disabled in the project and enabling it was out of scope. Treat them as ±15 %.
+
+| Item | Basis | Est. US$/month |
+|---|---|---|
+| VM e2-standard-2 (2 vCPU, 8 GB) | ≈ US$0.074/h × 730 h (us-central1 list is US$0.067/h; Toronto about 10 % higher) | ≈ 54 |
+| Boot disk pd-balanced 100 GB | ≈ US$0.11/GB-month | ≈ 11 |
+| Daily snapshots (not yet attached) | ≈ US$0.05/GB-month × ~20 GB first full + ~1–2 GB/day changed blocks × 14-day retention ≈ 35–50 GB | ≈ 2–3 |
+| Static external IPv4 in use | US$0.005/h | ≈ 3.7 |
+| Network egress (API responses only; ingest is ingress) | small | < 1 |
+| **Total** | | **≈ US$71–73/month ≈ CA$97–100** (FX 1.37 assumed) |
+
+Disk runway: see the growth measurement in the work log (filled at the end of the stage).
 
 ## Acceptance criteria
 
