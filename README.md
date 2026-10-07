@@ -116,13 +116,15 @@ Every material input has documented rights below. Full records live in [`data-co
 | ECCC MSC Datamart / GeoMet (HRDPS precipitation) | Model feature | ECCC Data Servers End-use Licence (attribution required) | 🟢 Green |
 | BC River Forecast Centre advisories and CLEVER/COFFEE forecasts | **Comparison baseline only** — linked and cited, never republished | Province of BC website terms (under review) | 🟡 Yellow |
 | Google Flood Hub | Comparison baseline only, where it covers a gauge | Google terms (under review) | 🟡 Yellow |
+| USGS water data (Nooksack and Sumas gauges, WA) | Core model input and ground truth for the river that floods Sumas Prairie | US public domain (credit USGS) | 🟢 Green |
+| NOAA NWS National Water Prediction Service | Official forecasts (scoring baseline) and official flood categories, shown unmodified | US public domain (NWS conditions) | 🟢 Green |
 
 ```yaml
 - source: ECCC Real-time Hydrometric Data
   url: https://open.canada.ca/data/dataset/65d3a88b-eb09-4fd9-ac44-cf42dc1f7444
   license: OGL-Canada-2.0
   license_url: https://open.canada.ca/en/open-government-licence-canada
-  access_method: AMQP push (dd.weather.gc.ca, hydrometric.csv.#) + HTTPS CSV + OGC API
+  access_method: HTTPS polling of Datamart CSVs every 10 min with conditional GETs (dd.weather.gc.ca/today/hydrometric/csv/BC/) + OGC API for station metadata
   commercial_use: true
   redistribution: true
   attribution_required: true
@@ -159,10 +161,10 @@ Every material input has documented rights below. Full records live in [`data-co
 ## How it works
 
 ```text
-ECCC AMQP / Datamart / GeoMet
-        │
+ECCC Datamart (BC) · USGS Water Data (Nooksack, Sumas) · NOAA NWPS (official forecasts)
+        │  HTTPS polling: every 10 / 15 / 30 min
         ▼
-  Ingestor (dedupe, schema checks) ──► Raw archive (Parquet, Canadian region)
+  Ingestor (dedupe, schema checks) ──► Raw archive (gzip + sha256, read-only, VM disk in Toronto)
         │
         ▼
   TimescaleDB ──► Feature builder ──► Forecast model (hourly, per station)
@@ -178,14 +180,14 @@ ECCC AMQP / Datamart / GeoMet
 
 | Layer | Choice |
 |---|---|
-| Ingestion | Python asyncio AMQP consumer; 30-day Datamart backfill; HRDPS basin subsetting |
-| Storage | TimescaleDB (Postgres 16) + Parquet archive; DuckDB for offline training |
+| Ingestion | Python scheduler polling ECCC Datamart (all 429 BC hourly files), USGS (10 sites, 15-min) and NOAA NWPS; 30-day Datamart and USGS history backfills; HRDPS basin subsetting later |
+| Storage | TimescaleDB (Postgres 16) in Docker on the VM; every raw payload archived on local disk (gzip, sha256-indexed, never overwritten), with daily disk snapshots as the off-machine copy; DuckDB for offline training |
 | Model | LightGBM quantile regression + isotonic calibration; discrete-time hazard for time-to-crossing |
-| Serving | FastAPI, hourly scoring |
+| Serving | FastAPI read-only public API behind Caddy (automatic HTTPS): `/v1/health`, stations, observations, official forecasts; hourly scoring later |
 | Agent | State machine (detect → compose → call → await approval → notify → escalate); voice + SMS provider |
 | Front end | Next.js PWA: gauge chart with forecast fan, threshold setup, public ledger |
 | Observability | Prometheus/Grafana (feed lag, ingest rate, alert latency); data-quality checks on every batch |
-| Deployment | Single VM + managed Postgres in a Canadian region |
+| Deployment | Single GCE VM in Toronto (Canada), Docker Compose (`db`, `ingest`, `api`, `caddy`) |
 
 Full data architecture record: [`architecture.md`](architecture.md).
 
@@ -203,7 +205,7 @@ All performance numbers in this repo will come from these experiments. None are 
 
 | Gate | Go if | Otherwise |
 |---|---|---|
-| Data access | AMQP archive running and 30-day backfill complete for ≥ 40 BC stations | Switch to HTTPS polling of Datamart CSVs |
+| Data access | Archive running and 30-day backfill complete for ≥ 40 BC stations. **Met Oct 7:** HTTPS polling chosen (files change only every ~30 min, so push gives no freshness gain); 30-day backfill covers 428 stations | Switch to HTTPS polling of Datamart CSVs |
 | Licence | All core inputs Green (done for ECCC) | Drop any Yellow source to "link only" |
 | Model skill | Walk-forward Brier skill score vs persistence ≥ 0.10 at 12 h, calibration error ≤ 0.05 | Ship "gauge watch + trend" mode without probability alerts, and say so |
 | Originality | Our personal-threshold + agent + public-scoring combination isn't already offered for these gauges | Re-scope the claim; keep competitor as a baseline |
@@ -235,8 +237,25 @@ data-contract.md   inputs, freshness, lineage, privacy, usage rights
 evaluation.md      metrics, thresholds, kill criteria
 roadmap.md         next bets and explicit rejects
 demo.md            replayable demo scripts
-src/               application code
+src/floodlead/     application code (ingestion, archive, API, CLI `floodlead`)
+migrations/        additive SQL migrations
+compose.yaml       production stack (db, ingest, api, caddy) · Dockerfile · deploy/Caddyfile
+docs/build/        build plan and stage prompts · docs/stages/ stage documents
 tests/             unit, contract, replay and calibration tests
+```
+
+## Run it
+
+```bash
+# on the VM (needs .env with PUBLIC_HOSTNAME, POSTGRES_PASSWORD, ARCHIVE_DIR; never commit it)
+docker compose up -d                                              # db, ingest, api, caddy
+docker compose run -d --name bf-eccc backfill floodlead backfill eccc-30d
+docker compose run -d --name bf-usgs backfill floodlead backfill usgs --since 2004-10-01
+curl https://$PUBLIC_HOSTNAME/v1/health
+
+# development
+uv sync && uv run ruff check . && uv run pytest              # DB tests need a reachable TimescaleDB
+uv run pytest -m live                                         # checks against the real sources
 ```
 
 ## Non-goals
@@ -248,7 +267,7 @@ tests/             unit, contract, replay and calibration tests
 
 ## Attribution
 
-Contains information licensed under the Open Government Licence – Canada. Contains data from Environment and Climate Change Canada.
+Contains information licensed under the Open Government Licence – Canada. Contains data from Environment and Climate Change Canada. Credit: U.S. Geological Survey. Official forecasts and flood categories: NOAA National Weather Service (not affiliated with or endorsed by NOAA/NWS).
 
 ## References
 

@@ -264,6 +264,16 @@ Every raw payload is archived immutably on local disk with its sha256. The ECCC 
   - 3 live tests. `uv run pytest -q` → **41 passed, 3 deselected**. `uv run pytest -m live` → 2 passed, 1 failed: the USGS live test, because the API is rate-limiting this IP (429). It will be re-run after the quota resets.
 - `14:24` — Finding: ECCC rewrote the hourly files at **20:31:21** and again at **21:01:28** UTC (`raw_objects.last_modified` for 08MH001; all 429 `fetch_state` rows at 21:01). That is a 30-min cadence, not hourly as PLAN.md says. Polling every 10 min catches both within about 2 min. Run 12 (21:10, during both backfills) fetched 429 files: 4,634 rows inserted, 563,393 unchanged, 0 stale, in 2 min 21 s.
 - Sentinel evidence for D-01.5: 2 real ECCC sentinels (`eccc:08HB029` and `eccc:08NJ026`, level `99999`). **1,119** USGS flow values are ≥ 9999 ft³/s and are real, not flagged; the prompt's literal rule would have flagged all of them.
+- `14:24` — `4b68120` pushed. The ECCC 30-day backfill finished: run 17 `ok`, 442 files (417 fetched, 25 already done by interrupted run 9), **5,980,015 rows inserted, 406,916 unchanged, 13,073 stale**, 0 failed, in 9 min 44 s. The 13,073 stale rows are older 30-day-file values that differ from newer hourly-file values; the out-of-order guard (D-01.6) refused to apply them.
+- `14:24` — **Restart check (AC-9, first part).** Health before (21:23:36): green for all three sources. `docker compose restart` at 21:24:14; after 40 s all 4 services were up (`api` and `db` healthy). Health after (21:24:36): green. New runs started automatically at 21:24:16: eccc live 34 `ok`, nwps live 35 `ok`, eccc stations 36. USGS runs 33 and 37 → `error` (`RateLimited … retry after 1502 s`), as expected while limited.
+- `14:26` — USGS Retry-After kept moving later as more requests were made while limited (21:45 → 21:49), so live USGS jobs now skip locally (no request) until Retry-After has passed. Rebuilt, redeployed ingest; `pytest` → 41 passed.
+- `14:27` — Measured volumes for the contract docs:
+  - `pg_database_size` 2,032 MB; 312 chunks; `hypertable_size('observations')` 2,109,620,224 B for 7,369,690 rows (≈ 286 B/row).
+  - Last hour: ECCC hourly payloads 676 (26.0 MB raw → 1.81 MB gz); NWPS 26 (12.96 MB → 0.45 MB).
+  - Of the 429 files rewritten at 21:01, 247 had new content; 182 were byte-identical to 20:31 and stored once.
+  - `df -h /` → 17 G used of 96 G (includes the 4 G swapfile, 3.2 G images, 4.3 G volumes).
+- `14:27` — The Cloud Billing catalog API is disabled in the project (`403 … has not been used in project …`). Enabling it would change the project, so the cost estimate uses list prices and is labelled as an estimate.
+- `14:28` — Contract files updated (table below).
 
 ## Measurements
 
@@ -286,6 +296,10 @@ Every raw payload is archived immutably on local disk with its sha256. The ECCC 
 
 | File | What changed | Why |
 |---|---|---|
+| `architecture.md` | Data architecture record rewritten to the running system: polling instead of AMQP; TimescaleDB in Docker on GCE instead of managed Postgres; local gzip archive plus daily snapshots instead of Parquet on object storage; Caddy/sslip.io; USGS and NWPS sources; measured volumes and freshness; cost estimate. Components, core schema (actual Stage 1 tables), public API (live vs planned) and deployment updated | Facts changed in this stage (CLAUDE.md rule 5) |
+| `data-contract.md` | Freshness for records 1, 6, 7 replaced with measured latencies and the observed 30-min ECCC rewrite. USGS access method set to OGC API v1 with the keyless 1,000 req/h limit. Lineage diagram set to the real pipeline. SLO table aligned with `/v1/health` thresholds | Prompt: "replace estimated freshness with the latencies you measure" |
+| `README.md` | Data/rights table gains USGS and NOAA NWPS (🟢). ECCC access method changed from AMQP to polling. "How it works" diagram and table (ingestion, storage, serving, deployment), go/no-go "Data access" status, attribution lines, repository layout, a "Run it" section | Prompt: README "How it works" and data table; Parquet/object-storage line replaced |
+| `product.yaml` | `inputs` gains USGS water data and NOAA NWPS | Two new core inputs since Stage 0 |
 
 ## Open issues and handoff to next stage
 

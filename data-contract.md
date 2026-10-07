@@ -6,13 +6,13 @@ Every material external input has known provenance and documented usage rights, 
 
 | # | Source | Role | Freshness | Licence | Light |
 |---|---|---|---|---|---|
-| 1 | ECCC real-time hydrometric (Datamart hourly CSV) | Core feature + ground truth (BC gauges) | 5-min observations; files refreshed hourly, ~1 h behind real time | OGL – Canada | 🟢 |
+| 1 | ECCC real-time hydrometric (Datamart hourly CSV) | Core feature + ground truth (BC gauges) | 5-min observations; all 429 BC files rewritten about every 30 min (observed 20:31 and 21:01 UTC, Oct 7); newest row 22–47 min old just after a rewrite, up to 107 min just before one; station-lag p50 ~49 min (measured Oct 7) | OGL – Canada | 🟢 |
 | 2 | ECCC historical daily hydrometric | Training history | Daily, decades | OGL – Canada | 🟢 |
 | 3 | ECCC MSC HRDPS precipitation | Model feature | 4 runs/day | ECCC Data Servers End-use Licence | 🟢 |
 | 4 | BC River Forecast Centre advisories, CLEVER/COFFEE | Scoring baseline only | Irregular | Province of BC website terms (pending) | 🟡 |
 | 5 | Google Flood Hub | Scoring baseline only | Daily | Google terms (pending) | 🟡 |
-| 6 | USGS water data (Nooksack and Sumas gauges, Washington) | Core feature + ground truth (the river that floods Sumas Prairie) | 15-min, ~45 min behind; history since 2004–2007 | US public domain | 🟢 |
-| 7 | NOAA NWS National Water Prediction Service (official forecasts, flood stages) | Official baseline + official thresholds | Forecast issued ~daily, 6-hourly points to 7 days | US public domain (NWS) | 🟢 |
+| 6 | USGS water data (Nooksack and Sumas gauges, Washington) | Core feature + ground truth (the river that floods Sumas Prairie) | 15-min; newest value 14–52 min old (measured Oct 7); instantaneous history since 2004–2007 at the main sites; keyless API limit 1,000 requests/hour per IP | US public domain | 🟢 |
+| 7 | NOAA NWS National Water Prediction Service (official forecasts, flood stages) | Official baseline + official thresholds | NRKW1 and NKSW1 forecasts issued about daily (15:36 UTC on Oct 7), 6-hourly points to 7 days (NRKW1, 29 points) or 10 days (NKSW1, 40 points); observed series ~37 min behind | US public domain (NWS) | 🟢 |
 
 Yellow sources are never core dependencies. If their terms do not allow the intended use, we only link to them and compare against what any member of the public can see.
 
@@ -23,7 +23,7 @@ Yellow sources are never core dependencies. If their terms do not allow the inte
   url: https://open.canada.ca/data/dataset/65d3a88b-eb09-4fd9-ac44-cf42dc1f7444
   license: OGL-Canada-2.0
   license_url: https://open.canada.ca/en/open-government-licence-canada
-  access_method: HTTPS polling of Datamart hourly and 30-day CSVs (dd.weather.gc.ca/today/hydrometric/csv/BC/), OGC API (api.weather.gc.ca) for station metadata and daily history
+  access_method: HTTPS polling (every 10 min, conditional GETs) of Datamart hourly and 30-day CSVs (dd.weather.gc.ca/today/hydrometric/csv/BC/), OGC API (api.weather.gc.ca) for station metadata and daily history
   commercial_use: true
   redistribution: true
   attribution_required: true
@@ -81,7 +81,7 @@ Yellow sources are never core dependencies. If their terms do not allow the inte
   url: https://api.waterdata.usgs.gov/ogcapi/v0/
   license: US Public Domain
   license_url: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
-  access_method: USGS Water Data OGC API (continuous, daily); legacy waterservices.usgs.gov NWIS as fallback
+  access_method: USGS Water Data OGC API v1 (api.waterdata.usgs.gov/ogcapi/v1; collections continuous, time-series-metadata, monitoring-locations); legacy waterservices.usgs.gov NWIS as fallback. Keyless limit 1,000 requests/hour per IP (an API key from api.waterdata.usgs.gov/signup raises it)
   commercial_use: true
   redistribution: true
   attribution_required: false   # credit requested: "U.S. Geological Survey"
@@ -110,26 +110,36 @@ Yellow sources are never core dependencies. If their terms do not allow the inte
 ## Freshness and lineage
 
 ```text
-ECCC AMQP message ──► raw CSV (immutable, Parquet, hashed) ──► observation table
+HTTPS poll (ECCC Datamart CSV / USGS OGC JSON / NWPS JSON)
+   │
+   ├──► raw payload: gzip, sha256, read-only, $ARCHIVE_DIR/raw/<source>/YYYY/MM/DD/HH/  (raw_objects index)
+   │
+   └──► parse ──► observations (TimescaleDB; SI + raw value; revisions appended to observation_revisions)
+                  official_forecasts (NWPS, unmodified)
                                                               │
-HYDAT daily ──────────────────────────────────────────────────┤
-HRDPS GRIB2 ──► basin-mean precip ────────────────────────────┤
+HYDAT daily (Stage 3) ────────────────────────────────────────┤
+HRDPS GRIB2 ──► basin-mean precip (later stage) ───────────────┤
                                                               ▼
                                                    features ──► forecast (model_version)
                                                               ──► ledger (sha256 chain)
                                                               ──► score (vs observed)
 ```
 
-- Every forecast row stores `model_version`, `feature_snapshot_hash` and the latest observation timestamp it used.
+- Every observation row keeps `raw_object_id` (the payload that set its value), `published_at`, `first_seen_at`, `last_seen_at` and `revision_count`; every change is appended to `observation_revisions`.
+- Every forecast row (Stage 2+) stores `model_version`, `feature_snapshot_hash` and the latest observation timestamp it used.
 - Observations are stored as first received and as revised; scoring uses the value available at the time of the forecast for features, and the final value for ground truth.
 
 ## Freshness SLOs
 
-| Feed | Expected | Alert if |
-|---|---|---|
-| Real-time hydrometric (watched gauges) | New reading every 5–15 min | No reading for 30 min → "data gap" notice to subscribed users |
-| HRDPS | New run every 6 h | No new run for 9 h → model falls back to gauge-only features |
-| RFC advisory snapshot | Every 15 min | Fetch failure for 2 h → baseline marked missing, not zero |
+Aligned with `/v1/health` (thresholds in `docs/stages/STAGE-01-live-archive.md`, D-01.14).
+
+| Feed | Expected (measured Oct 7) | Amber if | Red if |
+|---|---|---|---|
+| ECCC real-time (Datamart) | files rewritten ~every 30 min; newest row 22–107 min old | newest row > 150 min, or last successful poll > 30 min, or < 80 % of stations reported in 3 h | newest row > 360 min or last successful poll > 90 min |
+| USGS 15-min | newest value 14–52 min old | newest > 120 min or last successful poll > 45 min | newest > 360 min or last poll > 120 min |
+| NWPS official forecasts | issued about daily | newest issuance > 36 h or last poll > 90 min | newest issuance > 72 h or last poll > 180 min |
+| HRDPS (later stage) | new run every 6 h | no new run for 9 h → model falls back to gauge-only features | — |
+| RFC advisory snapshot (later stage) | every 15 min | fetch failure for 2 h → baseline marked missing, not zero | — |
 
 ## Privacy tiers
 

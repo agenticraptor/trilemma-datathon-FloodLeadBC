@@ -67,6 +67,23 @@ def _headers() -> dict[str, str]:
     return {"X-Api-Key": key} if key else {}
 
 
+# Process-wide: after a 429, no live USGS request is made until this monotonic time. Requests made
+# while limited appeared to extend the limit (Retry-After moved from 21:45 to 21:49 UTC after more
+# 429s), so we stop asking instead of probing.
+_blocked_until = 0.0
+
+
+def _check_not_blocked() -> None:
+    remaining = _blocked_until - time.monotonic()
+    if remaining > 0:
+        raise http.RateLimited("(skipped locally)", int(remaining))
+
+
+def _note_rate_limited(e: http.RateLimited) -> None:
+    global _blocked_until
+    _blocked_until = max(_blocked_until, time.monotonic() + e.retry_after_s + 5)
+
+
 class Pacer:
     """Shared minimum interval between request starts, plus a global pause after a 429."""
 
@@ -220,7 +237,12 @@ def ingest_live(pool: ConnectionPool, hours: int = 6) -> int:
     with pool.connection() as conn, http.client() as c:
         conn.autocommit = True
         with store.Run(conn, SOURCE, "live") as run:
-            mf, meta = fetch_series_metadata(c, list(SITES))
+            _check_not_blocked()
+            try:
+                mf, meta = fetch_series_metadata(c, list(SITES))
+            except http.RateLimited as e:
+                _note_rate_limited(e)
+                raise
             with conn.transaction():
                 archive.store(conn, s.archive_dir, SOURCE, "time-series-metadata", mf)
             sites = live_sites(meta, now)
@@ -250,6 +272,7 @@ def ingest_live(pool: ConnectionPool, hours: int = 6) -> int:
                         fut.result()
                     except http.RateLimited as e:
                         limited.append(e)
+                        _note_rate_limited(e)
                         run.fail(futs[fut], e)
                     except Exception as e:  # noqa: BLE001 - one site never stops the others
                         run.fail(futs[fut], e)
@@ -261,9 +284,14 @@ def refresh_stations(pool: ConnectionPool) -> int:
     with pool.connection() as conn, http.client() as c:
         conn.autocommit = True
         with store.Run(conn, SOURCE, "stations") as run:
-            f = http.fetch(c, f"{_base()}/collections/monitoring-locations/items", params={
-                "f": "json", "id": ",".join(f"USGS-{x}" for x in SITES), "limit": "100",
-            }, headers=_headers())
+            _check_not_blocked()
+            try:
+                f = http.fetch(c, f"{_base()}/collections/monitoring-locations/items", params={
+                    "f": "json", "id": ",".join(f"USGS-{x}" for x in SITES), "limit": "100",
+                }, headers=_headers())
+            except http.RateLimited as e:
+                _note_rate_limited(e)
+                raise
             run.items_fetched = 1
             with conn.transaction():
                 ref = archive.store(conn, s.archive_dir, SOURCE, "monitoring-locations", f)
