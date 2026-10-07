@@ -46,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     bu.add_argument("--sites", default="all", help="comma-separated USGS site numbers, or 'all'")
     bu.add_argument("--since", default="2004-10-01", help="ISO date (UTC)")
     bu.add_argument("--until", default=None, help="ISO date (UTC); default now")
+    bu.add_argument("--chunk-months", type=int, default=6, help="months per request window (default 6)")
     bsub.add_parser("nwps", help="NWPS gauge metadata, flood categories and current forecasts")
     a = sub.add_parser("api", help="serve the read-only API")
     a.add_argument("--host", default="0.0.0.0")
@@ -99,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
             sites = None if args.sites == "all" else [s.strip() for s in args.sites.split(",") if s.strip()]
             since = datetime.fromisoformat(args.since).replace(tzinfo=UTC)
             until = datetime.fromisoformat(args.until).replace(tzinfo=UTC) if args.until else datetime.now(UTC)
-            usgs.backfill(pool, sites, since, until)
+            usgs.backfill(pool, sites, since, until, chunk_months=args.chunk_months)
         elif args.what == "nwps":
             nwps.ingest_live(pool, job="backfill-nwps")
         return 0

@@ -53,8 +53,9 @@ def process_payload(
     with conn.transaction():
         ref = archive.store(conn, get_settings().archive_dir, source, name, fetched)
     rows = parse(fetched)
-    with conn.transaction():
-        if rows:
+    if rows:
+        # Own short transaction: the stations row lock must not be held for the whole upsert.
+        with conn.transaction():
             store.ensure_stations(
                 conn,
                 [
@@ -63,6 +64,7 @@ def process_payload(
                     for sid in sorted({r.station_id for r in rows})
                 ],
             )
+    with conn.transaction():
         res = store.upsert_observations(conn, rows, ref.raw_object_id)
         if on_parsed is not None:
             on_parsed(conn, rows, ref.raw_object_id)

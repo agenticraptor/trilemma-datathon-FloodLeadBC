@@ -78,6 +78,17 @@ services:
       - ${ARCHIVE_DIR:-/srv/floodlead/archive}:/archive
     mem_limit: 1g
 
+  # One-off backfills: `docker compose run -d --name <name> backfill floodlead backfill <what>`.
+  # restart "no" so a finished backfill is never re-run by Docker.
+  backfill:
+    <<: *app
+    restart: "no"
+    profiles: ["backfill"]
+    command: ["floodlead", "backfill", "--help"]
+    volumes:
+      - ${ARCHIVE_DIR:-/srv/floodlead/archive}:/archive
+    mem_limit: 1g
+
   api:
     <<: *app
     command: ["floodlead", "api", "--host", "0.0.0.0", "--port", "8000"]

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -40,6 +41,7 @@ SITES: dict[str, str] = {
     "12214500": "Sumas River near Sumas",
 }
 PARAMS = {"00065": ("level", "ft"), "00060": ("flow", "ft3/s")}
+_STATE_CODES = {"Washington": "WA"}
 _UNIT_MAP = {"ft": "ft", "ft^3/s": "ft3/s", "ft3/s": "ft3/s"}
 _PROPS = ",".join([
     "time", "value", "parameter_code", "statistic_id", "time_series_id", "approval_status", "qualifier",
@@ -58,6 +60,32 @@ class Series:
 
 def _base() -> str:
     return get_settings().usgs_ogc_base
+
+
+def _headers() -> dict[str, str]:
+    key = get_settings().usgs_api_key
+    return {"X-Api-Key": key} if key else {}
+
+
+class Pacer:
+    """Shared minimum interval between request starts, plus a global pause after a 429."""
+
+    def __init__(self, min_interval_s: float) -> None:
+        self.min_interval_s = min_interval_s
+        self.lock = threading.Lock()
+        self.next_at = 0.0
+
+    def wait(self) -> None:
+        with self.lock:
+            now = time.monotonic()
+            delay = max(0.0, self.next_at - now)
+            self.next_at = max(now, self.next_at) + self.min_interval_s
+        if delay:
+            time.sleep(delay)
+
+    def pause(self, seconds: float) -> None:
+        with self.lock:
+            self.next_at = max(self.next_at, time.monotonic() + seconds)
 
 
 def _ts(s: str | None) -> datetime | None:
@@ -85,7 +113,7 @@ def fetch_series_metadata(c: httpx.Client, sites: list[str]) -> tuple[http.Fetch
     f = http.fetch(c, f"{_base()}/collections/time-series-metadata/items", params={
         "f": "json", "monitoring_location_id": ",".join(f"USGS-{s}" for s in sites),
         "parameter_code": ",".join(PARAMS), "limit": "1000", "skipGeometry": "true",
-    })
+    }, headers=_headers())
     return f, parse_series_metadata(json.loads(f.content))
 
 
@@ -139,6 +167,7 @@ def fetch_window(
     start: datetime,
     end: datetime,
     allowed: set[str] | None,
+    pacer: Pacer | None = None,
 ) -> int:
     """Fetch [start, end) for one site (both parameters), following pagination. Returns rows."""
     params: dict[str, str] | None = {
@@ -150,7 +179,9 @@ def fetch_window(
     n = 0
     page = 0
     while url:
-        f = http.fetch(c, url, params=params)
+        if pacer is not None:
+            pacer.wait()
+        f = http.fetch(c, url, params=params, headers=_headers())
         run.items_fetched += 1
         page += 1
         name = f"{site}_{start:%Y%m%dT%H%M}_{end:%Y%m%dT%H%M}_p{page}"
@@ -199,7 +230,11 @@ def ingest_live(pool: ConnectionPool, hours: int = 6) -> int:
             lock = threading.Lock()
             start = now - timedelta(hours=hours)
 
+            limited: list[http.RateLimited] = []
+
             def work(site: str) -> None:
+                if limited:  # quota exhausted: do not spend more requests this cycle
+                    raise limited[0]
                 with pool.connection() as wconn:
                     wconn.autocommit = True
                     sub = store.Run(wconn, SOURCE, "live")
@@ -213,6 +248,9 @@ def ingest_live(pool: ConnectionPool, hours: int = 6) -> int:
                 for fut in as_completed(futs):
                     try:
                         fut.result()
+                    except http.RateLimited as e:
+                        limited.append(e)
+                        run.fail(futs[fut], e)
                     except Exception as e:  # noqa: BLE001 - one site never stops the others
                         run.fail(futs[fut], e)
             return run.run_id
@@ -225,7 +263,7 @@ def refresh_stations(pool: ConnectionPool) -> int:
         with store.Run(conn, SOURCE, "stations") as run:
             f = http.fetch(c, f"{_base()}/collections/monitoring-locations/items", params={
                 "f": "json", "id": ",".join(f"USGS-{x}" for x in SITES), "limit": "100",
-            })
+            }, headers=_headers())
             run.items_fetched = 1
             with conn.transaction():
                 ref = archive.store(conn, s.archive_dir, SOURCE, "monitoring-locations", f)
@@ -249,7 +287,8 @@ def refresh_stations(pool: ConnectionPool) -> int:
                     store.upsert_station_meta(conn, {
                         "station_id": f"usgs:{site}", "source": SOURCE, "native_id": site,
                         "name": p.get("monitoring_location_name") or SITES.get(site),
-                        "lon": coords[0], "lat": coords[1], "region": p.get("state_name") or "WA",
+                        "lon": coords[0], "lat": coords[1],
+                        "region": _STATE_CODES.get(p.get("state_name") or "", p.get("state_name") or "WA"),
                         "drainage_area_km2": float(area_mi2) * 2.589988110336 if area_mi2 else None,
                         "params": sorted(PARAMS[c][0] for (st, c) in meta if st == site),
                         "links": {"usgs": f"https://waterdata.usgs.gov/monitoring-location/USGS-{site}/"},
@@ -258,22 +297,52 @@ def refresh_stations(pool: ConnectionPool) -> int:
             return run.run_id
 
 
-def month_chunks(start: datetime, end: datetime) -> list[tuple[datetime, datetime]]:
+def month_chunks(start: datetime, end: datetime, months: int = 1) -> list[tuple[datetime, datetime]]:
+    """Calendar-aligned chunks of `months` months covering [start, end)."""
     out = []
     cur = start.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    cur = cur.replace(month=1 + ((cur.month - 1) // months) * months)
     while cur < end:
-        nxt = (cur.replace(day=28) + timedelta(days=4)).replace(day=1)
+        nxt = cur
+        for _ in range(months):
+            nxt = (nxt.replace(day=28) + timedelta(days=4)).replace(day=1)
         out.append((max(cur, start), min(nxt, end)))
         cur = nxt
     return out
 
 
-def backfill(pool: ConnectionPool, sites: list[str] | None, since: datetime, until: datetime) -> int:
-    """Chunked by calendar month per site (both parameters per request), resumable: completed
-    chunks are recorded in backfill_chunks and skipped on re-run. At most http_max_parallel
-    requests in flight."""
+def covered(intervals: list[tuple[datetime, datetime]], a: datetime, b: datetime) -> bool:
+    """True if the union of `intervals` covers [a, b)."""
+    pos = a
+    for s0, s1 in sorted(intervals):
+        if s0 > pos:
+            break
+        pos = max(pos, s1)
+        if pos >= b:
+            return True
+    return pos >= b
+
+
+# Sites the acceptance checks depend on go first; the rest follow.
+PRIORITY = ["12210700", "12211200", "12211195", "12214500", "12213100", "12208000", "12205000", "12210000",
+            "12211500", "12211190"]
+
+
+def backfill(
+    pool: ConnectionPool,
+    sites: list[str] | None,
+    since: datetime,
+    until: datetime,
+    chunk_months: int = 6,
+    max_attempts: int = 6,
+) -> int:
+    """Chunked per site (both parameters per request), resumable: a chunk already covered by recorded
+    chunks (any size) is skipped. Requests are paced (usgs_backfill_min_interval_s) and the whole
+    backfill pauses for Retry-After when the API rate-limits, then retries the chunk."""
     s = get_settings()
     job = "backfill-usgs"
+    pacer = Pacer(s.usgs_backfill_min_interval_s if not s.usgs_api_key else 1.0)
+    workers = 2  # each 6-month page is ~15-25 MB of JSON; keep memory well under the 1 GiB limit
     with pool.connection() as conn, http.client() as c:
         conn.autocommit = True
         with store.Run(conn, SOURCE, job) as run:
@@ -281,9 +350,12 @@ def backfill(pool: ConnectionPool, sites: list[str] | None, since: datetime, unt
             with conn.transaction():
                 archive.store(conn, s.archive_dir, SOURCE, "time-series-metadata", mf)
             wanted = sites or live_sites(meta, datetime.now(UTC))
-            done = {(k, cs) for k, cs in conn.execute(
-                "SELECT key, chunk_start FROM backfill_chunks WHERE job = %s", (job,))}
-            tasks: list[tuple[str, datetime, datetime]] = []
+            done: dict[str, list[tuple[datetime, datetime]]] = {}
+            for k, a, b in conn.execute(
+                "SELECT key, chunk_start, chunk_end FROM backfill_chunks WHERE job = %s", (job,)
+            ):
+                done.setdefault(k, []).append((a, b))
+            by_site: dict[str, list[tuple[str, datetime, datetime]]] = {}
             plan: dict[str, Any] = {}
             for site in wanted:
                 begins = [sr.begin for (st, _), sr in meta.items() if st == site and sr.begin]
@@ -291,31 +363,47 @@ def backfill(pool: ConnectionPool, sites: list[str] | None, since: datetime, unt
                     plan[site] = "no 00011 series; skipped"
                     continue
                 site_start = max(since, min(begins))
-                chunks = month_chunks(site_start, until)
-                todo = [(site, a, b) for a, b in chunks if (f"usgs:{site}", a) not in done]
+                chunks = month_chunks(site_start, until, chunk_months)
+                todo = [(site, a, b) for a, b in chunks if not covered(done.get(f"usgs:{site}", []), a, b)]
                 plan[site] = {"from": site_start.isoformat(), "chunks": len(chunks), "todo": len(todo)}
-                tasks += todo
+                by_site[site] = sorted(todo, key=lambda t: t[1], reverse=True)  # newest first
+            order = [x for x in PRIORITY if x in by_site] + [x for x in by_site if x not in PRIORITY]
+            tasks = [t for site in order for t in by_site[site]]
             run.items_total = len(tasks)
-            run.details = {"plan": plan, "since": since.isoformat(), "until": until.isoformat()}
+            run.details = {"plan": plan, "since": since.isoformat(), "until": until.isoformat(),
+                           "chunk_months": chunk_months, "min_interval_s": pacer.min_interval_s,
+                           "api_key": bool(s.usgs_api_key)}
             L.info("usgs backfill plan", **log.kv(tasks=len(tasks), plan=plan))
             lock = threading.Lock()
+            rate_limited = {"count": 0}
 
             def work(site: str, a: datetime, b: datetime) -> None:
-                with pool.connection() as wconn:
-                    wconn.autocommit = True
-                    sub = store.Run(wconn, SOURCE, job)
-                    n = fetch_window(c, wconn, sub, site, a, b, _allowed(meta, site))
-                    with wconn.transaction():
-                        wconn.execute(
-                            "INSERT INTO backfill_chunks (job, key, chunk_start, chunk_end, rows)"
-                            " VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
-                            (job, f"usgs:{site}", a, b, n),
-                        )
-                    with lock:
-                        run.items_fetched += sub.items_fetched
-                        run.rows.add(sub.rows)
+                for attempt in range(1, max_attempts + 1):
+                    try:
+                        with pool.connection() as wconn:
+                            wconn.autocommit = True
+                            sub = store.Run(wconn, SOURCE, job)
+                            n = fetch_window(c, wconn, sub, site, a, b, _allowed(meta, site), pacer)
+                            with wconn.transaction():
+                                wconn.execute(
+                                    "INSERT INTO backfill_chunks (job, key, chunk_start, chunk_end, rows)"
+                                    " VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
+                                    (job, f"usgs:{site}", a, b, n),
+                                )
+                            with lock:
+                                run.items_fetched += sub.items_fetched
+                                run.rows.add(sub.rows)
+                            return
+                    except http.RateLimited as e:
+                        with lock:
+                            rate_limited["count"] += 1
+                        L.warning("usgs rate limited; pausing backfill",
+                                  **log.kv(site=site, chunk=a.isoformat(), retry_after_s=e.retry_after_s,
+                                           attempt=attempt))
+                        pacer.pause(e.retry_after_s + 5)
+                raise RuntimeError(f"still rate limited after {max_attempts} attempts")
 
-            with ThreadPoolExecutor(max_workers=s.http_max_parallel) as ex:
+            with ThreadPoolExecutor(max_workers=workers) as ex:
                 futs = {ex.submit(work, *t): t for t in tasks}
                 for i, fut in enumerate(as_completed(futs), 1):
                     site, a, _ = futs[fut]
@@ -323,7 +411,8 @@ def backfill(pool: ConnectionPool, sites: list[str] | None, since: datetime, unt
                         fut.result()
                     except Exception as e:  # noqa: BLE001 - one chunk never stops the others
                         run.fail(f"{site}@{a:%Y-%m}", e)
-                    if i % 100 == 0:
+                    if i % 20 == 0:
                         L.info("usgs backfill progress", **log.kv(done=i, total=len(tasks),
                                                                   rows=run.rows.inserted))
+            run.details["rate_limited_events"] = rate_limited["count"]
             return run.run_id

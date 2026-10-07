@@ -167,6 +167,65 @@ Every raw payload is archived immutably on local disk with its sha256. The ECCC 
 - **Choice:** a small `fetch_state(url, last_modified, last_status, checked_at)` table, advanced only **after** a payload has been archived and upserted, so a failed parse is retried on the next run.
 - **Why:** a restarted ingest container resumes without re-downloading 429 files. Verified: the first scheduler run after start fetched 0 and found 429 unchanged, in 0.45 s.
 
+### D-01.13 — Literal station predicate in the upsert joins, and short station-row locks (measured)
+
+- **Context:** the ECCC 30-day backfill managed about 12 files/min. EXPLAIN ANALYZE of the stale-row count for one 30-day file (12,904 staged rows): **Hash Join over Seq Scans of all 5 chunks (701,900 rows), 5,610 ms**. Separately, `pg_stat_activity` showed USGS backfill workers waiting on `Lock/tuple` and `Lock/transactionid` for `INSERT INTO stations … ON CONFLICT DO UPDATE`, because that row lock was held for the whole upsert transaction.
+- **Options considered:** (a) `enable_hashjoin = off` per session; (b) `ANALYZE` the staging table; (c) add `o.station_id = ANY(<literal list>)` so the planner range-scans the primary key.
+- **Choice:**
+  - (c), which brings the plan to Hash Join over **Index Scans** returning 1,134 rows: **68.7 ms** (82× faster).
+  - `ensure_stations` runs in its own short transaction and only updates when `params` actually change.
+  - USGS backfill tasks are interleaved across sites, so parallel workers do not queue on one station's advisory lock.
+  - An interrupted backfill run is marked `error` ("abandoned: interrupted, resumed by a later run") when the job restarts.
+- **Why:** it is the measured bottleneck, and (c) keeps the plan correct without global planner switches.
+- **Reversibility / cost:** none.
+
+### D-01.14 — Health thresholds
+
+- **Context:** `/v1/health` reports per-source status green/amber/red. The thresholds come from the measured behaviour of each feed.
+- **Choice:**
+  - **ECCC:** green when the last successful live run is ≤ 30 min old (job runs every 10 min), the newest row is ≤ 150 min old (worst case measured in Stage 0: 107 min just before a rewrite), and ≥ 80 % of stations seen in the last 7 days reported in the last 3 h. Amber up to 90 min / 360 min. Otherwise red.
+  - **USGS:** green when run ≤ 45 min (job every 15 min), lag ≤ 120 min (measured 21–52 min), reporting ≥ 80 %. Amber up to 120 / 360 min.
+  - **NWPS:** green when run ≤ 90 min (job every 30 min) and the newest official issuance is ≤ 36 h old (NRKW1 is issued about daily in low water). Amber up to 180 min / 72 h.
+  - **Disk:** amber at 80 % used, red at 90 % (prompt).
+  - Overall status is the worst of the four.
+- **Why:** each threshold sits above normal behaviour, so green means "working as designed". The response also shows per-station lag p50/p90, so a reader can judge for themselves. Health is computed from SQL and cached for 30 s in the API process.
+- **Follow-ups:** Stage 8 monitoring alerts on amber/red.
+
+### D-01.15 — Public API shape, CORS, rate limit, attribution
+
+- **Choice:**
+  - FastAPI behind Caddy, read-only, GET only. CORS `*` for GET.
+  - In-memory token bucket of **120 requests/min per client IP** on `/v1/*` (client IP from Caddy's `X-Forwarded-For`; the API is only reachable through Caddy). Over the limit → 429 with `Retry-After: 30`.
+  - Every response, errors included, carries `attribution` (the four credit lines from `data-contract.md`).
+  - Observations are served in SI with `raw_value`/`raw_unit`, at most 7 days per call (400 otherwise). Sentinels are excluded unless `include_sentinels=true`.
+  - `/v1/official-forecasts/{lid}` returns the latest issuance by default, or all issuances after `issued_after`, unmodified, with the station's official thresholds.
+  - `/v1/stations` includes the latest reading per parameter (last 3 days) via one primary-key probe per station and parameter. That query took 5.6 s as a `DISTINCT ON` sort and 0.17 s as `LATERAL … ORDER BY ts DESC LIMIT 1`.
+- **Why:** this satisfies the prompt's API contract, and the latest-reading query stays cheap as history grows.
+
+### D-01.16 — TLS via Caddy with no ACME email
+
+- **Context:** `ACME_EMAIL` is absent from `.env`. The prompt says to use it only if present.
+- **Choice:** the Caddyfile has no `email` option. Caddy obtains the certificate for `PUBLIC_HOSTNAME` automatically (`admin off`, HSTS, gzip/zstd).
+- **Evidence:** Caddy log `"certificate obtained successfully","identifier":"<host>.sslip.io","issuer":"acme-v02.api.letsencrypt.org-directory"`, after `tls-alpn-01` validation requests from 5 Let's Encrypt vantage points reached port 443. That is the first real proof that inbound 443 works. `openssl x509` → `issuer=C = US, O = Let's Encrypt, CN = YE2`, `notAfter=Jan  5 20:15:00 2027 GMT`. `http://` → `308` to `https://`.
+- **Reversibility / cost:** adding `email {$ACME_EMAIL}` later only affects expiry notices.
+
+### D-01.17 — USGS keyless rate limit: paced, resumable backfill; API key requested
+
+- **Context:** after about 250 USGS requests, the API returned **HTTP 429** `OVER_RATE_LIMIT` with `x-ratelimit-limit: 1000`, `x-ratelimit-remaining: 0`, `retry-after: 1336`. The message says to sign up for an API key at `https://api.waterdata.usgs.gov/signup/`. The monthly-chunk plan needed **1,802** requests, and the old retry loop slept at most 120 s, then retried into the limit.
+- **Options considered:**
+  - (a) keep monthly chunks and wait out the limit for hours;
+  - (b) larger chunks plus pacing plus honouring Retry-After;
+  - (c) sign up for a key myself. **Not done:** it is a credential tied to a person's email, so it is the human's call (CLAUDE.md "stop and ask").
+- **Choice:** (b), plus support for an optional `USGS_API_KEY` in `.env` (sent as `X-Api-Key`).
+  - Chunks are **6 calendar months** per site with both parameters (≈ 35k rows, one page; pagination is still followed). The total drops to about 300 requests.
+  - Requests are paced at **7.2 s between starts (≤ 500/h)**, leaving ≥ 450/h for live ingest (about 44/h). With a key the interval drops to 1 s.
+  - A 429 asking to wait more than 60 s raises `RateLimited` at once. The backfill then pauses all workers for Retry-After + 5 s and retries the chunk (up to 6 times). Live ingest stops the cycle after the first 429.
+  - Resume is by **coverage**: a chunk is skipped when completed chunks of any size cover it, so the 113 monthly chunks already done are kept.
+  - Sites go in priority order (12210700, 12211200 first), newest chunks first.
+  - 2 workers, because each 6-month page is about 15–25 MB of JSON and the container limit is 1 GiB.
+- **Reversibility / cost:** with a key, re-run `floodlead backfill usgs` and it continues from the coverage table.
+- **Follow-ups:** "Needs human": a USGS API key.
+
 ## Work log
 
 - `13:33` — `git remote set-url origin https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC.git` (the new URL the human gave), `git checkout main && git pull origin main` → fast-forward `b7b263e..939495f` ("Fold Stage 0 findings into Stage 1; fix repo name and archive wording"). `docker run --rm hello-world` → `Hello from Docker!` without sudo. `git checkout -b stage-01-live-archive`.
@@ -188,6 +247,14 @@ Every raw payload is archived immutably on local disk with its sha256. The ECCC 
   - Official thresholds on usgs:12210700 (NRKW1, 4 categories), 12211195 (NOEW1: action 3.6, minor 4 ft), 12211200 (NREW1: action 83 ft) and 12213100 (NKSW1, 4 categories). 12211500 (NKLW1) and 12214500 (SUMW1) define none.
   - `raw_objects`: eccc 430 (21.0 MB raw → 1.41 MB gz), nwps 12 (3.77 MB → 0.15 MB), usgs 13 (0.40 MB → 0.03 MB).
   - Archive: 455 files, 2.4 MB, files `-r--r--r-- prana prana`.
+- `14:06` — Committed and pushed `6dc918b`.
+- `14:07` — Added a `backfill` compose service (`restart: "no"`, profile `backfill`). `docker compose run -d --name fl-backfill-eccc30d backfill floodlead backfill eccc-30d`; `docker inspect` → `restart=no mem=1073741824`.
+  - USGS dry run: `floodlead backfill usgs --sites 12211200 --since 2021-11-01 --until 2021-12-01` → run 10 `ok`, 5,662 rows in 8.7 s. SQL: `usgs:12211200 flow 2021-11-15 13:40:00 (America/Vancouver) raw 52300 ft3/s, SI 1481.0 m3/s, Approved`.
+  - Then the full USGS backfill: plan 1,802 monthly tasks.
+- `14:09` — ECCC backfill slow (17 files in about 2 min). `pg_stat_activity` showed 1–4 s joins and lock waits on `stations`. EXPLAIN → D-01.13. Fixed, rebuilt, restarted ingest, relaunched both backfills (resumed: ECCC skips files already in `fetch_state`; USGS skips recorded chunks). After 45 s: 43 daily files, 105 USGS chunks.
+- `14:11–14:13` — Wrote `api.py`. TestClient smoke test against the live DB: `/v1/health 200`; `/v1/stations?source=usgs 200` (5.60 s, then 0.17 s after the LATERAL rewrite); `/v1/stations/usgs:12210700 200` with the NRKW1 categories; observations `200` (278 level rows for 24 h); `/v1/official-forecasts/NRKW1 200`; unknown station → `404`; 30-day window → `400`. Errors now carry attribution.
+- `14:13` — `docker compose up -d ingest api caddy`. Caddy obtained a Let's Encrypt certificate via `tls-alpn-01` in about 3.5 s (D-01.16). From the VM: `curl https://<host>/v1/health` → `status green`; eccc lag 24 min, station lag p50 49 min, 428 stations reporting in 3 h; usgs lag 14 min, 10 stations; nwps newest issuance 5.63 h; disk 15.5 %; archive 993 files, 22.2 MB on disk (381 MB raw), 0 write failures. `http://` → `308`.
+- `14:14` — USGS backfill stalled. `docker logs` showed `status 429`. `curl -D -` → `HTTP/2 429`, `retry-after: 1336`, `x-ratelimit-limit: 1000`, `x-ratelimit-remaining: 0`, `"code": "OVER_RATE_LIMIT"`. Stopped the backfill container. Recorded chunks so far: 12205000 71 chunks (2004-10 → now, 304,502 rows); the other 9 sites only their newest 4–5 months. 12211200 also has 2021-11. Implemented D-01.17, rebuilt, redeployed ingest and api.
 
 ## Measurements
 

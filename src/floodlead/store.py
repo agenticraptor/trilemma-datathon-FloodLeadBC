@@ -93,9 +93,14 @@ def upsert_observations(
             cp.write_row((r.station_id, r.ts, r.param, r.value, r.raw_value, r.raw_unit,
                           json.dumps(r.quality, sort_keys=True), r.is_sentinel, r.published_at))
 
-    # Literal time bounds let TimescaleDB exclude chunks at plan time.
-    join = "o.station_id = s.station_id AND o.ts = s.ts AND o.param = s.param AND o.ts BETWEEN %(t0)s AND %(t1)s"
-    p = {"t0": tmin, "t1": tmax, "now": now, "rid": raw_object_id}
+    # Literal time bounds let TimescaleDB exclude chunks at plan time, and the literal station list
+    # makes the planner range-scan the primary key instead of hash-joining whole chunks (measured:
+    # 5.6 s -> milliseconds for a 30-day file, see D-01.13).
+    join = (
+        "o.station_id = s.station_id AND o.ts = s.ts AND o.param = s.param"
+        " AND o.ts BETWEEN %(t0)s AND %(t1)s AND o.station_id = ANY(%(sids)s)"
+    )
+    p = {"t0": tmin, "t1": tmax, "now": now, "rid": raw_object_id, "sids": stations}
 
     conn.execute(
         f"""
@@ -154,14 +159,20 @@ def upsert_observations(
 def ensure_stations(conn: psycopg.Connection, stations: list[dict[str, Any]]) -> None:
     """Create minimal station rows for ids seen in data but not yet in metadata."""
     for s in stations:
+        known = conn.execute("SELECT params FROM stations WHERE station_id = %s", (s["station_id"],)).fetchone()
+        if known is not None:
+            if not set(s.get("params", [])) <= set(known[0] or []):
+                conn.execute(
+                    "UPDATE stations SET params = (SELECT ARRAY(SELECT DISTINCT unnest(params || %s::text[])"
+                    " ORDER BY 1)) WHERE station_id = %s",
+                    (s.get("params", []), s["station_id"]),
+                )
+            continue
         conn.execute(
             """
             INSERT INTO stations (station_id, source, native_id, name, region, params)
             VALUES (%(station_id)s, %(source)s, %(native_id)s, %(name)s, %(region)s, %(params)s)
-            ON CONFLICT (station_id) DO UPDATE
-               SET params = (SELECT ARRAY(SELECT DISTINCT unnest(stations.params || EXCLUDED.params)
-                                          ORDER BY 1))
-             WHERE NOT (stations.params @> EXCLUDED.params)
+            ON CONFLICT (station_id) DO NOTHING
             """,
             {"name": None, "region": None, **s},
         )
@@ -210,6 +221,15 @@ class Run:
     details: dict[str, Any] = field(default_factory=dict)
 
     def __enter__(self) -> Run:
+        if self.job.startswith("backfill"):
+            # Backfills are resumable; a previous run of the same job still marked 'running' was
+            # interrupted (container stopped). Record that honestly before starting again.
+            self.conn.execute(
+                "UPDATE ingest_runs SET status = 'error', finished_at = now(),"
+                " error_text = 'abandoned: interrupted, resumed by a later run'"
+                " WHERE source = %s AND job = %s AND status = 'running'",
+                (self.source, self.job),
+            )
         self.run_id = self.conn.execute(
             "INSERT INTO ingest_runs (source, job) VALUES (%s, %s) RETURNING run_id", (self.source, self.job)
         ).fetchone()[0]  # type: ignore[index]

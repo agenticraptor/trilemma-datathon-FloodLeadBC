@@ -18,6 +18,14 @@ L = log.get(__name__)
 RETRY_STATUS = {429, 500, 502, 503, 504}
 
 
+class RateLimited(Exception):
+    """HTTP 429 with a long Retry-After: give up now instead of spending more of the quota."""
+
+    def __init__(self, url: str, retry_after_s: int) -> None:
+        super().__init__(f"HTTP 429 rate limited; retry after {retry_after_s} s ({url})")
+        self.retry_after_s = retry_after_s
+
+
 @dataclass
 class Fetched:
     url: str
@@ -62,9 +70,11 @@ def fetch(
     params: dict[str, str] | None = None,
     if_modified_since: datetime | None = None,
     attempts: int = 4,
+    headers: dict[str, str] | None = None,
 ) -> Fetched:
-    """GET with retries on timeouts, connection errors, 429 and 5xx (exponential backoff + jitter)."""
-    headers = {}
+    """GET with retries on timeouts, connection errors, 429 and 5xx (exponential backoff + jitter).
+    A 429 asking to wait more than 60 s raises RateLimited immediately."""
+    headers = dict(headers or {})
     if if_modified_since is not None:
         headers["If-Modified-Since"] = http_date(if_modified_since)
     last_exc: Exception | None = None
@@ -90,6 +100,8 @@ def fetch(
             last_exc = httpx.HTTPStatusError(f"HTTP {r.status_code}", request=r.request, response=r)
             L.warning("http retryable status", **log.kv(url=url, attempt=attempt, status=r.status_code))
             retry_after = r.headers.get("Retry-After")
+            if r.status_code == 429 and retry_after and retry_after.isdigit() and int(retry_after) > 60:
+                raise RateLimited(url, int(retry_after))
             if retry_after and retry_after.isdigit() and attempt < attempts:
                 time.sleep(min(int(retry_after), 120))
                 continue
