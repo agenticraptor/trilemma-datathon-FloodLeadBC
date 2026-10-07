@@ -26,7 +26,18 @@ Answers to the [Build Session 1 checklist](https://github.com/TrilemmaFoundation
 
 **The pain is timing, not awareness.** A Sumas Way farm-market owner said that in 2021 they "had little time to prepare", and that in 2025, even with 20+ hours of siren warnings, uncertainty about *when and from where* water would rise made people feel unsafe ([The Cascade](https://ufvcascade.ca/the-2025-floods-effect-on-abbotsfords-farmers/)).
 
-**Am I the N-of-1 user?** No. I am a Vancouver developer, not a floodplain farmer. That is the weakest part of this framing, so the first users are being recruited directly: a Sumas Prairie farm business affected in 2021 and 2025, and the BC Dairy and BC Poultry associations, which convened a roundtable of affected animal producers in January 2026 ([City of Abbotsford](https://www.abbotsford.ca/node/11732)). Interview status is tracked in [`evidence/user-outreach.md`](evidence/user-outreach.md). Until at least one farmer confirms the pain in their own words, the problem is supported by public evidence, not first-hand use.
+**Why this is my problem too.** I live in Vancouver, not on a farm. But when Sumas Prairie floods, my household and family feel it directly:
+
+| What floods | What happens in Vancouver | Source |
+|---|---|---|
+| Abbotsford and Chilliwack farms | These two cities produce **80% of BC's eggs**. About **380 of BC's 470 dairy farms** are in the Lower Mainland–Fraser Valley. In 2021, ~75% of two days' milk was dumped because trucks couldn't reach farms, and Lower Mainland shoppers were warned of milk and egg shortages. | [BIV](https://biv.com/article/2021/11/expect-temporary-shortages-milk-and-eggs) |
+| Abbotsford and Fraser Valley East | **69% of BC's poultry farms, 78% of hog farms, 45% of dairy farms** and 37% of BC's farm revenue. | [Statistics Canada](https://www.statcan.gc.ca/o1/en/plus/205-taking-stock-farm-damage-caused-flooding-british-columbia) |
+| Highway 1 across Sumas Prairie | In December 2025 the highway closed for almost 48 hours, cutting "the only viable road corridor to move goods to and from Canada's busiest port". | [Global News](https://globalnews.ca/news/11580841/frustration-flooding-closing-highway-1-abbotsford-no-federal-funding) |
+| The same November 2021 storm | Vancouver and the Lower Mainland were cut off from the rest of Canada by road and rail, grocery shelves emptied, and fuel was rationed to 30 litres per visit across the Lower Mainland until Dec 1. | [Reuters via Farmtario](https://farmtario.com/daily/panicked-shoppers-clear-out-flood-hit-b-c-s-grocery-stores), [Daily Hive](https://dailyhive.com/vancouver/bc-rationing-gas-drivers) |
+
+So every flood on this farmland reaches the eggs, milk and chicken on my family's table, the highway out of the city and the fuel in our car. Earlier warning on the farm means fewer animals lost, less food dumped and shorter shortages in the city.
+
+**The direct users are farmers, and they are being contacted now.** The person who feels the flood first is the farmer moving animals at night. Starting Oct 7, 2026, I am reaching out directly to farmers affected in 2021 and 2025: a Sumas Prairie farm business evacuated in 2021, and producers through the BC Dairy and BC Poultry associations, which convened a roundtable of affected animal producers in January 2026 ([City of Abbotsford](https://www.abbotsford.ca/node/11732)). Progress and their own words will be logged in [`evidence/user-outreach.md`](evidence/user-outreach.md). Until then, the farmer-side pain rests on public evidence, not first-hand interviews.
 
 **A single prompt or search does not solve it.** A chatbot has no live gauge feed and no calibrated error history for a specific gauge. Official tools give basin labels (RFC advisories), raw levels (Wateroffice) or evacuation orders after the fact. None says "your level, in X hours, with Y% confidence" and none acts on it. Whether Google Flood Hub covers these gauges is still being checked.
 

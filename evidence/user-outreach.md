@@ -1,15 +1,15 @@
 # First-user outreach
 
-The builder is not a floodplain farmer, so the problem must be confirmed by people who live it. This file tracks who has been asked and what they said. Personal contact details are kept out of this public repo.
+The builder lives in Vancouver and feels these floods through food, fuel and highway disruption (see the README), but the direct users are farmers, so the problem must be confirmed by people who live it. This file tracks who has been asked and what they said. Personal contact details are kept out of this public repo.
 
 ## Who
 
 | # | Who | Why them | Channel | Status |
 |---|---|---|---|---|
-| 1 | Sumas Prairie farm market (Sumas Way, Abbotsford) | Evacuated in 2021; owner spoke publicly about flood timing after December 2025 | Public business email / phone / in person | Not yet contacted |
-| 2 | BC Dairy Association | Represents dairy farms; co-convened the January 2026 roundtable of affected animal producers | Producer line / general email | Not yet contacted |
-| 3 | BC Poultry Association | Co-convened the same roundtable; poultry losses were the largest in 2021 | Association contact | Not yet contacted |
-| 4 | BC Ministry of Agriculture and Food — agriculture emergency management | Coordinates livestock moves during floods; can point to willing producers | AgriServiceBC line / emergency email | Not yet contacted |
+| 1 | Sumas Prairie farm market (Sumas Way, Abbotsford) | Evacuated in 2021; owner spoke publicly about flood timing after December 2025 | Public business email / phone / in person | Outreach started Oct 7, 2026 |
+| 2 | BC Dairy Association | Represents dairy farms; co-convened the January 2026 roundtable of affected animal producers | Producer line / general email | Outreach started Oct 7, 2026 |
+| 3 | BC Poultry Association | Co-convened the same roundtable; poultry losses were the largest in 2021 | Association contact | Outreach started Oct 7, 2026 |
+| 4 | BC Ministry of Agriculture and Food — agriculture emergency management | Coordinates livestock moves during floods; can point to willing producers | AgriServiceBC line / emergency email | Outreach started Oct 7, 2026 |
 
 ## Message
 
