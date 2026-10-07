@@ -254,6 +254,14 @@ Every raw payload is archived immutably on local disk with its sha256. The ECCC 
 - **Reversibility / cost:** NWIS IV is being retired by USGS in favour of the OGC APIs (no date seen in responses). With an API key the system goes back to OGC only, automatically.
 - **Follow-ups:** API key (Needs human).
 
+### D-01.20 — Poll ECCC every 5 min, because files appear 2–6 min after their Last-Modified
+
+- **Context:** the 22:01 rewrite has `Last-Modified: 22:01:28 GMT`. At the 22:03:00 poll, though, the listing still showed `21:31`, and the probe file still answered `304` (run 73: `fetched 0`, probe `false`). At 22:07:21 the listing showed `22:01`. The 21:31 rewrite behaved the same way (listing stale at 21:36:15). So Datamart publishes files a few minutes after their `Last-Modified` time, probably while mirrors sync. The D-01.18 probe does not help when the file itself is not yet visible.
+- **Options considered:** (a) keep 10-min polling at :03/:13/…, which catches each refresh at the second poll, about 12 min after `Last-Modified`; (b) shift the 10-min offset to :08/:38; (c) poll every 5 min (:02, :07, …).
+- **Choice:** (c). An unchanged poll costs one listing (~64 KB) plus one conditional GET, about 576 requests/day. Detection is within about 5 min of a file becoming visible. The probe from D-01.18 is kept for the stale-listing case.
+- **Evidence:** run 75 (scheduler restart at 22:08:07) fetched all 429 files of the 22:01 rewrite: 4,655 rows inserted, 572,013 unchanged, 103 s while the USGS backfill was running.
+- **Reversibility / cost:** one line in `cli.py`.
+
 ## Work log
 
 - `13:33` — `git remote set-url origin https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC.git` (the new URL the human gave), `git checkout main && git pull origin main` → fast-forward `b7b263e..939495f` ("Fold Stage 0 findings into Stage 1; fix repo name and archive wording"). `docker run --rm hello-world` → `Hello from Docker!` without sudo. `git checkout -b stage-01-live-archive`.
@@ -324,6 +332,25 @@ Every raw payload is archived immutably on local disk with its sha256. The ECCC 
 - `14:49–14:52` — USGS OGC backfill resumed at 21:49 after the 594-s pause. One chunk succeeded (12210700 2026-01→07, 34,640 rows), then every request got `429` with `retry_after_s 3601`. Live USGS runs 53/58 → `error`. Stopped the backfill container (D-01.19).
 - `14:52–14:57` — Implemented the NWIS IV path and a real fixture (`nwis_iv_12211200_2021-11.json`, includes the peak) with a parser test. Everson 2021-H2 test chunk → 29,566 inserted, **2 updated** (boundary rows, see D-01.19), fixed. `pytest` → 43, then **44 passed**. Full backfill launched at 21:56: `--api nwis`, plan **285 tasks** (12210700: 43 of 45 chunks left). Live NWIS fallback deployed: run 69 `ok`.
 - `14:58` — Health (public): status green. eccc green (lag 38.5 min, p50 58.5, 428 stations within 3 h); usgs green (lag 13.5 min, 10 stations); nwps green (issuance 6.38 h old); disk 16.9 %. NWIS backfill after about 2.5 min: 51 chunks, 1,626,510 rows, 0 warnings. `observation_revisions` = 2.
+- `15:00` — Live tests updated: the OGC test now skips with an explicit reason on 429, and an NWIS IV live test was added. `pytest -m live -rs` → **3 passed, 1 skipped** (`USGS OGC API rate-limited this IP (HTTP 429, short Retry-After)`).
+- `15:07` — D-01.20: ECCC polling every 5 min. Rebuilt, redeployed ingest; `scheduler started … ["eccc-hourly", 300, 120]`.
+- `15:10` — **USGS history backfill finished:** run 66 `ok`, `items_total 285, fetched 285, failed 0, inserted 7,643,117, updated 0, unchanged 0, stale 0`, in 14 min 48 s (NWIS IV, 1 request/s, 2 workers). WAL from 21:40:17 to 22:10:04: 4,103,472,600 B, mostly this backfill. DB 4,361 MB.
+- `15:10–15:24` — **AC-5 SQL** (`scratchpad/ac5.sql`; took about 3 min over the long hypertable):
+  - North Cedarville (12210700) stage, 15-min slots per year since 2007-10-01: 2007 98.6 %, 2008 97.8, 2009 99.4, 2010 99.3, 2011 99.2, 2012 99.1, 2013 98.8, 2014 97.3, 2015 97.5, 2016 97.0, **2017 92.5 (lowest)**, 2018 98.9, 2019 99.7, 2020 99.2, 2021 99.8, 2022 100.0, 2023 100.0, 2024 99.8, 2025 99.2, 2026 (to date) 99.8.
+  - Everson peak: `usgs:12211200 flow 2021-11-15 13:40:00 (America/Vancouver) = 21:40Z, 52300 ft3/s, Approved`.
+  - Coverage per site (rows, first):
+    - 12205000 flow 767,101 from 2004-10-01; level 663,803 from 2007-10-01
+    - 12208000 flow 758,298 from 2004-10-01; level 658,772 from 2007-10-01
+    - 12210000 flow 623,939 / level 626,705 from 2008-10-01
+    - 12210700 flow 743,308 from 2004-10-15; level 657,740 from 2007-10-01
+    - 12211190 level 3,337 from 2024-01-28 (overflow gauge, sparse)
+    - 12211195 level 2,161 from 2015-11-14 (overflow gauge, sparse)
+    - 12211200 flow 348,622 / level 349,531 from 2016-10-01
+    - 12211500 flow 137,839 / level 138,385 from 2022-10-26
+    - 12213100 flow 764,625 from 2004-10-01; level 662,454 from 2007-10-01
+    - 12214500 flow 170,894 from 2011-01-14; level 67,934 from 2022-10-28
+  - Every site's newest row is between 21:00 and 21:45Z on Oct 7.
+- `15:13` — Steady-state baseline for growth (no backfill running) at 22:13:19: WAL LSN `2/1A259750`, `pg_database_size` 4,678,573,079 B, `hypertable_size` 4,627,062,784 B, archive 65,414,338 B, `/` used 20,084,744,192 B of 102,888,095,744 B.
 
 ## Measurements
 

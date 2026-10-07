@@ -19,9 +19,10 @@ def _jobs(pool):  # type: ignore[no-untyped-def]
     from floodlead.sources import eccc, nwps, usgs
 
     return [
-        # ECCC rewrites all hourly files at ~:31; polling every 10 min at :03/:13/.../:33 means the
-        # :33 run picks up each refresh within ~2 min of publication.
-        Job("eccc-hourly", 600, 180, lambda: eccc.ingest_files(pool, "hourly", "live")),
+        # ECCC rewrites the BC hourly files every 30 min (Last-Modified ~:01:28 and ~:31:18), but they appear
+        # on dd.weather.gc.ca 2-6 min later. Polling every 5 min (:02, :07, ...) catches each refresh within
+        # ~5 min of it becoming visible; an unchanged poll costs one listing + one conditional GET.
+        Job("eccc-hourly", 300, 120, lambda: eccc.ingest_files(pool, "hourly", "live")),
         Job("usgs-live", 900, 120, lambda: usgs.ingest_live(pool)),
         Job("nwps-live", 1800, 300, lambda: nwps.ingest_live(pool)),
         # Station metadata daily (and at start).
