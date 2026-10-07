@@ -234,6 +234,26 @@ Every raw payload is archived immutably on local disk with its sha256. The ECCC 
 - **Reversibility / cost:** trivial.
 - **Follow-ups:** verify at the next rewrite (logged below).
 
+### D-01.19 — Legacy NWIS IV as the USGS fallback, for the history backfill and for live ingest while OGC is rate-limited
+
+- **Context:** with D-01.17 pacing (7.2 s), one 6-month OGC chunk succeeded (12210700 2026-H1, 34,640 rows) at 21:49. Then the OGC API answered `429` with **`retry-after: 3601`** (a full hour) to both workers, and to live ingest, which had no successful USGS run after 21:10. USGS health would have gone amber, then red. The keyless OGC API cannot finish a ~300-request backfill today, and it cannot be relied on for live data either.
+- **Options considered:**
+  - (a) wait for a human-provided API key;
+  - (b) keep retrying OGC every hour;
+  - (c) use the legacy NWIS IV service (`waterservices.usgs.gov/nwis/iv/`, follows a 301 to `nwis.waterservices.usgs.gov`). Data-contract record 6 already lists it as the fallback, and the prompt says "Fall back to the legacy IV service … Record which one you used and why."
+- **Choice:** (c), with OGC v1 kept as the primary for live.
+  - **History backfill:** `floodlead backfill usgs --api nwis` (`auto` = OGC when `USGS_API_KEY` is set, else NWIS). Same 6-month chunks and same coverage table. It never touches the OGC API: it reads the newest *archived* `time-series-metadata` payload for sites and begin dates. Paced at 1 request/s with 2 workers. The most recent day is left to live ingest.
+  - **No overlap between the APIs:** rows inside intervals already loaded from OGC are dropped (closed bounds, because OGC `datetime` intervals are closed), and every window now owns `[start, end)`.
+  - **Live:** when OGC is rate-limited, or blocked locally after a 429, the 15-min job makes **one** NWIS IV request for all live sites over the 6-h window. The run details say so (`"api": "nwis-iv (fallback)"`).
+  - **No false revisions:** the change comparison ignores provenance-only quality keys (`time_series_id`, `source_api`), so the same value from either API counts as unchanged. A real change in approval status is still a revision (test added).
+- **Evidence:**
+  - NWIS one month for Everson: `200 0.81 s 455,789 B`, max `52300` at `2021-11-15T13:40:00.000-08:00`, qualifier `A`, identical to OGC. No rate-limit headers.
+  - North Cedarville via NWIS: flow from 2004-12-31 17:00 PST in a 2005-01 request, stage from `2007-10-01T01:00-07:00`, matching the OGC metadata begin dates.
+  - Test chunk (Everson 2021-H2): 29,566 rows inserted in 8.2 s. It produced **2 revisions** at `2021-12-01 00:00Z` (flow and level): same value, only the quality provenance differed, because the OGC November chunk included its closed end. That is the bug fixed above. The rows stay in the append-only table and are reported, not deleted.
+  - Live fallback run 69: `ok`, 10 of 10 sites with data, 31 rows inserted, 360 unchanged, 0 revisions. Health back to green.
+- **Reversibility / cost:** NWIS IV is being retired by USGS in favour of the OGC APIs (no date seen in responses). With an API key the system goes back to OGC only, automatically.
+- **Follow-ups:** API key (Needs human).
+
 ## Work log
 
 - `13:33` — `git remote set-url origin https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC.git` (the new URL the human gave), `git checkout main && git pull origin main` → fast-forward `b7b263e..939495f` ("Fold Stage 0 findings into Stage 1; fix repo name and archive wording"). `docker run --rm hello-world` → `Hello from Docker!` without sudo. `git checkout -b stage-01-live-archive`.
@@ -301,6 +321,9 @@ Every raw payload is archived immutably on local disk with its sha256. The ECCC 
 - `14:38` — Found the stale listing (D-01.18) and implemented the probe. `pytest` → 41 passed. Rebuilt, redeployed ingest.
 - `14:39` — Relaunched the USGS backfill (6-month chunks): plan **297 tasks** (12205000: 34 of 45 left, since monthly chunks already cover part). Metadata request `200`; first data request `429`, `retry_after_s 594`, so all workers pause until about 21:49 UTC.
 - `14:41` — `HEAD` support: every GET route is registered for GET and HEAD (uvicorn drops the body), plus a test. `pytest` → **42 passed**. Redeployed api. `curl -sI https://<host>/v1/health` → `HTTP/2 200`. WAL baseline at 21:40:17: LSN `1/195BDA28`, DB 2,112 MB, `hypertable_size` 2,193,645,568 B. On the current chunk, 2,564,954 updates of which only 21,583 were HOT.
+- `14:49–14:52` — USGS OGC backfill resumed at 21:49 after the 594-s pause. One chunk succeeded (12210700 2026-01→07, 34,640 rows), then every request got `429` with `retry_after_s 3601`. Live USGS runs 53/58 → `error`. Stopped the backfill container (D-01.19).
+- `14:52–14:57` — Implemented the NWIS IV path and a real fixture (`nwis_iv_12211200_2021-11.json`, includes the peak) with a parser test. Everson 2021-H2 test chunk → 29,566 inserted, **2 updated** (boundary rows, see D-01.19), fixed. `pytest` → 43, then **44 passed**. Full backfill launched at 21:56: `--api nwis`, plan **285 tasks** (12210700: 43 of 45 chunks left). Live NWIS fallback deployed: run 69 `ok`.
+- `14:58` — Health (public): status green. eccc green (lag 38.5 min, p50 58.5, 428 stations within 3 h); usgs green (lag 13.5 min, 10 stations); nwps green (issuance 6.38 h old); disk 16.9 %. NWIS backfill after about 2.5 min: 51 chunks, 1,626,510 rows, 0 warnings. `observation_revisions` = 2.
 
 ## Measurements
 

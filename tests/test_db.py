@@ -155,3 +155,21 @@ def test_migrations_are_recorded(conn: psycopg.Connection) -> None:
     assert versions[0] == "001_init.sql"
     ht = conn.execute("SELECT hypertable_name FROM timescaledb_information.hypertables").fetchall()
     assert ("observations",) in ht
+
+
+def test_same_value_from_ogc_and_nwis_is_not_a_revision(conn: psycopg.Connection) -> None:
+    ts = datetime(2021, 12, 1, 0, 0, tzinfo=UTC)
+    ogc = store.Obs("usgs:12211200", ts, "flow", 532.36, 18800.0, "ft3/s",
+                    {"approval_status": "Approved", "qualifier": None, "time_series_id": "f292"}, False,
+                    datetime(2025, 9, 12, tzinfo=UTC))
+    nwis = store.Obs("usgs:12211200", ts, "flow", 532.36, 18800.0, "ft3/s",
+                     {"approval_status": "Approved", "qualifier": None, "time_series_id": None,
+                      "source_api": "nwis-iv"}, False, None)
+    _upsert(conn, [ogc], datetime(2026, 10, 7, 21, 0, tzinfo=UTC))
+    r = _upsert(conn, [nwis], datetime(2026, 10, 7, 22, 0, tzinfo=UTC))
+    assert (r.updated, r.unchanged) == (0, 1)
+    assert conn.execute("SELECT count(*) FROM observation_revisions").fetchone()[0] == 0
+    # A real change in approval status is still a revision.
+    changed = dataclasses.replace(nwis, quality={**nwis.quality, "approval_status": "Provisional"})
+    r = _upsert(conn, [changed], datetime(2026, 10, 7, 23, 0, tzinfo=UTC))
+    assert r.updated == 1

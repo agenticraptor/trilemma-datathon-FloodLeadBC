@@ -54,8 +54,12 @@ CREATE TEMP TABLE IF NOT EXISTS stg_obs (
 # sentinel flag differ. The out-of-order guard: an incoming version published *before* the stored
 # version is stale and is ignored (counted, not applied), so an older 30-day file can never
 # "revise" a value back after a newer hourly file has updated it.
-_DIFFERS = """(o.raw_value IS DISTINCT FROM s.raw_value OR o.raw_unit IS DISTINCT FROM s.raw_unit
-     OR o.quality IS DISTINCT FROM s.quality OR o.is_sentinel IS DISTINCT FROM s.is_sentinel)"""
+# Provenance-only keys (which USGS API or series delivered the value) are not data: the same value from
+# the OGC API and from NWIS IV must not count as a revision.
+_PROVENANCE_KEYS = "'time_series_id' - 'source_api'"
+_DIFFERS = f"""(o.raw_value IS DISTINCT FROM s.raw_value OR o.raw_unit IS DISTINCT FROM s.raw_unit
+     OR (o.quality - {_PROVENANCE_KEYS}) IS DISTINCT FROM (s.quality - {_PROVENANCE_KEYS})
+     OR o.is_sentinel IS DISTINCT FROM s.is_sentinel)"""
 _NOT_STALE = "(o.published_at IS NULL OR s.published_at IS NULL OR s.published_at >= o.published_at)"
 
 

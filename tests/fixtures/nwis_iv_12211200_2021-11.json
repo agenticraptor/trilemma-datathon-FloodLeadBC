@@ -1,0 +1,294 @@
+{
+ "name": "ns1:timeSeriesResponseType",
+ "declaredType": "org.cuahsi.waterml.TimeSeriesResponseType",
+ "scope": "javax.xml.bind.JAXBElement$GlobalScope",
+ "value": {
+  "queryInfo": {
+   "queryURL": "http://nwis.waterservices.usgs.gov/nwis/iv/format=json&sites=12211200&parameterCd=00060,00065&startDT=2021-11-01T00:00Z&endDT=2021-12-01T00:00Z&siteStatus=all",
+   "criteria": {
+    "locationParam": "[ALL:12211200]",
+    "variableParam": "[00060, 00065]",
+    "timeParam": {
+     "beginDateTime": "2021-11-01T00:00:00.000",
+     "endDateTime": "2021-12-01T00:00:00.000"
+    },
+    "parameter": []
+   }
+  },
+  "timeSeries": [
+   {
+    "sourceInfo": {
+     "siteName": "NOOKSACK RIVER AT EVERSON, WA",
+     "siteCode": [
+      {
+       "value": "12211200",
+       "network": "NWIS",
+       "agencyCode": "USGS"
+      }
+     ],
+     "timeZoneInfo": {
+      "defaultTimeZone": {
+       "zoneOffset": "-08:00",
+       "zoneAbbreviation": "PST"
+      },
+      "daylightSavingsTimeZone": {
+       "zoneOffset": "-07:00",
+       "zoneAbbreviation": "PDT"
+      },
+      "siteUsesDaylightSavingsTime": true
+     },
+     "geoLocation": {
+      "geogLocation": {
+       "srs": "EPSG:4326",
+       "latitude": 48.91789467,
+       "longitude": -122.3479369
+      },
+      "localSiteXY": []
+     },
+     "note": [],
+     "siteType": [],
+     "siteProperty": [
+      {
+       "value": "ST",
+       "name": "siteTypeCd"
+      },
+      {
+       "value": "17110004",
+       "name": "hucCd"
+      },
+      {
+       "value": "53",
+       "name": "stateCd"
+      },
+      {
+       "value": "53073",
+       "name": "countyCd"
+      }
+     ]
+    },
+    "variable": {
+     "variableCode": [
+      {
+       "value": "00060",
+       "network": "NWIS",
+       "vocabulary": "NWIS:UnitValues",
+       "variableID": 45807197,
+       "default": true
+      }
+     ],
+     "variableName": "Streamflow, ft&#179;/s",
+     "variableDescription": "Discharge, cubic feet per second",
+     "valueType": "Derived Value",
+     "unit": {
+      "unitCode": "ft3/s"
+     },
+     "options": {
+      "option": [
+       {
+        "name": "Statistic",
+        "optionCode": "00000"
+       }
+      ]
+     },
+     "note": [],
+     "noDataValue": -999999.0,
+     "variableProperty": [],
+     "oid": "45807197"
+    },
+    "values": [
+     {
+      "value": [
+       {
+        "value": "6000",
+        "qualifiers": [
+         "A"
+        ],
+        "dateTime": "2021-10-31T17:00:00.000-07:00"
+       },
+       {
+        "value": "5960",
+        "qualifiers": [
+         "A"
+        ],
+        "dateTime": "2021-10-31T17:15:00.000-07:00"
+       },
+       {
+        "value": "52300",
+        "qualifiers": [
+         "A"
+        ],
+        "dateTime": "2021-11-15T13:40:00.000-08:00"
+       },
+       {
+        "value": "49000",
+        "qualifiers": [
+         "A"
+        ],
+        "dateTime": "2021-11-15T13:45:00.000-08:00"
+       }
+      ],
+      "qualifier": [
+       {
+        "qualifierCode": "A",
+        "qualifierDescription": "Approved for publication -- Processing and review completed.",
+        "qualifierID": 0,
+        "network": "NWIS",
+        "vocabulary": "uv_rmk_cd"
+       }
+      ],
+      "qualityControlLevel": [],
+      "method": [
+       {
+        "methodDescription": "",
+        "methodID": 166847
+       }
+      ],
+      "source": [],
+      "offset": [],
+      "sample": [],
+      "censorCode": []
+     }
+    ],
+    "name": "USGS:12211200:00060:00000"
+   },
+   {
+    "sourceInfo": {
+     "siteName": "NOOKSACK RIVER AT EVERSON, WA",
+     "siteCode": [
+      {
+       "value": "12211200",
+       "network": "NWIS",
+       "agencyCode": "USGS"
+      }
+     ],
+     "timeZoneInfo": {
+      "defaultTimeZone": {
+       "zoneOffset": "-08:00",
+       "zoneAbbreviation": "PST"
+      },
+      "daylightSavingsTimeZone": {
+       "zoneOffset": "-07:00",
+       "zoneAbbreviation": "PDT"
+      },
+      "siteUsesDaylightSavingsTime": true
+     },
+     "geoLocation": {
+      "geogLocation": {
+       "srs": "EPSG:4326",
+       "latitude": 48.91789467,
+       "longitude": -122.3479369
+      },
+      "localSiteXY": []
+     },
+     "note": [],
+     "siteType": [],
+     "siteProperty": [
+      {
+       "value": "ST",
+       "name": "siteTypeCd"
+      },
+      {
+       "value": "17110004",
+       "name": "hucCd"
+      },
+      {
+       "value": "53",
+       "name": "stateCd"
+      },
+      {
+       "value": "53073",
+       "name": "countyCd"
+      }
+     ]
+    },
+    "variable": {
+     "variableCode": [
+      {
+       "value": "00065",
+       "network": "NWIS",
+       "vocabulary": "NWIS:UnitValues",
+       "variableID": 45807202,
+       "default": true
+      }
+     ],
+     "variableName": "Gage height, ft",
+     "variableDescription": "Gage height, feet",
+     "valueType": "Derived Value",
+     "unit": {
+      "unitCode": "ft"
+     },
+     "options": {
+      "option": [
+       {
+        "name": "Statistic",
+        "optionCode": "00000"
+       }
+      ]
+     },
+     "note": [],
+     "noDataValue": -999999.0,
+     "variableProperty": [],
+     "oid": "45807202"
+    },
+    "values": [
+     {
+      "value": [
+       {
+        "value": "75.79",
+        "qualifiers": [
+         "A"
+        ],
+        "dateTime": "2021-10-31T17:00:00.000-07:00"
+       },
+       {
+        "value": "75.77",
+        "qualifiers": [
+         "A"
+        ],
+        "dateTime": "2021-10-31T17:15:00.000-07:00"
+       },
+       {
+        "value": "86.86",
+        "qualifiers": [
+         "A"
+        ],
+        "dateTime": "2021-11-15T13:40:00.000-08:00"
+       },
+       {
+        "value": "86.34",
+        "qualifiers": [
+         "A"
+        ],
+        "dateTime": "2021-11-15T13:45:00.000-08:00"
+       }
+      ],
+      "qualifier": [
+       {
+        "qualifierCode": "A",
+        "qualifierDescription": "Approved for publication -- Processing and review completed.",
+        "qualifierID": 0,
+        "network": "NWIS",
+        "vocabulary": "uv_rmk_cd"
+       }
+      ],
+      "qualityControlLevel": [],
+      "method": [
+       {
+        "methodDescription": "[(4)]",
+        "methodID": 151534
+       }
+      ],
+      "source": [],
+      "offset": [],
+      "sample": [],
+      "censorCode": []
+     }
+    ],
+    "name": "USGS:12211200:00065:00000"
+   }
+  ]
+ },
+ "nil": false,
+ "globalScope": true,
+ "typeSubstituted": false
+}

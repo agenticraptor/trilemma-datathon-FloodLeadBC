@@ -206,6 +206,8 @@ def fetch_window(
 
         def parse(fx: http.Fetched, _box: list[int] = rows_box, _name: str = name) -> list[store.Obs]:
             rows, stats = parse_items(fx.content, allowed)
+            # The OGC `datetime` interval is closed; each window owns [start, end) so chunks never overlap.
+            rows = [r for r in rows if start <= r.ts < end]
             _box.append(len(rows))
             if stats["null_values"] or stats["skipped_series"]:
                 run.details.setdefault("parse_stats", {})[_name] = stats
@@ -231,18 +233,44 @@ def live_sites(meta: dict[tuple[str, str], Series], now: datetime) -> list[str]:
     return sorted(live)
 
 
+def ingest_live_nwis(pool: ConnectionPool, conn: psycopg.Connection, c: httpx.Client, run: store.Run,
+                     start: datetime, end: datetime, reason: str) -> None:
+    """Fallback for live ingestion while the OGC API is rate-limited: one NWIS IV request for all live sites."""
+    s = get_settings()
+    meta, meta_src = archived_series_metadata(conn, s.archive_dir)
+    sites = live_sites(meta, end)
+    run.items_total = len(sites)
+    f = http.fetch(c, NWIS_IV_URL, params={
+        "format": "json", "sites": ",".join(sites), "parameterCd": ",".join(PARAMS), "siteStatus": "all",
+        "startDT": f"{start:%Y-%m-%dT%H:%MZ}", "endDT": f"{end:%Y-%m-%dT%H:%MZ}",
+    })
+    run.items_fetched += 1
+    box: list[int] = []
+
+    def parse(fx: http.Fetched) -> list[store.Obs]:
+        rows, _ = parse_nwis_iv(fx.content)
+        box.append(len({r.station_id for r in rows}))
+        return rows
+
+    ingest.process_payload(conn, run, SOURCE, f"nwis-iv_live_{end:%Y%m%dT%H%M}", f, parse)
+    run.details = {"api": "nwis-iv (fallback)", "reason": reason, "sites": sites,
+                   "sites_with_data": box[0] if box else 0, "metadata_raw_object_id": meta_src}
+
+
 def ingest_live(pool: ConnectionPool, hours: int = 6) -> int:
     s = get_settings()
     now = datetime.now(UTC)
     with pool.connection() as conn, http.client() as c:
         conn.autocommit = True
         with store.Run(conn, SOURCE, "live") as run:
-            _check_not_blocked()
             try:
+                _check_not_blocked()
                 mf, meta = fetch_series_metadata(c, list(SITES))
             except http.RateLimited as e:
                 _note_rate_limited(e)
-                raise
+                ingest_live_nwis(pool, conn, c, run, now - timedelta(hours=hours), now,
+                                 f"OGC API rate-limited (retry after {e.retry_after_s} s)")
+                return run.run_id
             with conn.transaction():
                 archive.store(conn, s.archive_dir, SOURCE, "time-series-metadata", mf)
             sites = live_sites(meta, now)
@@ -325,6 +353,87 @@ def refresh_stations(pool: ConnectionPool) -> int:
             return run.run_id
 
 
+NWIS_IV_URL = "https://waterservices.usgs.gov/nwis/iv/"
+_NWIS_UNITS = {"ft": "ft", "ft3/s": "ft3/s"}
+
+
+def parse_nwis_iv(content: bytes) -> tuple[list[store.Obs], dict[str, int]]:
+    """Legacy NWIS IV (WaterML-JSON). Used for the history backfill while the OGC API is rate-limited
+    (data-contract record 6 lists NWIS as the fallback). Values keep their published offsets; the NWIS
+    noDataValue (-999999) is flagged as a sentinel by the shared rule."""
+    payload = json.loads(content)
+    out: list[store.Obs] = []
+    stats = {"series": 0, "values": 0, "extra_methods_skipped": 0}
+    for t in payload.get("value", {}).get("timeSeries", []):
+        stats["series"] += 1
+        code = t["variable"]["variableCode"][0]["value"]
+        if code not in PARAMS:
+            continue
+        param, default_unit = PARAMS[code]
+        raw_unit = _NWIS_UNITS.get(t["variable"]["unit"]["unitCode"], default_unit)
+        site = t["sourceInfo"]["siteCode"][0]["value"]
+        methods = t.get("values") or []
+        stats["extra_methods_skipped"] += max(0, len(methods) - 1)
+        for v in (methods[0]["value"] if methods else []):
+            stats["values"] += 1
+            raw = float(v["value"])
+            value, sentinel = units.si_value(param, raw, raw_unit)
+            quals = v.get("qualifiers") or []
+            appr = "Approved" if "A" in quals else "Provisional" if "P" in quals else None
+            other = [q for q in quals if q not in ("A", "P")]
+            q = {"approval_status": appr, "qualifier": ",".join(other) or None, "time_series_id": None,
+                 "source_api": "nwis-iv"}
+            out.append(store.Obs(f"usgs:{site}", datetime.fromisoformat(v["dateTime"]).astimezone(UTC), param,
+                                 value, raw, raw_unit, q, sentinel, None))
+    return out, stats
+
+
+def fetch_nwis_window(
+    c: httpx.Client,
+    conn: psycopg.Connection,
+    run: store.Run,
+    site: str,
+    start: datetime,
+    end: datetime,
+    skip: list[tuple[datetime, datetime]],
+    pacer: Pacer | None = None,
+) -> int:
+    """One NWIS IV request for [start, end); rows inside `skip` intervals (already loaded from the OGC API)
+    are dropped so the two APIs never write the same key."""
+    if pacer is not None:
+        pacer.wait()
+    f = http.fetch(c, NWIS_IV_URL, params={
+        "format": "json", "sites": site, "parameterCd": ",".join(PARAMS), "siteStatus": "all",
+        "startDT": f"{start:%Y-%m-%dT%H:%MZ}", "endDT": f"{end:%Y-%m-%dT%H:%MZ}",
+    })
+    run.items_fetched += 1
+    name = f"nwis-iv_{site}_{start:%Y%m%dT%H%M}_{end:%Y%m%dT%H%M}"
+    box: list[int] = []
+
+    def parse(fx: http.Fetched) -> list[store.Obs]:
+        rows, _ = parse_nwis_iv(fx.content)
+        # Closed bounds on skip intervals: OGC `datetime` intervals are closed, so earlier OGC chunks may hold
+        # the row exactly at their end.
+        rows = [r for r in rows if start <= r.ts < end and not any(a <= r.ts <= b for a, b in skip)]
+        box.append(len(rows))
+        return rows
+
+    ingest.process_payload(conn, run, SOURCE, name, f, parse)
+    return box[0] if box else 0
+
+
+def archived_series_metadata(conn: psycopg.Connection, archive_dir: Any) -> tuple[dict[tuple[str, str], Series], int]:
+    row = conn.execute(
+        "SELECT raw_object_id, archive_path FROM raw_objects WHERE source = 'usgs' AND archive_path LIKE %s"
+        " ORDER BY fetched_at DESC LIMIT 1", ("%/time-series-metadata.%",)).fetchone()
+    if row is None:
+        raise RuntimeError("no archived USGS time-series-metadata payload; run usgs-stations first")
+    import gzip
+
+    with gzip.open(archive_dir / row[1]) as fh:
+        return parse_series_metadata(json.load(fh)), row[0]
+
+
 def month_chunks(start: datetime, end: datetime, months: int = 1) -> list[tuple[datetime, datetime]]:
     """Calendar-aligned chunks of `months` months covering [start, end)."""
     out = []
@@ -363,26 +472,36 @@ def backfill(
     until: datetime,
     chunk_months: int = 6,
     max_attempts: int = 6,
+    api: str = "auto",
 ) -> int:
     """Chunked per site (both parameters per request), resumable: a chunk already covered by recorded
     chunks (any size) is skipped. Requests are paced (usgs_backfill_min_interval_s) and the whole
     backfill pauses for Retry-After when the API rate-limits, then retries the chunk."""
     s = get_settings()
     job = "backfill-usgs"
-    pacer = Pacer(s.usgs_backfill_min_interval_s if not s.usgs_api_key else 1.0)
+    if api == "auto":
+        api = "ogc" if s.usgs_api_key else "nwis"
+    if api == "nwis":
+        # Leave the most recent day to live ingestion (OGC), so the APIs never overlap.
+        until = min(until, datetime.now(UTC) - timedelta(days=1))
+    pacer = Pacer(1.0 if (api == "nwis" or s.usgs_api_key) else s.usgs_backfill_min_interval_s)
     workers = 2  # each 6-month page is ~15-25 MB of JSON; keep memory well under the 1 GiB limit
     with pool.connection() as conn, http.client() as c:
         conn.autocommit = True
         with store.Run(conn, SOURCE, job) as run:
-            while True:
-                try:
-                    mf, meta = fetch_series_metadata(c, list(SITES))
-                    break
-                except http.RateLimited as e:
-                    L.warning("usgs rate limited before start; waiting", **log.kv(retry_after_s=e.retry_after_s))
-                    time.sleep(e.retry_after_s + 5)
-            with conn.transaction():
-                archive.store(conn, s.archive_dir, SOURCE, "time-series-metadata", mf)
+            if api == "nwis":
+                # Do not touch the (rate-limited) OGC API at all: use the newest archived metadata payload.
+                meta, meta_src = archived_series_metadata(conn, s.archive_dir)
+            else:
+                while True:
+                    try:
+                        mf, meta = fetch_series_metadata(c, list(SITES))
+                        break
+                    except http.RateLimited as e:
+                        L.warning("usgs rate limited before start; waiting", **log.kv(retry_after_s=e.retry_after_s))
+                        time.sleep(e.retry_after_s + 5)
+                with conn.transaction():
+                    meta_src = archive.store(conn, s.archive_dir, SOURCE, "time-series-metadata", mf).raw_object_id
             wanted = sites or live_sites(meta, datetime.now(UTC))
             done: dict[str, list[tuple[datetime, datetime]]] = {}
             for k, a, b in conn.execute(
@@ -405,7 +524,8 @@ def backfill(
             tasks = [t for site in order for t in by_site[site]]
             run.items_total = len(tasks)
             run.details = {"plan": plan, "since": since.isoformat(), "until": until.isoformat(),
-                           "chunk_months": chunk_months, "min_interval_s": pacer.min_interval_s,
+                           "chunk_months": chunk_months, "min_interval_s": pacer.min_interval_s, "api": api,
+                           "metadata_raw_object_id": meta_src,
                            "api_key": bool(s.usgs_api_key)}
             L.info("usgs backfill plan", **log.kv(tasks=len(tasks), plan=plan))
             lock = threading.Lock()
@@ -417,7 +537,10 @@ def backfill(
                         with pool.connection() as wconn:
                             wconn.autocommit = True
                             sub = store.Run(wconn, SOURCE, job)
-                            n = fetch_window(c, wconn, sub, site, a, b, _allowed(meta, site), pacer)
+                            if api == "nwis":
+                                n = fetch_nwis_window(c, wconn, sub, site, a, b, done.get(f"usgs:{site}", []), pacer)
+                            else:
+                                n = fetch_window(c, wconn, sub, site, a, b, _allowed(meta, site), pacer)
                             with wconn.transaction():
                                 wconn.execute(
                                     "INSERT INTO backfill_chunks (job, key, chunk_start, chunk_end, rows)"

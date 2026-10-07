@@ -9,6 +9,7 @@ Small **real** payloads, trimmed. They were taken on 2026-10-07 from the raw arc
 | `eccc_listing_hourly.html` | `https://dd.weather.gc.ca/today/hydrometric/csv/BC/hourly/` | first 14 lines (6 file entries, all stamped 2026-10-07 21:01) |
 | `usgs_continuous_12210700.json` | USGS OGC v1 `continuous/items`, North Cedarville, June 2026 | 3 stage + 3 discharge features; `links` cut to two, and the `next` link's cursor replaced by the placeholder `EXAMPLE` |
 | `usgs_time_series_metadata.json` | USGS OGC v1 `time-series-metadata/items` | only sites 12210700 and 12210500; `links` removed |
+| `nwis_iv_12211200_2021-11.json` | USGS legacy NWIS IV (`waterservices.usgs.gov/nwis/iv/`), Everson, Nov 2021 | per series the first 2 values and the 2 values at the peak (2021-11-15 13:40 PST) |
 | `nwps_gauge_NRKW1.json` | NOAA NWPS `gauges/NRKW1` | only identity, `flood.categories`, units |
 | `nwps_stageflow_NRKW1.json` | NOAA NWPS `gauges/NRKW1/stageflow` (issued 2026-10-07T15:36Z) | last 3 observed points, first 4 forecast points |
 

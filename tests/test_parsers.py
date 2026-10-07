@@ -104,3 +104,20 @@ def test_nwps_forecast_parse_unmodified() -> None:
 def test_nwps_missing_forecast_gives_no_rows() -> None:
     issued, rows = nwps.parse_forecast({"forecast": {"issuedTime": "0001-01-01T00:00:00Z", "data": []}})
     assert issued is None and rows == []
+
+
+def test_nwis_iv_parse_offsets_qualifiers_and_peak() -> None:
+    rows, stats = usgs.parse_nwis_iv(fixture_bytes("nwis_iv_12211200_2021-11.json"))
+    assert stats["series"] == 2 and len(rows) == 8
+    flows = [r for r in rows if r.param == "flow"]
+    peak = max(flows, key=lambda r: r.raw_value)
+    # 2021-11-15T13:40:00.000-08:00 (PST) is 21:40 UTC; the verified Everson peak.
+    assert peak.ts == datetime(2021, 11, 15, 21, 40, tzinfo=UTC)
+    assert (peak.station_id, peak.raw_value, peak.raw_unit) == ("usgs:12211200", 52300.0, "ft3/s")
+    assert not peak.is_sentinel and peak.value == pytest.approx(52300 * 0.028316846592)
+    assert peak.quality == {"approval_status": "Approved", "qualifier": None, "time_series_id": None,
+                            "source_api": "nwis-iv"}
+    # PDT values (-07:00) before the DST change are converted correctly too.
+    assert flows[0].ts == datetime(2021, 11, 1, 0, 0, tzinfo=UTC)
+    lvl = [r for r in rows if r.param == "level"][0]
+    assert lvl.raw_unit == "ft" and lvl.raw_value == 75.79
