@@ -6,19 +6,19 @@ You are the FloodLead BC build worker. Follow `CLAUDE.md` exactly (stage protoco
 
 Start keeping the river data that would otherwise disappear, and make it verifiable from outside.
 
-ECCC's real-time files only hold 30 days. Every hour we are not archiving is history we can never get back, and every forecast the ledger issues later needs this data underneath it. By the end of this stage, three public sources are being ingested continuously on the VM, every raw file is archived immutably in GCS, the backfills are loaded, and a read-only HTTPS API lets anyone check what we hold.
+ECCC's real-time files only hold 30 days. Every hour we are not archiving is history we can never get back, and every forecast the ledger issues later needs this data underneath it. By the end of this stage, three public sources are being ingested continuously on the VM, every raw file is archived immutably on the VM's disk (there is no cloud bucket; the disk is protected by daily snapshots), the backfills are loaded, and a read-only HTTPS API lets anyone check what we hold.
 
 Build Session 2 is today at 18:00 PT. Get the live ECCC ingestion and raw archive running first, then widen.
 
 ## Read first
 
-`CLAUDE.md`, `AGENTS.md`, `docs/build/PLAN.md` (especially "Facts the supervisor verified"), `data-contract.md` (records 1, 6, 7), `architecture.md`, `evidence/` (earlier pull scripts and `station_summary.csv`). The VM's `.env` holds `GCS_BUCKET`, `PUBLIC_HOSTNAME`, `ACME_EMAIL`, `POSTGRES_PASSWORD`.
+`CLAUDE.md`, `AGENTS.md`, `docs/build/PLAN.md` (especially "Facts the supervisor verified"), `docs/stages/STAGE-00-environment.md` (what this VM is and what already runs on it), `data-contract.md` (records 1, 6, 7), `architecture.md`, `evidence/` (earlier pull scripts and `station_summary.csv`). The VM's `.env` holds `PUBLIC_HOSTNAME`, `ACME_EMAIL`, `POSTGRES_PASSWORD`, `ARCHIVE_DIR`. Anything already running on this VM that is not FloodLead must be left untouched; avoid its ports.
 
 ## Priorities and time boxes
 
 | Priority | Deliverable | Target |
 |---|---|---|
-| P1 | ECCC Datamart live ingestion for all BC hourly files + raw archive to GCS, running under docker compose | within ~90 min of starting |
+| P1 | ECCC Datamart live ingestion for all BC hourly files + raw archive on disk, running under docker compose | within ~90 min of starting |
 | P2 | ECCC 30-day backfill; USGS and NOAA NWPS live ingestion; USGS history backfill | next ~2 h |
 | P3 | Read-only public API behind Caddy HTTPS | before 17:30 PT if possible |
 | P4 | Tests, docs, contract sync, PR | before you stop |
@@ -53,7 +53,8 @@ If time runs out, ship P1–P2 working and report P3–P4 honestly as PARTIAL.
 You may override any of these, but only with a decision record that gives evidence.
 
 - **Runtime:** Docker Compose on this VM. Services: `db` (TimescaleDB on PostgreSQL 16, pinned image tag), `ingest` (Python scheduler), `api` (FastAPI + uvicorn), `caddy` (automatic HTTPS for `PUBLIC_HOSTNAME`). All `restart: unless-stopped`. Postgres is never exposed publicly.
-- **Python:** 3.12, `uv`, `ruff`, `pytest`, `psycopg` 3, `httpx`, `pydantic-settings`, `google-cloud-storage` (credentials from the VM's service account; no key files). Package at `src/floodlead/`, CLI entry point `floodlead`.
+- **Python:** 3.12, `uv`, `ruff`, `pytest`, `psycopg` 3, `httpx`, `pydantic-settings`. Package at `src/floodlead/`, CLI entry point `floodlead`.
+- **No cloud bucket.** The raw archive is a host directory (`ARCHIVE_DIR`, default `/srv/floodlead/archive`) bind-mounted into the containers. Postgres data also lives on the boot disk. Daily disk snapshots (set up by the human) are the off-machine copy.
 - **Polling, not AMQP.** Measured freshness is set by the hourly file refresh, so polling after :31 is as fresh as push and simpler to debug. Write this up as a decision.
 - **Migrations:** plain SQL files in `migrations/`, applied by a small runner recording a `schema_migrations` table.
 
@@ -65,13 +66,14 @@ You may override any of these, but only with a decision record that gives eviden
   - Flag sentinels (|value| ≥ 9999 and any documented sentinel codes) and keep them. The API's default series excludes them.
 - `observation_revisions`: append-only history of every changed value (old value, new value, when, which raw object).
 - `official_forecasts`: `lid, issued_at, valid_at, stage_ft, flow_kcfs, generated_at, fetched_at, raw_object_id`; unique on `(lid, issued_at, valid_at)`.
-- `raw_objects`: one row per fetched payload: source, URL, GCS URI, sha256, bytes, HTTP status, `Last-Modified`, `fetched_at`.
+- `raw_objects`: one row per fetched payload: source, URL, archive path, sha256, bytes, HTTP status, `Last-Modified`, `fetched_at`.
 - `ingest_runs`: source, started/finished, status, rows inserted/updated/unchanged, error text.
 
 ## Ingestion
 
 - **Schedules:** ECCC listing every 10 min (download only changed files); USGS every 15 min (rolling 6 h window per site); NWPS every 30 min; station metadata daily.
-- **Raw archive:** every fetched payload is gzipped to `gs://$GCS_BUCKET/raw/<source>/YYYY/MM/DD/HH/<name>.<sha8>.gz` and recorded in `raw_objects`. Objects are never overwritten or deleted. If GCS is unreachable, spool to a local directory and retry; never block or drop ingestion.
+- **Raw archive:** every fetched payload is gzipped to `$ARCHIVE_DIR/raw/<source>/YYYY/MM/DD/HH/<name>.<sha8>.gz`, written atomically (temp file + rename), made read-only (`0444`) and recorded in `raw_objects`. Files are never overwritten or deleted. Identical payloads (same sha256) are recorded once.
+- **Disk guard:** `/v1/health` reports disk use; amber at 80 %, red at 90 %. Ingestion keeps the database current even if the archive write fails, and logs the failure loudly.
 - **Upserts:** idempotent. A re-fetch of identical data changes nothing except `last_seen_at`. A changed value updates the row, increments `revision_count` and appends to `observation_revisions`.
 - **Robustness:** timeouts, retries with backoff, one failing station never stops the others, every run logged to `ingest_runs`. Structured JSON logs to stdout.
 
@@ -85,7 +87,7 @@ Run them in the background (for example a one-off compose service) so the live i
 
 ## Public read-only API (behind Caddy, HTTPS)
 
-- `GET /v1/health`: per source, last successful run, newest observation time, lag in minutes, stations reporting in the last 3 h, and status (green/amber/red with thresholds you document).
+- `GET /v1/health`: per source, last successful run, newest observation time, lag in minutes, stations reporting in the last 3 h, and status (green/amber/red with thresholds you document); plus disk use and archive size.
 - `GET /v1/stations` (filters: source, region, text search), `GET /v1/stations/{station_id}` (includes official thresholds).
 - `GET /v1/stations/{station_id}/observations?param=&since=&until=&include_sentinels=` (max 7 days per call; ISO UTC timestamps).
 - `GET /v1/official-forecasts/{lid}?issued_after=`.
@@ -100,7 +102,7 @@ Run them in the background (for example a one-off compose service) so the live i
 ## Documentation (while you build)
 
 - Stage doc with at least 10 decision records (for example polling vs AMQP, image pin, ID scheme, units, sentinel rule, revision handling, archive layout, USGS API choice, health thresholds, rate limits).
-- Update `architecture.md` (data architecture record: polling, TimescaleDB in Docker on GCE, GCS archive, Caddy/sslip, US sources, measured volumes), `README.md` ("How it works" and the data table: add USGS and NOAA), and `data-contract.md` (replace estimated freshness with the latencies you measure).
+- Update `architecture.md` (data architecture record: polling, TimescaleDB in Docker on GCE, local disk archive + daily snapshots instead of object storage, Caddy/sslip, US sources, measured volumes and growth per day), `README.md` ("How it works" and the data table: add USGS and NOAA; replace the Parquet/object-storage line), and `data-contract.md` (replace estimated freshness with the latencies you measure).
 
 ## Acceptance criteria
 
@@ -112,12 +114,12 @@ Run them in the background (for example a one-off compose service) so the live i
 | AC-4 | For 08MH001, 08MH029 and 08MH103, the latest stored row equals the last row of the live Datamart file fetched at check time | both outputs side by side |
 | AC-5 | USGS: all live sites backfilled; North Cedarville stage from 2007-10-01, with per-year completeness reported; Everson's 2021-11-15 peak present and equal to 52,300 cfs | SQL |
 | AC-6 | NWPS: at least one official NRKW1 forecast stored with `issued_at`; flood categories stored as official thresholds | API output |
-| AC-7 | Every fetched payload is in GCS with sha256 in `raw_objects`; objects written in the last hour counted | `gcloud storage ls` count + SQL |
+| AC-7 | Every fetched payload is in the archive with sha256 in `raw_objects`; files written in the last hour counted; sha256 of 5 random files re-verified; archive growth per day measured | `find`/`sha256sum` + SQL |
 | AC-8 | Sentinel and revision counts reported; sentinels excluded from the default API series | SQL + API |
 | AC-9 | Services survive `docker compose restart` and a VM reboot; ingestion resumes without manual steps | health before/after |
 | AC-10 | `ruff check .` and `pytest` pass; test count reported | output |
 | AC-11 | Stage doc has ≥ 10 decisions and was updated across ≥ 4 commits; contract files updated | `git log --stat` excerpt |
-| AC-12 | Monthly cost estimate for VM, disk, bucket and egress, labelled as an estimate | table |
+| AC-12 | Monthly cost estimate for VM, disk and snapshots, labelled as an estimate; days until the disk reaches 80 % at the measured growth rate | table |
 
 ## Out of scope for this stage
 

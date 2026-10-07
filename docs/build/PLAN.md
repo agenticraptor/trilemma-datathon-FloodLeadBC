@@ -46,8 +46,8 @@ next prompt ◄── PASS (merge) ◄── supervisor QA ──► FIX prompt 
 
 | # | Stage | Target | Value question the supervisor asks |
 |---|---|---|---|
-| 0 | Human setup: GCP project, VM, bucket, Claude Code, GitHub access | Oct 7, ~45 min | Can the worker build and deploy without blocking on access? |
-| 1 | Foundation + live archive: ingest ECCC Datamart (all BC), USGS Nooksack/Sumas, NOAA official forecasts; raw archive to GCS; backfills; minimal public read API | Oct 7, before Build Session 2 (18:00) | Is data that disappears after 30 days now being kept, fresh to ~1 h, and verifiable from outside? |
+| 0 | Environment discovery on the existing VM (worker prompt `prompts/STAGE-00-environment.md`) | Oct 7, ~30 min | Can the worker build and deploy without blocking on access, and without disturbing anything already on the VM? |
+| 1 | Foundation + live archive: ingest ECCC Datamart (all BC), USGS Nooksack/Sumas, NOAA official forecasts; raw archive on the VM disk (daily snapshots as the off-machine copy); backfills; minimal public read API | Oct 7, before Build Session 2 (18:00) | Is data that disappears after 30 days now being kept, fresh to ~1 h, and verifiable from outside? |
 | 2 | Forecast ledger + baselines: hourly persistence/trend forecasts, NOAA official forecast archived, hash-chained append-only ledger, scoring | Oct 7 night | Is every forecast fixed in time before the truth arrives, and scored honestly? |
 | 3 | History, thresholds, training sets: daily history (BC), 15-min history (Nooksack), official and station thresholds, upstream links, leakage-safe datasets | Oct 8 AM | Do the labels and features reflect what was knowable at forecast time? |
 | 4 | Models, walk-forward evaluation, calibration, 2021/2025 replays; kill-criteria verdict in `evaluation.md` | Oct 8 PM | Does the model beat persistence and trend honestly, and by how many hours at official flood stages? |

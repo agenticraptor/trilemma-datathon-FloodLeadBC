@@ -1,4 +1,6 @@
-# Stage 0 — human setup (≈45 minutes)
+# Stage 0 — human setup (reference only)
+
+> **Superseded on Oct 7, 2026:** the VM already exists and no storage bucket is used. Stage 0 is now the worker's discovery prompt, `docs/build/prompts/STAGE-00-environment.md`. Keep this file only as a reference for rebuilding the VM from scratch.
 
 Do these yourself. They need your accounts and billing. Replace `YOUR_PROJECT_ID` and `YOUR_BILLING_ACCOUNT`. All resources are in Toronto (`northamerica-northeast2`) to keep data in Canada.
 
