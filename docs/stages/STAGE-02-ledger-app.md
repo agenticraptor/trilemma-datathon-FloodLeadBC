@@ -196,6 +196,7 @@ Order from addendum 1 (targets in UTC):
   - Review found and fixed: (1) `appendKids` took one argument, so multi-argument calls dropped children; the Overflow gauge block was missing its observation time and stage list. (2) Input age now uses `created_at − data_as_of` (the entry's `input_age_min`). (3) The Overflow block now states "below action stage: no overflow; reports ~3.5 ft continuously since 2026-10-01".
   - The snapshot `index.json` gained attribution. Web tests 16 passed. Screenshots committed in `docs/stages/img/stage-02/` (4.8 MB).
 - `13:10` — Ledger size after the first issuance: 856 entries, 2,849,717 B canonical text, 3,341 B average per forecast, `pg_total_relation_size` 1,656 kB (TOAST compression).
+- `13:12` — `docs/ledger-spec.md`: entries, canonicalisation, hash rule, golden vector, entry types, issuance rules, DB guards, anchors and publication (part 2), how to verify, plus a minimal stdlib verifier. Checks: `printf … | sha256sum` → `4f02a159…fa4e` (matches); the spec's minimal verifier run against the public API → `OK 856 ccf8f76d…3a98`. README "what works now" updated (hourly forecasts live, links to the spec and screenshots).
 
 ## Measurements
 

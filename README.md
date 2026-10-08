@@ -93,9 +93,19 @@ uv run floodlead export-demo                 # refresh web/data/snapshot/ from t
 
 ### What works now, and what remains before Build Session 3
 
-| Works now (Oct 8) | In progress in this stage | Before Build Session 3 (Oct 9) |
+| Works now (Oct 8) | Next in this stage (part 2) | Before Build Session 3 (Oct 9) |
 |---|---|---|
-| Live ingestion of 442 BC gauges, 10 Nooksack/Sumas gauges and NOAA official forecasts; immutable raw archive; public API; overflow watch; replay; station picker; snapshot mode | Hourly baseline forecasts (persistence and 3-h trend) in a hash-chained public ledger, published to the `ledger` branch; scoring against persistence, trend and NOAA | BC station thresholds (Stage 3), so BC farmers get the same "chance of crossing" view; the first trained model is Stage 4 |
+| Live ingestion of 442 BC gauges, 10 Nooksack/Sumas gauges and NOAA official forecasts; immutable raw archive; public API; overflow watch; replay; station picker; snapshot mode. **Hourly baseline forecasts** (`persistence-v1`, `trend3h-v1`) for ~426 gauges with chances of crossing each stage and any personal level, fixed in a [hash-chained public ledger](docs/ledger-spec.md) since 2026-10-08 20:00Z (verify: `GET /v1/ledger`) | Scoring against what the river did, next to persistence, trend and NOAA's official forecast; hourly anchors and the ledger entries published to the `ledger` branch; a standard-library verifier | BC station thresholds (Stage 3), so BC farmers get the same "chance of crossing" view; the first trained model is Stage 4 |
+
+FloodLead's forecasts are **baselines** (what the river did after similar recent states), labelled "live skill being measured". No skill number is claimed until the scorer produces one.
+
+**Screenshots** (headless Chromium, `scripts/screenshots.cjs`):
+- [overflow watch, desktop](docs/stages/img/stage-02/overflow-watch-desktop-full.png)
+- [overflow watch, 375 px](docs/stages/img/stage-02/overflow-watch-375px-full.png)
+- [personal level](docs/stages/img/stage-02/personal-level-375px.png)
+- [replay](docs/stages/img/stage-02/replay-desktop.png)
+- [chances](docs/stages/img/stage-02/chances-desktop.png)
+- [ledger panel](docs/stages/img/stage-02/ledger-desktop.png)
 
 ## Build Session 1 evidence
 
