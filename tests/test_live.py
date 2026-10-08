@@ -16,10 +16,9 @@ pytestmark = pytest.mark.live
 
 def test_eccc_listing_has_hundreds_of_bc_files_and_csv_parses() -> None:
     with http.client() as c:
-        f = http.fetch(c, eccc.listing_url("hourly"))
-        files = eccc.parse_listing(f.content.decode())
-        assert len(files) >= 400
-        g = http.fetch(c, eccc.listing_url("hourly") + "BC_08MH001_hourly_hydrometric.csv")
+        base, files, _ = eccc.fetch_listing(c, "hourly")
+        assert len(files) >= 400 and "/WXO-DD/hydrometric/csv/BC/hourly/" in base  # dated directory (F1)
+        g = http.fetch(c, base + "BC_08MH001_hourly_hydrometric.csv")
     rows = eccc.parse_csv(g.content, g.last_modified)
     assert rows and datetime.now(UTC) - max(r.ts for r in rows) < timedelta(hours=6)
 
