@@ -192,6 +192,31 @@ Order from addendum 1 (targets in UTC):
   - Appended by the hourly issuance run (also in a late run), so the lag is ≤ 1 h. The issuances held since Oct 7 go in with their real fetch times, which is allowed: these are facts, not forecasts.
 - **Preview at 20:20Z:** 8 entries for 4 issuances (NKSW1 ×2 with 40 points each; NRKW1 Oct 7: 29 + 1 + 1 + 1; NRKW1 Oct 8: 28 + 1).
 
+### D-02.13 — Truth and scoring rules (scores are derived data, not ledger entries)
+
+- **Settling:** a horizon is scored once `valid_at` is ≥ 3 h old. The scorer runs hourly at HH:40 (`floodlead score` by hand).
+- **Level truth:** the observation at `valid_at`, else the nearest within ±10 min, else `no_truth` (counted, never imputed).
+- **Event truth:** the maximum observation over `(data_as_of, valid_at]`. This is the same window as `qmax` and `p_exceed`, so forecast and truth mean the same thing. The window includes the feed-latency gap the forecaster could not see. Fewer than 80 % of the window's grid points → `insufficient_truth`.
+- **Stored with each score:** the truth value, its timestamp, `first_seen_at` and `revision_count`.
+- **Rescoring:** a score is rewritten when any observation in its truth window was revised after it was scored. To keep runs cheap, only stations with a recent revision are re-checked.
+- **Metrics:**
+  - **CRPS approximated by the quantile score**, 2 × mean pinball loss over the 7 levels. It equals the absolute error for a point forecast (tested). Measured against the analytic CRPS of N(0,1): −7 % at z = 0, −25 % at |z| = 1, −18 % at |z| = 2, and **−19.4 % in expectation** for a calibrated forecast (200,000 draws). It is applied identically to every model, so it ranks models, but its absolute values are biased low and are not comparable with exact-CRPS figures elsewhere.
+  - Also: absolute error of the median, coverage of the 25–75, 10–90 and 5–95 % intervals, PIT bin (0–7), and Brier per threshold with its outcome.
+- **Skill:** CRPSS and BSS vs persistence use **paired samples only** (same station, base time, horizon; both scored, neither stale). A family with fewer than 30 events reports "too few events to judge" instead of a number. Stale-input forecasts are excluded from the summary.
+- **NOAA matched comparison:**
+  - eligibility: base times at 00/06/12/18Z, horizons in multiples of 6 h, stations with an NWPS forecast;
+  - comparison point: NOAA's latest issuance with points fetched by our `created_at`, at the same `valid_at`;
+  - metrics: absolute error, and Brier with p ∈ {0, 1} for the official categories, using NOAA's points in the same window; NOAA's own lead (`valid_at − issuedTime`) is reported.
+- **Summary:** materialised after every scorer run into `score_summaries`, carrying `scorer_run_id` and the window. Served by `/v1/scores/summary` and `/v1/scores/official`.
+- **Not done:** the day-block bootstrap intervals for CRPSS (optional in the prompt).
+
+### D-02.14 — Health gains `issuer`, `scorer` and `anchor` blocks
+
+- **issuer:** age of the newest `issuance` or `gap` base time. Green ≤ 75 min, amber ≤ 135 min, otherwise red; amber if the newest entry is a gap. The block also reports gaps in the last 24 h, forecast counts and runtime.
+- **scorer:** age of the last finished run, same thresholds.
+- **anchor:** age of the last `ok` anchor, same thresholds, plus errors in the last 24 h. Amber "pending" before the first anchor.
+- **Why 75/135 min:** the jobs are hourly, so one missed run turns amber and two turn red. The overall status is the worst of all blocks.
+
 ## Work log
 
 - `12:41` — `git checkout main && git pull` → `9e414f1` ("Stage 2 addendum: timeline reset, app first, two PRs before the mentor review"). PR #2 shows as `MERGED`. Read the prompt, addendum 1, PLAN.md and `brief.md`. `git checkout -b stage-02-ledger-app`.
@@ -220,6 +245,13 @@ Order from addendum 1 (targets in UTC):
 - `13:12` — `docs/ledger-spec.md`: entries, canonicalisation, hash rule, golden vector, entry types, issuance rules, DB guards, anchors and publication (part 2), how to verify, plus a minimal stdlib verifier. Checks: `printf … | sha256sum` → `4f02a159…fa4e` (matches); the spec's minimal verifier run against the public API → `OK 856 ccf8f76d…3a98`. README "what works now" updated (hourly forecasts live, links to the spec and screenshots).
 - `13:14` — PR 1 opened: https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC/pull/3 (interim STAGE REPORT; done vs not done). Branched `stage-02-part2` from it.
 - `13:15–13:20` — Anchor job (D-02.11): token check via the API (repo reachable; expiry 2026-11-07); `floodlead ledger anchor` → first anchor and orphan branch (commit `28aefd8`). Outside verification passed. `official_entries()` (D-02.12) previewed: 8 entries.
+- `13:20–13:24` — Committed and pushed the anchor and official entries (part 2 commit 1). Rebuilt and recreated ingest at 20:17:57Z (jobs `ledger-anchor` HH:30; official entries go into the next issuance).
+- `13:24–13:32` — Scorer (D-02.13): `migrations/003_scores.sql` (scorer_runs, forecast_scores, score_summaries; new tables only), `scorer.py`, `tests/test_scorer.py`:
+  - point-forecast identity, normal-CRPS tolerance, PIT, ±10 min truth, 80 % coverage rule, NOAA `fetched_at` rule;
+  - an end-to-end test (issuer on 35 days of synthetic 15-min data → 2 forecasts → nothing scored at +1 h → 16 scores at +52 h → idempotent → summary with paired CRPSS and "too few events to judge").
+  - Fixes on the way: `upsert_station_meta` needs `name`; `avg(int)` returns `Decimal` (cast to float); ledger test cleanup must also truncate `forecast_scores`.
+  - `pytest` → **83 passed** (twice).
+  - `floodlead migrate` → `['003_scores.sql']`. `floodlead score` → run 1, 0 scored (nothing settled before ~00:00Z), 1.1 s.
 
 ## Measurements
 

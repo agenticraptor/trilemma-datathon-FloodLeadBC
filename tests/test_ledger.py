@@ -81,7 +81,7 @@ def lconn(test_dsn: str) -> Iterator[psycopg.Connection]:
         yield c
         # Disposable test database only: bypass the append-only triggers to reset between tests.
         c.execute("SET session_replication_role = replica")
-        c.execute("TRUNCATE ledger_anchors, ledger_entries")
+        c.execute("TRUNCATE forecast_scores, score_summaries, scorer_runs, ledger_anchors, ledger_entries")
         c.execute("SET session_replication_role = DEFAULT")
 
 
@@ -103,7 +103,8 @@ def test_db_rejects_update_delete_truncate_and_bad_appends(lconn: psycopg.Connec
     with lconn.transaction():
         ledger.append(lconn, [_pend(1)])
     for sql in ("UPDATE ledger_entries SET canonical = canonical WHERE seq = 2",
-                "DELETE FROM ledger_entries WHERE seq = 2", "TRUNCATE ledger_anchors, ledger_entries"):
+                "DELETE FROM ledger_entries WHERE seq = 2",
+                "TRUNCATE forecast_scores, ledger_anchors, ledger_entries"):
         with pytest.raises(psycopg.errors.RaiseException, match="append-only"):
             lconn.execute(sql)
     last_seq, last_hash = ledger.head(lconn)
@@ -121,6 +122,7 @@ def test_db_rejects_update_delete_truncate_and_bad_appends(lconn: psycopg.Connec
 def test_concurrent_appends_stay_gapless(lconn: psycopg.Connection, test_dsn: str) -> None:
     with lconn.transaction():
         ledger.append(lconn, [_pend(0)])
+    start = ledger.head(lconn)[0]
     errors: list[BaseException] = []
 
     def worker(k: int) -> None:
@@ -139,4 +141,4 @@ def test_concurrent_appends_stay_gapless(lconn: psycopg.Connection, test_dsn: st
         t.join()
     assert not errors
     r = ledger.verify_db(lconn)
-    assert r.ok and r.entries == 2 + 4 * 5 * 2 and r.last_seq == r.entries
+    assert r.ok and r.entries == start + 4 * 5 * 2 and r.last_seq == r.entries
