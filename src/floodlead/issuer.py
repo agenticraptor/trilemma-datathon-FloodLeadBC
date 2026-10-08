@@ -180,6 +180,49 @@ def forecast_station(conn: psycopg.Connection, sid: str, data_as_of: datetime, b
     return out
 
 
+def official_entries(conn: psycopg.Connection, created_at: datetime) -> list[ledger.Pending]:
+    """One `official_forecast` entry per NOAA issuance first stored in official_forecasts, with the values exactly as
+    received; points NOAA adds later under the same issuance get a further entry with only the added points."""
+    in_ledger: dict[tuple[str, datetime], set[str]] = {}
+    for (canonical,) in conn.execute("SELECT canonical FROM ledger_entries WHERE entry_type = 'official_forecast'"):
+        d = json.loads(canonical)["data"]
+        key = (d["lid"], datetime.fromisoformat(d["issued_at"].replace("Z", "+00:00")))
+        in_ledger.setdefault(key, set()).update(pt["valid_at"] for pt in d["points"])
+    rows = conn.execute(
+        "SELECT f.lid, f.issued_at, f.valid_at, f.stage_ft, f.flow_kcfs, f.generated_at, f.fetched_at, r.sha256,"
+        " s.station_id FROM official_forecasts f LEFT JOIN raw_objects r USING (raw_object_id)"
+        " LEFT JOIN stations s ON s.links->>'nwps_lid' = f.lid"
+        " WHERE f.fetched_at <= %s ORDER BY f.issued_at, f.lid, f.valid_at", (created_at,)).fetchall()
+    groups: dict[tuple[str, datetime], list[tuple]] = {}
+    for r in rows:
+        groups.setdefault((r[0], r[1]), []).append(r)
+    out: list[ledger.Pending] = []
+    for (lid, issued), pts in groups.items():
+        seen = set(in_ledger.get((lid, issued), set()))
+        new_all = [r for r in pts if ledger.ts(r[2]) not in seen]
+        # One entry per fetch that brought new points, in fetch order, each with its true fetched_at.
+        batches: dict[datetime, list[tuple]] = {}
+        for r in new_all:
+            batches.setdefault(r[6], []).append(r)
+        for _fetched, new in sorted(batches.items()):
+            out.append(_official(lid, issued, new, "added points" if seen else "issuance", created_at))
+            seen.update(ledger.ts(r[2]) for r in new)
+    return out
+
+
+def _official(lid: str, issued: datetime, new: list[tuple], part: str, created_at: datetime) -> ledger.Pending:
+    return ledger.Pending("official_forecast", {
+        "lid": lid, "station_id": new[0][8], "issued_at": ledger.ts(issued), "part": part,
+        "points": [{"valid_at": ledger.ts(r[2]), "stage_ft": r[3], "flow_kcfs": r[4],
+                    "generated_at": ledger.ts(r[5]) if r[5] else None} for r in new],
+        "fetched_at": ledger.ts(min(r[6] for r in new)),
+        "raw_sha256": sorted({r[7] for r in new if r[7]}),
+        "units": {"stage": "ft", "flow": "kcfs"},
+        "source": "NOAA NWS National Water Prediction Service, values exactly as published (unmodified); "
+                  "not affiliated with or endorsed by NOAA/NWS",
+    }, created_at, station_id=new[0][8], base_time=issued, lid=lid)
+
+
 def run(pool: ConnectionPool, now: datetime | None = None, dry_run: bool = False) -> dict[str, Any]:
     t0 = time.monotonic()
     created_at = now or datetime.now(UTC)
@@ -245,6 +288,7 @@ def run(pool: ConnectionPool, now: datetime | None = None, dry_run: bool = False
                                                        "reason": "no issuance run within 30 min of the base time"},
                                                created_at, base_time=t))
                     t += timedelta(hours=1)
+            head += official_entries(conn, created_at)
             if late:
                 if last_base is None:  # the ledger has not started issuing yet: nothing to record
                     return {"status": "late-before-first-issuance", "base_time": ledger.ts(base)}

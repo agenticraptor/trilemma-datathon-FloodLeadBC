@@ -15,7 +15,7 @@ def _pool(max_size: int = 6):  # type: ignore[no-untyped-def]
 
 
 def _jobs(pool):  # type: ignore[no-untyped-def]
-    from floodlead import issuer
+    from floodlead import anchor, issuer
     from floodlead.scheduler import Job
     from floodlead.sources import eccc, nwps, usgs
 
@@ -29,6 +29,8 @@ def _jobs(pool):  # type: ignore[no-untyped-def]
         # Station metadata daily (and at start).
         # Hourly forecast issuance into the ledger at HH:15 (after the HH:01 Datamart rewrite has landed).
         Job("ledger-issue", 3600, 900, lambda: issuer.run(pool)),
+        # Hourly anchor at HH:30 (after the HH:15 issuance has been written): head + new entries to the `ledger` branch.
+        Job("ledger-anchor", 3600, 1800, lambda: anchor.run(pool)),
         Job("eccc-stations", 86400, 9 * 3600 + 600, lambda: eccc.refresh_stations(pool)),
         Job("usgs-stations", 86400, 9 * 3600 + 900, lambda: usgs.refresh_stations(pool)),
     ]
@@ -58,6 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     iss.add_argument("--dry-run", action="store_true", help="compute forecasts but write nothing")
     lg = sub.add_parser("ledger", help="ledger tools")
     lgs = lg.add_subparsers(dest="ledger_cmd", required=True)
+    lgs.add_parser("anchor", help="publish the head and new entries to the `ledger` branch now")
     lv = lgs.add_parser("verify", help="verify the hash chain directly from the database")
     lv.add_argument("--from-seq", type=int, default=1)
     ex = sub.add_parser("export-demo", help="write the app's snapshot JSON (web/data/snapshot/) from the live DB")
@@ -109,6 +112,14 @@ def main(argv: list[str] | None = None) -> int:
 
         print(json.dumps(issuer.run(pool, dry_run=args.dry_run), indent=1, default=str))
         return 0
+    if args.cmd == "ledger" and args.ledger_cmd == "anchor":
+        import json
+
+        from floodlead import anchor
+
+        res = anchor.run(pool)
+        print(json.dumps(res, indent=1, default=str))
+        return 0 if res.get("status") in ("ok", "up-to-date") else 1
     if args.cmd == "ledger" and args.ledger_cmd == "verify":
         from dataclasses import asdict
 

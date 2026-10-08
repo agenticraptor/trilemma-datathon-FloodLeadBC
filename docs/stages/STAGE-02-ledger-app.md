@@ -171,6 +171,27 @@ Order from addendum 1 (targets in UTC):
 - `input_hash` = sha256 of the canonical list `[[ts, value_r4], …]` of the observations in the 3 h window ending at `data_as_of` (the point-path inputs).
 - A station-model with fewer than 50 library paths is skipped and counted (2 stations each in the first run).
 
+### D-02.11 — Anchors and the published ledger: one Git Data API commit per hour on an orphan `ledger` branch
+
+- **Options considered:** (a) the contents API, which makes one commit per file, so the entries file and the `heads.txt` line would land in separate commits; (b) the Git Data API: blobs, a tree on top of the previous tree, a commit with the previous head as parent, then a fast-forward ref update with `force: false`.
+- **Choice:** (b). Each hourly anchor (job `ledger-anchor` at HH:30, after the HH:15 issuance is written) is **one commit** containing:
+  - `ledger/entries/YYYY/MM/DD/HH.jsonl.gz`: every entry since the previous anchor, one JSON object per line (`seq, entry_type, created_at, canonical, prev_hash, entry_hash`, as stored), gzip with mtime 0;
+  - the updated `ledger/heads.txt`, with one appended `<anchored_at> <seq> <entry_hash>` line.
+- The `ledger` branch is an **orphan** (README plus `ledger/` only; no code), created by the first anchor. The job never touches `main` and never force-pushes; the ref update would fail rather than rewrite.
+- Every attempt is recorded in `ledger_anchors` (`ok` or `error`, with commit SHA, URL, path and bytes). The table is append-only like the ledger.
+- Manual run: `floodlead ledger anchor`. The token comes from `LEDGER_GITHUB_TOKEN` in `.env`. It expires 2026-11-07 (from the API's `github-authentication-token-expiration` header).
+- **First anchor (20:15:45Z):** commit `28aefd8958451e550dd0d90e0d953e244091a337`, 856 entries, **395,114 B** gzip. Checked from outside: raw `heads.txt` = `2026-10-08T20:15:45Z 856 ccf8f76d…3a98`, and the downloaded `20.jsonl.gz` recomputes to the same head with a stdlib script. `git ls-remote` shows `main` still at `9e414f1`.
+- **Publication size (addendum item 3):** ≈ 0.4 MB per hourly issuance → ≈ **285 MB/month**, under the ~1 GB/month limit. Git does not delta-compress gzip blobs well, so the repository grows by about that much each month. If that becomes a problem, alternatives are daily files, or hourly files kept only for a rolling window plus daily consolidations (each would be a published decision, never a silent drop).
+
+### D-02.12 — NOAA issuances in the ledger: one entry per fetch, values exactly as received
+
+- **Context:** NOAA keeps the same `issuedTime` and appends points: NRKW1's 2026-10-07 15:36Z issuance gained one point at each 6-hourly refresh (29 → 32 points by Oct 8).
+- **Choice:**
+  - For each NOAA issuance, one `official_forecast` entry per fetch that brought new points, in fetch order: `part = "issuance"` for the first, `"added points"` for later ones. Each carries the points exactly as stored (stage ft, flow kcfs, `generated_at`), NOAA's `issuedTime`, our true `fetched_at` and the raw payload's sha256.
+  - No unit conversion or rounding is applied; conversion to metres happens only in scoring.
+  - Appended by the hourly issuance run (also in a late run), so the lag is ≤ 1 h. The issuances held since Oct 7 go in with their real fetch times, which is allowed: these are facts, not forecasts.
+- **Preview at 20:20Z:** 8 entries for 4 issuances (NKSW1 ×2 with 40 points each; NRKW1 Oct 7: 29 + 1 + 1 + 1; NRKW1 Oct 8: 28 + 1).
+
 ## Work log
 
 - `12:41` — `git checkout main && git pull` → `9e414f1` ("Stage 2 addendum: timeline reset, app first, two PRs before the mentor review"). PR #2 shows as `MERGED`. Read the prompt, addendum 1, PLAN.md and `brief.md`. `git checkout -b stage-02-ledger-app`.
@@ -197,6 +218,8 @@ Order from addendum 1 (targets in UTC):
   - The snapshot `index.json` gained attribution. Web tests 16 passed. Screenshots committed in `docs/stages/img/stage-02/` (4.8 MB).
 - `13:10` — Ledger size after the first issuance: 856 entries, 2,849,717 B canonical text, 3,341 B average per forecast, `pg_total_relation_size` 1,656 kB (TOAST compression).
 - `13:12` — `docs/ledger-spec.md`: entries, canonicalisation, hash rule, golden vector, entry types, issuance rules, DB guards, anchors and publication (part 2), how to verify, plus a minimal stdlib verifier. Checks: `printf … | sha256sum` → `4f02a159…fa4e` (matches); the spec's minimal verifier run against the public API → `OK 856 ccf8f76d…3a98`. README "what works now" updated (hourly forecasts live, links to the spec and screenshots).
+- `13:14` — PR 1 opened: https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC/pull/3 (interim STAGE REPORT; done vs not done). Branched `stage-02-part2` from it.
+- `13:15–13:20` — Anchor job (D-02.11): token check via the API (repo reachable; expiry 2026-11-07); `floodlead ledger anchor` → first anchor and orphan branch (commit `28aefd8`). Outside verification passed. `official_entries()` (D-02.12) previewed: 8 entries.
 
 ## Measurements
 
