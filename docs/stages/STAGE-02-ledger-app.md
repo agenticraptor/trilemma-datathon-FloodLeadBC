@@ -324,6 +324,9 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
     - live: all 4 pages `scrollWidth = viewport` at 1280 and 375 px; legends 1034/317 px; `page errors (all pages): 0; with navigator.language=en-US@posix: 0`;
     - snapshot mode (local `http.server`, no API): same layout results; banner "Snapshot from Thu, Oct 8, 15:03 PDT (Oct 8, 22:03 UTC)"; ages "48 min before the snapshot"; 0 page errors (console shows only the expected `/v1` 404s that trigger the fallback).
   - Screenshots and both checks committed under `docs/stages/img/stage-02/`.
+- `15:16` — **Base 22:00Z** issued by the scheduler.
+  - Corrected `persistence-v1` model card appended at **seq 1719** (`supersedes_seq 2`, `change: "method description corrected; parameters and outputs unchanged"`); `trend3h-v1` card unchanged.
+  - Issuance: `created_at` 22:15:00.532Z, `inserts_started_at` 22:16:08.736Z, `committed_at` 22:16:09.903Z, so **created → commit = 69.4 s, measured**. Runtime 68.2 s; 857 forecasts (persistence 429, trend 428).
 
 ## Measurements
 
