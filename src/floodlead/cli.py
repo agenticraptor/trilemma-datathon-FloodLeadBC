@@ -51,6 +51,8 @@ def main(argv: list[str] | None = None) -> int:
     bu.add_argument("--api", choices=["auto", "ogc", "nwis"], default="auto",
                     help="auto: OGC API v1 when USGS_API_KEY is set, else legacy NWIS IV (no key needed)")
     bsub.add_parser("nwps", help="NWPS gauge metadata, flood categories and current forecasts")
+    ex = sub.add_parser("export-demo", help="write the app's snapshot JSON (web/data/snapshot/) from the live DB")
+    ex.add_argument("--out", default="web/data/snapshot")
     a = sub.add_parser("api", help="serve the read-only API")
     a.add_argument("--host", default="0.0.0.0")
     a.add_argument("--port", type=int, default=8000)
@@ -65,6 +67,12 @@ def main(argv: list[str] | None = None) -> int:
         db.migrate()
         uvicorn.run("floodlead.api:app", host=args.host, port=args.port, proxy_headers=True,
                     forwarded_allow_ips="*", access_log=False, log_config=None)
+        return 0
+
+    if args.cmd == "export-demo":
+        from floodlead.snapshot import export
+
+        export(args.out)
         return 0
 
     db.migrate()
