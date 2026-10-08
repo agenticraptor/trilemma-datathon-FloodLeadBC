@@ -1,0 +1,459 @@
+# Stage 01 — Foundation and live archive
+
+> Living document. Written while the stage is built, committed with the code. Newest work-log entries at the bottom.
+
+| | |
+|---|---|
+| Branch | `stage-01-live-archive` |
+| Started | 2026-10-07 13:34 PT |
+| Finished | 2026-10-07 15:45 PT |
+| Prompt | `docs/build/prompts/STAGE-01-live-archive.md` |
+| Status | ready for QA |
+
+## Goal
+
+Start keeping the river data that would otherwise disappear, and make it checkable from outside. ECCC's Datamart only holds 30 days of real-time BC gauge data. This stage ingests three public sources continuously on the VM:
+
+- ECCC Datamart hourly CSVs for every BC gauge;
+- USGS 15-min stage and flow for the Nooksack/Sumas gauges that flood Sumas Prairie;
+- NOAA NWPS official forecasts and flood categories.
+
+Every raw payload is archived immutably on local disk with its sha256. The ECCC 30-day files and the USGS history are backfilled. A read-only HTTPS API lets anyone see what we hold and how fresh it is. The user value: the forecasts and ledger in later stages need this data underneath them, and every hour without archiving is history that cannot be recovered.
+
+## Inputs read
+
+- `CLAUDE.md` (updated on `main`): the raw archive is `ARCHIVE_DIR` (default `/srv/floodlead/archive`), never deleted or overwritten. `pg_dump` goes to `/srv/floodlead/backups/` before any migration that touches existing tables.
+- `AGENTS.md`: licensed sources only (records 1, 6, 7 in `data-contract.md` cover ECCC, USGS and NWPS), no leakage, attribution on every response.
+- `docs/build/PLAN.md`, "Facts the supervisor verified". ECCC OGC real-time is ~4 h behind, so it is used for station metadata only. Datamart hourly files are ~1 h behind and rewritten at :31. USGS North Cedarville stage dates from 2007-10-01. Everson's 2021 peak was 52,300 cfs. NRKW1 flood stages are given.
+- `docs/build/prompts/STAGE-01-live-archive.md`: priorities P1–P4, data model, schedules, archive layout, API, 12 acceptance criteria.
+- `docs/stages/STAGE-00-environment.md` (QA passed): e2-standard-2 (2 vCPU, 7.7 GiB, no swap), 92 GB free, ports 80/443/5432/8000 free. Datamart uses a fixed `-08:00` offset. Git identity is unset on the VM.
+- `data-contract.md`, `architecture.md`, `README.md`, `evidence/` (`pull_gauges.py` uses the OGC API; `station_summary.csv` reports 1 sentinel row at 08MH001 and ±99999 sentinels in the real-time feed).
+- **Re-checked at start (13:33 PT, VM rebooted 4 min earlier onto kernel 7.0.0-1013-gcp):**
+  - `docker run --rm hello-world` works **without sudo** (user in group `docker`; Docker 29.1.3, Compose 2.40.3).
+  - `gcloud compute addresses list` shows `floodlead-ip` reserved and `IN_USE`, so the external IP is now static. `PUBLIC_HOSTNAME` resolves to it.
+  - `ACME_EMAIL` is still **absent** from `.env`.
+  - **No snapshot schedule** is attached to the boot disk yet (`disks describe … --format='value(resourcePolicies)'` → empty).
+  - Swap is still 0 B. Ports 80/443/5432/8000 are still free.
+
+## Plan
+
+1. Branch, open this doc, commit and push (first).
+2. Create a 4 GiB swapfile and add it to `/etc/fstab` (prompt requirement; decision record).
+3. Probe each source once to confirm its live payload shapes and commit trimmed real fixtures. USGS OGC `continuous` items (paging, limits, rate-limit headers, deprecation notices), NWPS `gauges/{lid}` (flood categories, `usgsId`), and the ECCC hourly and daily CSVs.
+4. Scaffold `src/floodlead/` with `uv`: settings, DB helpers, SQL migrations and runner, raw-archive writer (gzip, atomic, `0444`, sha256 dedupe), set-based upserts with revision capture, `ingest_runs`, JSON logs, CLI `floodlead`.
+5. **P1:** ECCC Datamart live ingestion (listing every 10 min, conditional GETs, only changed files). Compose `db` (pinned TimescaleDB/PG16 image, memory-limited) and `ingest` with `restart: unless-stopped`. Bring them up and verify rows plus archive files.
+6. **P2:** ECCC 30-day backfill as a one-off compose service. USGS live (15 min, rolling 6 h) and NWPS live (30 min, store every `issuedTime`). USGS history backfill (chunked, resumable cursor, ≤ 4 parallel requests). Station metadata daily from the ECCC OGC API, USGS and NWPS.
+7. **P3:** FastAPI read-only API (`/v1/health`, stations, observations, official forecasts, `/docs`, attribution, CORS, rate limit) behind Caddy with automatic HTTPS for `PUBLIC_HOSTNAME`. Report certificate issuance as the inbound proof.
+8. **P4:** tests on real fixtures (parsers, conversions, sentinels, `-08:00`, upsert idempotency and revisions against a disposable DB, API contract) plus `@pytest.mark.live`. Run `ruff` and `pytest`. Update `architecture.md`, `README.md` and `data-contract.md`. Run the restart/reboot check, collect AC evidence, open the PR and write the STAGE REPORT.
+
+## Decisions
+
+### D-01.1 — 4 GiB swapfile
+
+- **Context:** 7.7 GiB RAM and no swap. The DB (≤ 2.5 GiB), ingest (≤ 1 GiB), API, Caddy, backfill containers and this Claude Code session share it. With no swap, a burst means the OOM killer.
+- **Options considered:** (a) no swap, rely on container limits; (b) 4 GiB swapfile on the boot disk (prompt requirement); (c) resize the VM (costs money, human decision).
+- **Choice:** (b). `fallocate -l 4G /swapfile`, `chmod 600`, `mkswap`, `swapon`, plus `/swapfile none swap sw 0 0` in `/etc/fstab`. Swappiness left at the Ubuntu default (60).
+- **Why:** it makes memory pressure slow instead of fatal. It costs 4 GB of the 92 GB free disk.
+- **Reversibility / cost:** `swapoff /swapfile`, remove the fstab line, delete the file.
+- **Follow-ups:** watch `free -h` during backfills. Sustained swap use means the memory limits need revisiting.
+
+### D-01.2 — Polling with conditional GETs, not AMQP
+
+- **Context:** `architecture.md` assumed an AMQP consumer. Datamart freshness is set by the hourly file rewrite (all 429 hourly files stamped `:31`; the newest row is about 1 h old when written).
+- **Options considered:** (a) AMQP `sarracenia`/`aio-pika` subscription; (b) poll the listing every 10 min and download only files whose listing time is newer than the stored `Last-Modified`, using `If-Modified-Since`.
+- **Choice:** (b). The ECCC job runs at :03/:13/…/:53, so the :33 run catches each rewrite about 2 min after publication.
+- **Why:** freshness is the same because the files only change hourly, and polling is far simpler to debug and resume. Conditional GET verified: `If-Modified-Since` on an unchanged file returned `304` (Stage 0 probe; and run 5 below: `unchanged 429`, `fetched 0`, 0.45 s).
+- **Reversibility / cost:** an AMQP trigger could later replace the timer. Parsing and storage are unaffected.
+- **Follow-ups:** none.
+
+### D-01.3 — Pinned images
+
+- **Context:** reproducible deploys on a production VM.
+- **Choice:** `timescale/timescaledb:2.30.2-pg16` (latest 2.x pg16 tag on Docker Hub, published 2026-09-29), `caddy:2.11.7-alpine` (2026-10-06), `python:3.12.15-slim-bookworm`, and the uv binary from `ghcr.io/astral-sh/uv:0.12.23` (same version as on the VM). Python deps are locked in `uv.lock` (31 packages).
+- **Options considered:** floating tags (`latest-pg16`, `2-alpine`) vs exact tags.
+- **Why:** exact tags mean a restart never silently upgrades the database engine.
+- **Reversibility / cost:** change the tag, then pull and recreate. TimescaleDB minor upgrades need `ALTER EXTENSION timescaledb UPDATE`.
+- **Follow-ups:** Stage 8 (hardening) can add digest pinning.
+
+### D-01.4 — Station ID scheme and units
+
+- **Context:** two countries, three agencies, two unit systems.
+- **Choice:** namespaced IDs `eccc:<station number>` and `usgs:<site number>`. NWPS gauges (`NRKW1`, …) are not separate stations: they attach to the USGS station given by NWPS `usgsId`, as `links.nwps_lid` and `official_thresholds`. `value` is SI (m, m³/s); `raw_value` and `raw_unit` keep exactly what was published. Factors: ft × 0.3048, ft³/s × 0.028316846592.
+- **Why:** one namespace prevents collisions, and keeping raw values means a conversion bug can always be fixed from the database without re-fetching.
+- **Reversibility / cost:** IDs are primary keys, so renaming them later is costly. This scheme is fixed from now on.
+- **Follow-ups:** forecasts in Stage 2 key on these IDs.
+
+### D-01.5 — Sentinel rule (overrides the prompt's "|value| ≥ 9999" for flows)
+
+- **Context:** the prompt asks to flag `|value| ≥ 9999` plus documented codes. That rule would flag real flows: the Nooksack at Everson reached **52,300 ft³/s** on 2021-11-15 (verified in the USGS payload, below), and the Fraser at Hope has exceeded 10,000 m³/s in freshet (an assumption from general hydrology, not measured here).
+- **Options considered:** (a) `|v| ≥ 9999` for everything; (b) per-parameter rule.
+- **Choice:** (b). Flag a row when the raw value is one of the documented codes {±99999, ±999999, −9999} (ECCC real-time ±99999, USGS legacy −999999, NWS/USGS −9999); or for **levels** when `|v| ≥ 9999`; or for **flows** when `|v| ≥ 99999`. Sentinel rows are kept with `raw_value` verbatim, `value = NULL`, `is_sentinel = true`. The API's default series excludes them.
+- **Why:** it never turns a real flood flow into "missing", and a sentinel can never be read as a real value (value is NULL).
+- **Reversibility / cost:** `raw_value` is kept, so flags can be recomputed with one UPDATE in a migration.
+- **Follow-ups:** sentinel counts are reported under AC-8.
+
+### D-01.6 — Revisions, idempotency and an out-of-order guard
+
+- **Context:** ECCC data are provisional and revised. The 30-day "daily" files (rewritten once a day at ~08:18 UTC) overlap the hourly files (rewritten hourly). Ingesting an older daily file after a newer hourly one would flip values back, and the next hourly file would flip them forward again: false revisions.
+- **Choice:**
+  - Set-based upsert per payload: COPY into a temp staging table, then:
+    1. bump `last_seen_at` on identical rows;
+    2. append changed rows to `observation_revisions` (old and new value, quality, sentinel flag, raw object ids) and update them, incrementing `revision_count`;
+    3. insert new rows.
+  - "Changed" means raw value, unit, quality fields or sentinel flag differ.
+  - Each row stores `published_at` (the payload's HTTP `Last-Modified` for ECCC, the per-value `last_modified` for USGS). An incoming version published **before** the stored one is counted as `stale` and not applied.
+  - Writers serialise per station with `pg_advisory_xact_lock(hashtext(station_id))`, so live ingest and backfills cannot deadlock or interleave.
+  - `observation_revisions`, `raw_objects` and `official_forecasts` have triggers that reject UPDATE and DELETE.
+- **Why:** re-fetching identical data changes only `last_seen_at`. Verified: forced re-download of all 429 hourly files → `rows_unchanged 563393`, `rows_inserted 0`, `rows_updated 0` (run 3). The guard makes revision counts mean something.
+- **Reversibility / cost:** `published_at` is an extra column beyond the prompt's minimum model.
+- **Follow-ups:** Stage 2 features must use the value as first seen (`observation_revisions` holds the history).
+
+### D-01.7 — Raw archive layout and immutability
+
+- **Choice:**
+  - Layout: `$ARCHIVE_DIR/raw/<source>/YYYY/MM/DD/HH/<name>.<sha8>.gz`, by UTC fetch time.
+  - gzip with `mtime=0`, so the archived bytes depend only on the payload. sha256 is computed on the **uncompressed** payload: `zcat f | sha256sum` must equal `raw_objects.sha256`.
+  - Written to a temp file in the same directory, `fsync`, `chmod 0444`, then `os.link` into place. A link never replaces an existing file, so nothing is ever overwritten.
+  - Identical payloads (same sha256) are recorded once (`UNIQUE (sha256)`).
+  - The archive row is committed in its own transaction **before** parsing, so a parse failure never leaves a payload unindexed.
+  - The directory is bind-mounted read-write into `ingest` and read-only into `api`. Containers run as uid 1001/gid 1002, the VM user that owns `/srv/floodlead/archive`.
+- **Why:** these properties make the archive immutable and checkable, as the prompt requires. Verified: files show `-r--r--r-- prana prana`. A forced re-download of 429 identical files added 0 new `raw_objects`.
+- **Reversibility / cost:** the layout is fixed from now on. Moving it means copying, never rewriting.
+- **Follow-ups:** a disk snapshot schedule is still needed for an off-machine copy (human).
+
+### D-01.8 — USGS: Water Data OGC API v1, primary series only
+
+- **Context:** the prompt names `…/ogcapi/v0/…`. Every v0 response's `next`/`self` links point to **`/ogcapi/v1/`** (`api-version: 1.9.8`), so v1 is current. No deprecation header was seen on v0 or v1 responses; all headers were checked. The legacy `waterservices.usgs.gov/nwis/iv` still answered `200` in Stage 0.
+- **Options considered:** (a) OGC v1 `continuous` collection; (b) legacy NWIS IV.
+- **Choice:** (a). Requests use `limit=50000`, `skipGeometry=true` and a `properties=` filter, and follow `rel=next` cursors. Only the series marked `Primary` with statistic `00011` in `time-series-metadata` are kept per (site, parameter), so two sensors cannot write the same key. Site 12210500 (Deming) has no instantaneous data after 2005-09-30, so it is **dropped** from live ingest and the backfill (logged in each run's `details.dropped_no_recent_data`).
+- **Why:** one request returns a whole month for a site (2,831 rows, 1.3 MB, 1.0 s). It returned the verified Everson peak exactly: `time 2021-11-15T21:40:00+00:00` (13:40 PST), `value 52300`, `Approved`.
+- **Reversibility / cost:** the parser is isolated in `sources/usgs.py`. NWIS IV can be added as a fallback if v1 fails.
+- **Follow-ups:** keep checking response headers for deprecation notices.
+
+### D-01.9 — Prepared statements disabled (measured)
+
+- **Context:** the first full ECCC load took **5 min 32 s** for 429 files, and throughput fell from 126 to about 50 files/min. A forced re-run was still unfinished after 10 min, with four Postgres backends at 36–45 % CPU each and single UPDATEs running for seconds. The same upsert on a fresh connection took **0.13 s** per 1,426-row file (EXPLAIN ANALYZE: 55 ms, index scans on the chunk's primary key).
+- **Choice:** connect with `prepare_threshold=None` (no server-side prepared statements).
+- **Why:** after 5 executions psycopg prepares statements, and PostgreSQL's generic plan for the staging-to-hypertable join is far slower than the custom plan, which uses the literal time bounds for chunk exclusion. After the change, the forced re-download of all 429 files took **54 s** (run 3; fetch 13.9 s, process 196 s summed over 4 workers).
+- **Reversibility / cost:** one line. A small planning cost on every statement (~11 ms measured).
+- **Follow-ups:** none.
+
+### D-01.10 — NWPS: forecasts stored unmodified; observed series archived only
+
+- **Choice:**
+  - Every `stageflow` forecast point is inserted with `ON CONFLICT (lid, issued_at, valid_at) DO NOTHING`, so each issuance is stored once, exactly as published (values not altered, including any NWS missing codes). The table rejects UPDATE and DELETE.
+  - Flood categories with a value other than −9999 ("not defined" in NWPS) become `official_thresholds` on the USGS station named by `usgsId`, in native ft plus a converted metre value, with source and `raw_object_id`.
+  - The NWPS `observed` series duplicates the USGS gauge, so it is archived raw but not loaded into `observations`.
+- **Why:** this follows NOAA's conditions (data-contract record 7: do not modify official data and present it as official). It also leaves one system of record for observations.
+- **Follow-ups:** Stage 2 scores against `official_forecasts`.
+
+### D-01.11 — Runtime layout and memory limits
+
+- **Choice:**
+  - Four compose services with `restart: unless-stopped`:
+    - `db`: `mem_limit 2560m`, `shared_buffers 512MB`, `effective_cache_size 1536MB`, `work_mem 16MB`, `maintenance_work_mem 128MB`, `max_connections 50`, `timescaledb.max_background_workers 2`, `max_parallel_workers 2`, telemetry off, `NO_TS_TUNE=true`;
+    - `ingest`: 1 GiB;
+    - `api`: 512 MiB;
+    - `caddy`: 256 MiB.
+  - Postgres data is in the named volume `pgdata` (on the boot disk, under `/var/lib/docker/volumes`).
+  - Postgres is published on **127.0.0.1:5432 only**, for admin and tests on the VM. GCP firewall has no 5432 rule either.
+  - At most 4 parallel HTTP requests per source (`http_max_parallel = 4`), including backfills.
+- **Why:** this leaves at least 3.5 GiB for the OS page cache and this session. Loopback-only binding keeps the database private.
+- **Follow-ups:** none.
+
+### D-01.12 — `fetch_state` table for conditional GETs across restarts
+
+- **Context:** `raw_objects` deduplicates identical payloads, so it cannot record the newest `Last-Modified` seen for a URL.
+- **Choice:** a small `fetch_state(url, last_modified, last_status, checked_at)` table, advanced only **after** a payload has been archived and upserted, so a failed parse is retried on the next run.
+- **Why:** a restarted ingest container resumes without re-downloading 429 files. Verified: the first scheduler run after start fetched 0 and found 429 unchanged, in 0.45 s.
+
+### D-01.13 — Literal station predicate in the upsert joins, and short station-row locks (measured)
+
+- **Context:** the ECCC 30-day backfill managed about 12 files/min. EXPLAIN ANALYZE of the stale-row count for one 30-day file (12,904 staged rows): **Hash Join over Seq Scans of all 5 chunks (701,900 rows), 5,610 ms**. Separately, `pg_stat_activity` showed USGS backfill workers waiting on `Lock/tuple` and `Lock/transactionid` for `INSERT INTO stations … ON CONFLICT DO UPDATE`, because that row lock was held for the whole upsert transaction.
+- **Options considered:** (a) `enable_hashjoin = off` per session; (b) `ANALYZE` the staging table; (c) add `o.station_id = ANY(<literal list>)` so the planner range-scans the primary key.
+- **Choice:**
+  - (c), which brings the plan to Hash Join over **Index Scans** returning 1,134 rows: **68.7 ms** (82× faster).
+  - `ensure_stations` runs in its own short transaction and only updates when `params` actually change.
+  - USGS backfill tasks are interleaved across sites, so parallel workers do not queue on one station's advisory lock.
+  - An interrupted backfill run is marked `error` ("abandoned: interrupted, resumed by a later run") when the job restarts.
+- **Why:** it is the measured bottleneck, and (c) keeps the plan correct without global planner switches.
+- **Reversibility / cost:** none.
+
+### D-01.14 — Health thresholds
+
+- **Context:** `/v1/health` reports per-source status green/amber/red. The thresholds come from the measured behaviour of each feed.
+- **Choice:**
+  - **ECCC:** green when the last successful live run is ≤ 30 min old (job runs every 10 min), the newest row is ≤ 150 min old (worst case measured in Stage 0: 107 min just before a rewrite), and ≥ 80 % of stations seen in the last 7 days reported in the last 3 h. Amber up to 90 min / 360 min. Otherwise red.
+  - **USGS:** green when run ≤ 45 min (job every 15 min), lag ≤ 120 min (measured 21–52 min), reporting ≥ 80 %. Amber up to 120 / 360 min.
+  - **NWPS:** green when run ≤ 90 min (job every 30 min) and the newest official issuance is ≤ 36 h old (NRKW1 is issued about daily in low water). Amber up to 180 min / 72 h.
+  - **Disk:** amber at 80 % used, red at 90 % (prompt).
+  - Overall status is the worst of the four.
+- **Why:** each threshold sits above normal behaviour, so green means "working as designed". The response also shows per-station lag p50/p90, so a reader can judge for themselves. Health is computed from SQL and cached for 30 s in the API process.
+- **Follow-ups:** Stage 8 monitoring alerts on amber/red.
+
+### D-01.15 — Public API shape, CORS, rate limit, attribution
+
+- **Choice:**
+  - FastAPI behind Caddy, read-only, GET only. CORS `*` for GET.
+  - In-memory token bucket of **120 requests/min per client IP** on `/v1/*` (client IP from Caddy's `X-Forwarded-For`; the API is only reachable through Caddy). Over the limit → 429 with `Retry-After: 30`.
+  - Every response, errors included, carries `attribution` (the four credit lines from `data-contract.md`).
+  - Observations are served in SI with `raw_value`/`raw_unit`, at most 7 days per call (400 otherwise). Sentinels are excluded unless `include_sentinels=true`.
+  - `/v1/official-forecasts/{lid}` returns the latest issuance by default, or all issuances after `issued_after`, unmodified, with the station's official thresholds.
+  - `/v1/stations` includes the latest reading per parameter (last 3 days) via one primary-key probe per station and parameter. That query took 5.6 s as a `DISTINCT ON` sort and 0.17 s as `LATERAL … ORDER BY ts DESC LIMIT 1`.
+- **Why:** this satisfies the prompt's API contract, and the latest-reading query stays cheap as history grows.
+
+### D-01.16 — TLS via Caddy with no ACME email
+
+- **Context:** `ACME_EMAIL` is absent from `.env`. The prompt says to use it only if present.
+- **Choice:** the Caddyfile has no `email` option. Caddy obtains the certificate for `PUBLIC_HOSTNAME` automatically (`admin off`, HSTS, gzip/zstd).
+- **Evidence:** Caddy log `"certificate obtained successfully","identifier":"<host>.sslip.io","issuer":"acme-v02.api.letsencrypt.org-directory"`, after `tls-alpn-01` validation requests from 5 Let's Encrypt vantage points reached port 443. That is the first real proof that inbound 443 works. `openssl x509` → `issuer=C = US, O = Let's Encrypt, CN = YE2`, `notAfter=Jan  5 20:15:00 2027 GMT`. `http://` → `308` to `https://`.
+- **Reversibility / cost:** adding `email {$ACME_EMAIL}` later only affects expiry notices.
+
+### D-01.17 — USGS keyless rate limit: paced, resumable backfill; API key requested
+
+- **Context:** after about 250 USGS requests, the API returned **HTTP 429** `OVER_RATE_LIMIT` with `x-ratelimit-limit: 1000`, `x-ratelimit-remaining: 0`, `retry-after: 1336`. The message says to sign up for an API key at `https://api.waterdata.usgs.gov/signup/`. The monthly-chunk plan needed **1,802** requests, and the old retry loop slept at most 120 s, then retried into the limit.
+- **Options considered:**
+  - (a) keep monthly chunks and wait out the limit for hours;
+  - (b) larger chunks plus pacing plus honouring Retry-After;
+  - (c) sign up for a key myself. **Not done:** it is a credential tied to a person's email, so it is the human's call (CLAUDE.md "stop and ask").
+- **Choice:** (b), plus support for an optional `USGS_API_KEY` in `.env` (sent as `X-Api-Key`).
+  - Chunks are **6 calendar months** per site with both parameters (≈ 35k rows, one page; pagination is still followed). The total drops to about 300 requests.
+  - Requests are paced at **7.2 s between starts (≤ 500/h)**, leaving ≥ 450/h for live ingest (about 44/h). With a key the interval drops to 1 s.
+  - A 429 asking to wait more than 60 s raises `RateLimited` at once. The backfill then pauses all workers for Retry-After + 5 s and retries the chunk (up to 6 times). Live ingest stops the cycle after the first 429.
+  - Resume is by **coverage**: a chunk is skipped when completed chunks of any size cover it, so the 113 monthly chunks already done are kept.
+  - Sites go in priority order (12210700, 12211200 first), newest chunks first.
+  - 2 workers, because each 6-month page is about 15–25 MB of JSON and the container limit is 1 GiB.
+- **Reversibility / cost:** with a key, re-run `floodlead backfill usgs` and it continues from the coverage table.
+- **Follow-ups:** "Needs human": a USGS API key.
+
+### D-01.18 — Probe a file when the Datamart listing shows no change
+
+- **Context:** the directory listing can lag the files. `raw_objects.last_modified` shows the hourly files were rewritten at 20:31:17–23, 21:01:24–30 and **21:31:14–20** UTC: every 30 min, not hourly as PLAN.md says. Yet `curl` of the listing at 21:36:15 still showed every file at `21:01`, so the 21:33 poll skipped all files (run 44: `fetched 0, unchanged 429`). Listing-only change detection can therefore add one or more 10-min cycles of latency.
+- **Options considered:** (a) trust the listing; (b) conditional GET on all 429 files every 10 min (≈ 62k requests/day, mostly 304s); (c) when the listing shows nothing new, one conditional GET on a probe file (`BC_08MH001_hourly_hydrometric.csv`); if it changed, re-check every file with conditional GETs.
+- **Choice:** (c). One extra request per poll; a missed rewrite is detected on the next poll (≤ 10 min) instead of waiting for the listing. Run details record `listing_stale_probe_changed`.
+- **Reversibility / cost:** trivial.
+- **Follow-ups:** verify at the next rewrite (logged below).
+
+### D-01.19 — Legacy NWIS IV as the USGS fallback, for the history backfill and for live ingest while OGC is rate-limited
+
+- **Context:** with D-01.17 pacing (7.2 s), one 6-month OGC chunk succeeded (12210700 2026-H1, 34,640 rows) at 21:49. Then the OGC API answered `429` with **`retry-after: 3601`** (a full hour) to both workers, and to live ingest, which had no successful USGS run after 21:10. USGS health would have gone amber, then red. The keyless OGC API cannot finish a ~300-request backfill today, and it cannot be relied on for live data either.
+- **Options considered:**
+  - (a) wait for a human-provided API key;
+  - (b) keep retrying OGC every hour;
+  - (c) use the legacy NWIS IV service (`waterservices.usgs.gov/nwis/iv/`, follows a 301 to `nwis.waterservices.usgs.gov`). Data-contract record 6 already lists it as the fallback, and the prompt says "Fall back to the legacy IV service … Record which one you used and why."
+- **Choice:** (c), with OGC v1 kept as the primary for live.
+  - **History backfill:** `floodlead backfill usgs --api nwis` (`auto` = OGC when `USGS_API_KEY` is set, else NWIS). Same 6-month chunks and same coverage table. It never touches the OGC API: it reads the newest *archived* `time-series-metadata` payload for sites and begin dates. Paced at 1 request/s with 2 workers. The most recent day is left to live ingest.
+  - **No overlap between the APIs:** rows inside intervals already loaded from OGC are dropped (closed bounds, because OGC `datetime` intervals are closed), and every window now owns `[start, end)`.
+  - **Live:** when OGC is rate-limited, or blocked locally after a 429, the 15-min job makes **one** NWIS IV request for all live sites over the 6-h window. The run details say so (`"api": "nwis-iv (fallback)"`).
+  - **No false revisions:** the change comparison ignores provenance-only quality keys (`time_series_id`, `source_api`), so the same value from either API counts as unchanged. A real change in approval status is still a revision (test added).
+- **Evidence:**
+  - NWIS one month for Everson: `200 0.81 s 455,789 B`, max `52300` at `2021-11-15T13:40:00.000-08:00`, qualifier `A`, identical to OGC. No rate-limit headers.
+  - North Cedarville via NWIS: flow from 2004-12-31 17:00 PST in a 2005-01 request, stage from `2007-10-01T01:00-07:00`, matching the OGC metadata begin dates.
+  - Test chunk (Everson 2021-H2): 29,566 rows inserted in 8.2 s. It produced **2 revisions** at `2021-12-01 00:00Z` (flow and level): same value, only the quality provenance differed, because the OGC November chunk included its closed end. That is the bug fixed above. The rows stay in the append-only table and are reported, not deleted.
+  - Live fallback run 69: `ok`, 10 of 10 sites with data, 31 rows inserted, 360 unchanged, 0 revisions. Health back to green.
+- **Reversibility / cost:** NWIS IV is being retired by USGS in favour of the OGC APIs (no date seen in responses). With an API key the system goes back to OGC only, automatically.
+- **Follow-ups:** API key (Needs human).
+
+### D-01.20 — Poll ECCC every 5 min, because files appear 2–6 min after their Last-Modified
+
+- **Context:** the 22:01 rewrite has `Last-Modified: 22:01:28 GMT`. At the 22:03:00 poll, though, the listing still showed `21:31`, and the probe file still answered `304` (run 73: `fetched 0`, probe `false`). At 22:07:21 the listing showed `22:01`. The 21:31 rewrite behaved the same way (listing stale at 21:36:15). So Datamart publishes files a few minutes after their `Last-Modified` time, probably while mirrors sync. The D-01.18 probe does not help when the file itself is not yet visible.
+- **Options considered:** (a) keep 10-min polling at :03/:13/…, which catches each refresh at the second poll, about 12 min after `Last-Modified`; (b) shift the 10-min offset to :08/:38; (c) poll every 5 min (:02, :07, …).
+- **Choice:** (c). An unchanged poll costs one listing (~64 KB) plus one conditional GET, about 576 requests/day. Detection is within about 5 min of a file becoming visible. The probe from D-01.18 is kept for the stale-listing case.
+- **Evidence:** run 75 (scheduler restart at 22:08:07) fetched all 429 files of the 22:01 rewrite: 4,655 rows inserted, 572,013 unchanged, 103 s while the USGS backfill was running.
+- **Reversibility / cost:** one line in `cli.py`.
+
+## Work log
+
+- `13:33` — `git remote set-url origin https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC.git` (the new URL the human gave), `git checkout main && git pull origin main` → fast-forward `b7b263e..939495f` ("Fold Stage 0 findings into Stage 1; fix repo name and archive wording"). `docker run --rm hello-world` → `Hello from Docker!` without sudo. `git checkout -b stage-01-live-archive`.
+- `13:35` — Committed and pushed the opened doc (`d4e5e1d`).
+- `13:35` — Swapfile (D-01.1): `fallocate -l 4G /swapfile && chmod 600 && mkswap && swapon`, plus the fstab line. `swapon --show` → `/swapfile file 4G 0B -1`.
+- `13:36–13:40` — Source probes with the project User-Agent:
+  - USGS `ogcapi/v0/collections/continuous/items` → `200 0.334s`; `next` links point to `/ogcapi/v1/`. v1 with both parameters for 8 h at 12210700 → 66 features. One month of Everson 00060 (2021-11) → `200 1.003s 1,314,023 B`, 2,831 rows, max `52300` at `2021-11-15T21:40:00+00:00`, `Approved`.
+  - USGS `time-series-metadata` for the 11 sites → primary 00011 series and begin dates (for example 12210700: 00065 from 2007-10-01, 00060 from 2004-10-15; 12211500 and 12214500 stage from 2022-10). 12210500 instantaneous data ends 2005-09-30.
+  - NWPS `gauges/{lid}` for 6 gauges → all `200`. `usgsId`: NRKW1→12210700, NREW1→12211200, NOEW1→12211195, NKLW1→12211500, NKSW1→12213100, **SUMW1→12214500**. NRKW1 categories action 144.8 / minor 146.5 / moderate 148 / major 150 ft. NKSW1 also has routine forecasts.
+  - ECCC daily listing → 442 `BC_*_daily_hydrometric.csv` files, all stamped `2026-10-07 08:18/08:19`. 08MH001 daily → 465,812 B, 8,625 rows, first `2026-09-07T00:00:00-08:00`, last `2026-10-06T23:20:00-08:00`. A conditional GET with its `Last-Modified` → `304`.
+- `13:41` — Pulled the pinned images (D-01.3). Wrote `pyproject.toml` and `uv.lock` (`uv lock` → 31 packages), `migrations/001_init.sql`, `src/floodlead/` (config, log, units, db, http, archive, store, ingest, scheduler, cli, sources/eccc, usgs, nwps), `Dockerfile`, `compose.yaml` and `deploy/Caddyfile`. `uv run ruff check .` → `All checks passed!`
+- `13:46` — `docker compose build ingest` (23.9 s). `docker compose up -d db` → healthy. `docker compose run --rm --no-deps ingest floodlead migrate` → `['001_init.sql']`.
+- `13:46–13:52` — First ECCC load (`floodlead run eccc-hourly`) → run 1: `status ok, items_total 429, fetched 429, failed 0, inserted 563393` in **5:31.9**. One transient `RemoteProtocolError('Server disconnected…')` on one file, retried successfully. Throughput per minute (from `raw_objects.fetched_at`): 126, 82, 58, 44, 59, 60 files.
+- `13:52–14:03` — Diagnosed the slowdown (D-01.9). Profiling one file on a fresh connection: fetch 0.240 s, parse 0.012 s, upsert 0.13–0.16 s for 1,426 rows. A forced re-download on pooled connections was still running after 10 min (run 2), with `pg_stat_activity` showing UPDATEs running 0.3–2.6 s each and `docker stats` showing db at 188 % CPU. Stopped that one-off container (`docker stop`; the run is idempotent). EXPLAIN ANALYZE of the same UPDATE → 55 ms with index scans. Set `prepare_threshold=None`, rebuilt, forced re-run → run 3: `fetched 429, rows_unchanged 563393, inserted 0, updated 0` in **54.1 s** (`timing_s {"fetch": 13.868, "process": 196.288}`, summed over 4 workers).
+- `14:04` — `docker compose up -d ingest` (scheduler). Run 2 (killed) is left as `running`; the scheduler now marks interrupted live runs `error` at start. First cycle: eccc-hourly run 5 `fetched 0, unchanged 429` (0.45 s); usgs-stations run 4 `ok`; eccc-stations run 7 `ok` (2,324 BC stations read, real-time ones upserted); usgs-live run 8 `ok`, 10 sites; nwps-live run 6 `ok`, 6 gauges, 12 payloads.
+- `14:06` — Snapshot:
+  - `observations`: eccc 429 stations, 563,393 rows, newest `20:20 UTC` (lag 46 min); usgs 10 stations, 373 rows, newest `20:45 UTC` (lag 21 min); sentinels 0.
+  - `official_forecasts`: NRKW1 issued `15:36 UTC`, 29 points to Oct 14 18:00; NKSW1 issued `15:36 UTC`, 40 points to Oct 17 12:00.
+  - Official thresholds on usgs:12210700 (NRKW1, 4 categories), 12211195 (NOEW1: action 3.6, minor 4 ft), 12211200 (NREW1: action 83 ft) and 12213100 (NKSW1, 4 categories). 12211500 (NKLW1) and 12214500 (SUMW1) define none.
+  - `raw_objects`: eccc 430 (21.0 MB raw → 1.41 MB gz), nwps 12 (3.77 MB → 0.15 MB), usgs 13 (0.40 MB → 0.03 MB).
+  - Archive: 455 files, 2.4 MB, files `-r--r--r-- prana prana`.
+- `14:06` — Committed and pushed `6dc918b`.
+- `14:07` — Added a `backfill` compose service (`restart: "no"`, profile `backfill`). `docker compose run -d --name fl-backfill-eccc30d backfill floodlead backfill eccc-30d`; `docker inspect` → `restart=no mem=1073741824`.
+  - USGS dry run: `floodlead backfill usgs --sites 12211200 --since 2021-11-01 --until 2021-12-01` → run 10 `ok`, 5,662 rows in 8.7 s. SQL: `usgs:12211200 flow 2021-11-15 13:40:00 (America/Vancouver) raw 52300 ft3/s, SI 1481.0 m3/s, Approved`.
+  - Then the full USGS backfill: plan 1,802 monthly tasks.
+- `14:09` — ECCC backfill slow (17 files in about 2 min). `pg_stat_activity` showed 1–4 s joins and lock waits on `stations`. EXPLAIN → D-01.13. Fixed, rebuilt, restarted ingest, relaunched both backfills (resumed: ECCC skips files already in `fetch_state`; USGS skips recorded chunks). After 45 s: 43 daily files, 105 USGS chunks.
+- `14:11–14:13` — Wrote `api.py`. TestClient smoke test against the live DB: `/v1/health 200`; `/v1/stations?source=usgs 200` (5.60 s, then 0.17 s after the LATERAL rewrite); `/v1/stations/usgs:12210700 200` with the NRKW1 categories; observations `200` (278 level rows for 24 h); `/v1/official-forecasts/NRKW1 200`; unknown station → `404`; 30-day window → `400`. Errors now carry attribution.
+- `14:13` — `docker compose up -d ingest api caddy`. Caddy obtained a Let's Encrypt certificate via `tls-alpn-01` in about 3.5 s (D-01.16). From the VM: `curl https://<host>/v1/health` → `status green`; eccc lag 24 min, station lag p50 49 min, 428 stations reporting in 3 h; usgs lag 14 min, 10 stations; nwps newest issuance 5.63 h; disk 15.5 %; archive 993 files, 22.2 MB on disk (381 MB raw), 0 write failures. `http://` → `308`.
+- `14:14` — USGS backfill stalled. `docker logs` showed `status 429`. `curl -D -` → `HTTP/2 429`, `retry-after: 1336`, `x-ratelimit-limit: 1000`, `x-ratelimit-remaining: 0`, `"code": "OVER_RATE_LIMIT"`. Stopped the backfill container. Recorded chunks so far: 12205000 71 chunks (2004-10 → now, 304,502 rows); the other 9 sites only their newest 4–5 months. 12211200 also has 2021-11. Implemented D-01.17, rebuilt, redeployed ingest and api.
+- `14:17` — Committed and pushed `5f3961d`. The backfill start now also waits out a 429 on its metadata request. Relaunched `fl-backfill-usgs` (6-month chunks): first request → `429`, `retry_after_s 1652`, so it waits on its own. The quota window is rolling: Retry-After grew from 1,336 s to 1,652 s.
+- `14:18–14:24` — Tests and fixtures:
+  - Real trimmed fixtures in `tests/fixtures/` (see its README): ECCC hourly 08MH001, ECCC daily 08NJ026 with a **real `99999.000` level sentinel**, ECCC listing, USGS continuous and metadata, NWPS gauge and stageflow.
+  - Unit tests: parsers, `-08:00` handling, units, sentinel rule, archive atomicity/read-only/no-overwrite/deterministic gzip, chunk planning.
+  - DB tests against a **disposable** `floodlead_test_<hex>` database created and dropped per session on the same server: idempotency, revisions, out-of-order guard, append-only triggers, sha256 dedupe, archive-failure path, forecasts insert-once, NWPS thresholds.
+  - API contract tests (attribution on every response including 404/400/422, health shape, filters, 7-day limit, sentinel exclusion, forecasts, CORS, rate limiter).
+  - 3 live tests. `uv run pytest -q` → **41 passed, 3 deselected**. `uv run pytest -m live` → 2 passed, 1 failed: the USGS live test, because the API is rate-limiting this IP (429). It will be re-run after the quota resets.
+- `14:24` — Finding: ECCC rewrote the hourly files at **20:31:21** and again at **21:01:28** UTC (`raw_objects.last_modified` for 08MH001; all 429 `fetch_state` rows at 21:01). That is a 30-min cadence, not hourly as PLAN.md says. Polling every 10 min catches both within about 2 min. Run 12 (21:10, during both backfills) fetched 429 files: 4,634 rows inserted, 563,393 unchanged, 0 stale, in 2 min 21 s.
+- Sentinel evidence for D-01.5: 2 real ECCC sentinels (`eccc:08HB029` and `eccc:08NJ026`, level `99999`). **1,119** USGS flow values are ≥ 9999 ft³/s and are real, not flagged; the prompt's literal rule would have flagged all of them.
+- `14:24` — `4b68120` pushed. The ECCC 30-day backfill finished: run 17 `ok`, 442 files (417 fetched, 25 already done by interrupted run 9), **5,980,015 rows inserted, 406,916 unchanged, 13,073 stale**, 0 failed, in 9 min 44 s. The 13,073 stale rows are older 30-day-file values that differ from newer hourly-file values; the out-of-order guard (D-01.6) refused to apply them.
+- `14:24` — **Restart check (AC-9, first part).** Health before (21:23:36): green for all three sources. `docker compose restart` at 21:24:14; after 40 s all 4 services were up (`api` and `db` healthy). Health after (21:24:36): green. New runs started automatically at 21:24:16: eccc live 34 `ok`, nwps live 35 `ok`, eccc stations 36. USGS runs 33 and 37 → `error` (`RateLimited … retry after 1502 s`), as expected while limited.
+- `14:26` — USGS Retry-After kept moving later as more requests were made while limited (21:45 → 21:49), so live USGS jobs now skip locally (no request) until Retry-After has passed. Rebuilt, redeployed ingest; `pytest` → 41 passed.
+- `14:27` — Measured volumes for the contract docs:
+  - `pg_database_size` 2,032 MB; 312 chunks; `hypertable_size('observations')` 2,109,620,224 B for 7,369,690 rows (≈ 286 B/row).
+  - Last hour: ECCC hourly payloads 676 (26.0 MB raw → 1.81 MB gz); NWPS 26 (12.96 MB → 0.45 MB).
+  - Of the 429 files rewritten at 21:01, 247 had new content; 182 were byte-identical to 20:31 and stored once.
+  - `df -h /` → 17 G used of 96 G (includes the 4 G swapfile, 3.2 G images, 4.3 G volumes).
+- `14:27` — The Cloud Billing catalog API is disabled in the project (`403 … has not been used in project …`). Enabling it would change the project, so the cost estimate uses list prices and is labelled as an estimate.
+- `14:28` — Contract files updated (table below).
+- `14:28–14:31` — **AC evidence collected (non-USGS).**
+  - AC-2 SQL at 21:28:33 UTC: **427** ECCC stations newer than 3 h (429 with data in 48 h). Newest-row lag **p50 63.6 min**, p90 83.6 min, min 38.6 min. Measured 2.5 min before the 21:31 rewrite, so close to the daily worst case.
+  - AC-7: 1,289 `raw_objects` and 1,289 `.gz` files. `comm` of DB paths vs disk paths: 0 missing, 0 orphans. 0 temp files, 0 files without mode 0444, 0 archive errors. 1,289 files written in the last 60 min. 5 random files re-verified with `zcat | sha256sum`: all `OK`. Total HTTP-200 payloads fetched (sum of `items_fetched`) 1,804, so 515 were byte-identical repeats stored once.
+  - AC-8: sentinels **2** (`eccc:08HB029` 2026-10-06 22:00Z and `eccc:08NJ026` 23:50Z, level `99999`, `value NULL`); revisions **0** (`observation_revisions` empty; no published value changed between fetches yet); stale **13,073** (backfill). Public API for `eccc:08NJ026` 23:40–00:01Z: default → `count 2` (sentinel excluded); `include_sentinels=true` → `count 3` with `{"ts":"2026-10-06T23:50:00Z","raw_value":99999.0,"value":null,"is_sentinel":true}`.
+  - AC-6: `GET /v1/official-forecasts/NRKW1` → `issued_at 2026-10-07T15:36:00Z`, 29 points, first `{"valid_at":"2026-10-07T18:00:00Z","stage_ft":138.05,"flow_kcfs":0.734}`, last `2026-10-14T18:00:00Z 138.2 ft`; station `usgs:12210700` with categories action 144.8 / minor 146.5 / moderate 148 / major 150 ft. NKSW1 thresholds (15 / 18 / 20.5 / 23 ft) on `usgs:12213100`.
+  - AC-4 (first check, 21:29:43 UTC, files Last-Modified 21:01:28): 08MH001 live last line `08MH001,2026-10-07T12:20:00-08:00,1.537,,,1,17.7,,,1` vs DB `20:20Z {level 1.537, flow 17.7}` → MATCH. 08MH029 `12:35-08:00, 1.252, 0.806` → MATCH. 08MH103 `12:05-08:00, 0.543, 10.4` → MATCH.
+  - Public latency: `/v1/health` 0.05–0.06 s (cached), `/v1/stations?region=BC&limit=5` 0.37 s, `/docs` 0.05 s. A `HEAD` request returns 405 (routes are GET only; use GET). CORS `access-control-allow-origin: *` and HSTS present.
+  - Idle resources: db 538 MiB / 2.5 GiB, ingest 52 MiB / 1 GiB, api 44 MiB / 512 MiB, caddy 13 MiB / 256 MiB; host 6.0 GiB available, swap used 64 KiB. `systemctl is-enabled docker containerd` → `enabled enabled`.
+- `14:31` — Committed and pushed `697942f`.
+- `14:36–14:38` — **Docker daemon restart (AC-9 stand-in for a reboot).**
+  - Health before (21:36:52): green for all three sources.
+  - `sudo systemctl restart docker` at 21:37:05. Within 2 s all four `floodlead-*` containers were `Up` again (restart policy `unless-stopped`); `api` and `db` healthy within about 60 s.
+  - Health after (21:38:13): green. New runs began at 21:37:08 without manual steps: eccc live 46 `ok` (fetched 428, 4,697 rows inserted, 566,583 unchanged, 0 stale, 56.4 s), nwps live 48 `ok`, eccc stations 50 `ok`. USGS runs 47/49 → `error` (rate-limited, expected).
+  - The one-off `fl-backfill-usgs` container exited (137) as expected for `restart: "no"`, and was relaunched by hand (resumable).
+  - `systemctl is-enabled docker containerd` → `enabled enabled`, so the daemon and containers also come back after a VM reboot. **A real VM reboot was not done:** it would end this worker session mid-stage, so it is left for the human.
+- `14:38` — **AC-4 second check** after the 21:31 rewrite (files Last-Modified 21:31:18, fetched 21:38:22–23): 08MH001 `20:20Z 1.537 / 17.7` MATCH; 08MH029 `20:35Z 1.252 / 0.806` MATCH; 08MH103 **new row** `13:05-08:00` → `21:05Z 0.538 / 10.3` MATCH.
+- `14:38` — Found the stale listing (D-01.18) and implemented the probe. `pytest` → 41 passed. Rebuilt, redeployed ingest.
+- `14:39` — Relaunched the USGS backfill (6-month chunks): plan **297 tasks** (12205000: 34 of 45 left, since monthly chunks already cover part). Metadata request `200`; first data request `429`, `retry_after_s 594`, so all workers pause until about 21:49 UTC.
+- `14:41` — `HEAD` support: every GET route is registered for GET and HEAD (uvicorn drops the body), plus a test. `pytest` → **42 passed**. Redeployed api. `curl -sI https://<host>/v1/health` → `HTTP/2 200`. WAL baseline at 21:40:17: LSN `1/195BDA28`, DB 2,112 MB, `hypertable_size` 2,193,645,568 B. On the current chunk, 2,564,954 updates of which only 21,583 were HOT.
+- `14:49–14:52` — USGS OGC backfill resumed at 21:49 after the 594-s pause. One chunk succeeded (12210700 2026-01→07, 34,640 rows), then every request got `429` with `retry_after_s 3601`. Live USGS runs 53/58 → `error`. Stopped the backfill container (D-01.19).
+- `14:52–14:57` — Implemented the NWIS IV path and a real fixture (`nwis_iv_12211200_2021-11.json`, includes the peak) with a parser test. Everson 2021-H2 test chunk → 29,566 inserted, **2 updated** (boundary rows, see D-01.19), fixed. `pytest` → 43, then **44 passed**. Full backfill launched at 21:56: `--api nwis`, plan **285 tasks** (12210700: 43 of 45 chunks left). Live NWIS fallback deployed: run 69 `ok`.
+- `14:58` — Health (public): status green. eccc green (lag 38.5 min, p50 58.5, 428 stations within 3 h); usgs green (lag 13.5 min, 10 stations); nwps green (issuance 6.38 h old); disk 16.9 %. NWIS backfill after about 2.5 min: 51 chunks, 1,626,510 rows, 0 warnings. `observation_revisions` = 2.
+- `15:00` — Live tests updated: the OGC test now skips with an explicit reason on 429, and an NWIS IV live test was added. `pytest -m live -rs` → **3 passed, 1 skipped** (`USGS OGC API rate-limited this IP (HTTP 429, short Retry-After)`).
+- `15:07` — D-01.20: ECCC polling every 5 min. Rebuilt, redeployed ingest; `scheduler started … ["eccc-hourly", 300, 120]`.
+- `15:10` — **USGS history backfill finished:** run 66 `ok`, `items_total 285, fetched 285, failed 0, inserted 7,643,117, updated 0, unchanged 0, stale 0`, in 14 min 48 s (NWIS IV, 1 request/s, 2 workers). WAL from 21:40:17 to 22:10:04: 4,103,472,600 B, mostly this backfill. DB 4,361 MB.
+- `15:10–15:24` — **AC-5 SQL** (`scratchpad/ac5.sql`; took about 3 min over the long hypertable):
+  - North Cedarville (12210700) stage, 15-min slots per year since 2007-10-01: 2007 98.6 %, 2008 97.8, 2009 99.4, 2010 99.3, 2011 99.2, 2012 99.1, 2013 98.8, 2014 97.3, 2015 97.5, 2016 97.0, **2017 92.5 (lowest)**, 2018 98.9, 2019 99.7, 2020 99.2, 2021 99.8, 2022 100.0, 2023 100.0, 2024 99.8, 2025 99.2, 2026 (to date) 99.8.
+  - Everson peak: `usgs:12211200 flow 2021-11-15 13:40:00 (America/Vancouver) = 21:40Z, 52300 ft3/s, Approved`.
+  - Coverage per site (rows, first):
+    - 12205000 flow 767,101 from 2004-10-01; level 663,803 from 2007-10-01
+    - 12208000 flow 758,298 from 2004-10-01; level 658,772 from 2007-10-01
+    - 12210000 flow 623,939 / level 626,705 from 2008-10-01
+    - 12210700 flow 743,308 from 2004-10-15; level 657,740 from 2007-10-01
+    - 12211190 level 3,337 from 2024-01-28 (overflow gauge, sparse)
+    - 12211195 level 2,161 from 2015-11-14 (overflow gauge, sparse)
+    - 12211200 flow 348,622 / level 349,531 from 2016-10-01
+    - 12211500 flow 137,839 / level 138,385 from 2022-10-26
+    - 12213100 flow 764,625 from 2004-10-01; level 662,454 from 2007-10-01
+    - 12214500 flow 170,894 from 2011-01-14; level 67,934 from 2022-10-28
+  - Every site's newest row is between 21:00 and 21:45Z on Oct 7.
+- `15:13` — Steady-state baseline for growth (no backfill running) at 22:13:19: WAL LSN `2/1A259750`, `pg_database_size` 4,678,573,079 B, `hypertable_size` 4,627,062,784 B, archive 65,414,338 B, `/` used 20,084,744,192 B of 102,888,095,744 B.
+- `15:24` — AC-1 captured (public health green). AC-10: ruff clean, `pytest -q` 44 passed. AC-11: 10 commits on the branch, all touching this doc; 20 decisions.
+- `15:27` — **Real revision captured.** `observation_revisions` went from 2 to 733 at 22:08 (run 75). All 731 new rows are `eccc:08EE012` flow, ts 2026-10-05 08:00Z → 2026-10-07 20:50Z. `new/old` ratio mean 1.0223, min 1.0174, max 1.0297; quality unchanged; `level` rows unchanged. Old payload raw object 61 (`…/20/BC_08EE012_hourly_hydrometric.csv.c22d8a37.gz`, Last-Modified 20:31:18); new payload 1879 (`…/22/….d2628254.gz`, Last-Modified 22:01:25). This looks like a discharge recomputation (rating shift) by the Water Survey on provisional data: exactly what the revision log exists to capture, and evidence that features must use values as first seen (Stage 2/3). Full-table counts: observations eccc 6,935,228 and usgs 8,145,489 rows; 0 USGS sentinels.
+- `15:38` — 22:31 rewrite: the 22:32 poll did not see it yet; the 22:37 poll (run 88) fetched 429 files, 4,700 inserted, 577,399 unchanged, 60.3 s. Growth window closed (AC-12 table): WAL +290,665,936 B; DB +786,432 B; archive +832,063 B; hourly payloads with new content in this rewrite: 247 of 429.
+- `15:40` — USGS live runs 64/72/77 were `partial`: the OGC metadata call succeeded, then 6–9 sites got 429 mid-run. Now sites refused mid-run get one NWIS IV request in the same run (D-01.19 extended). Deployed; run 92 → `ok`, 2 sites via OGC + 8 via NWIS, 8 rows inserted, 387 unchanged. `pytest` → 44 passed. Run totals so far: 57+ `ok`, 3 `partial` (the runs above), 24 `error`. The errors are 15 USGS rate-limit aborts and 9 interrupted runs that later runs marked "abandoned".
+
+## Measurements
+
+| What | Value | How measured | When |
+|---|---|---|---|
+| First full ECCC hourly load | 429 files, 563,393 rows, 5 min 32 s (before D-01.9) | ingest_runs run 1 | 20:46–20:51 UTC |
+| Forced re-download of all hourly files | 54.1 s; 563,393 rows unchanged; 0 new raw objects (sha dedupe) | ingest_runs run 3 | 21:03 UTC |
+| Single-file upsert, 1,426 rows | 0.12–0.20 s (custom plan), EXPLAIN 55 ms | `prof2.py`, EXPLAIN ANALYZE | 20:55 UTC |
+| Conditional-GET cycle, nothing changed | 0.45 s for 429 files (listing only) | ingest_runs run 5 | 21:04 UTC |
+| gzip ratio, ECCC hourly CSV | 21,007,854 B → 1,411,813 B (14.9×) | `raw_objects` sums | 21:06 UTC |
+| ECCC newest-row lag (all stations) | 46 min at 21:06 UTC (max ts 20:20) | SQL `now() - max(ts)` | 21:06 UTC |
+| USGS newest-row lag | 21 min at 21:06 UTC (max ts 20:45) | SQL | 21:06 UTC |
+| ECCC 30-day backfill | 442 files, 5,980,015 rows inserted, 406,916 unchanged, 13,073 stale, 9 min 44 s | ingest_runs run 17 | 21:10–21:20 UTC |
+| USGS history backfill (NWIS IV) | 285 chunks, 7,643,117 rows, 0 failed, 0 updated, 14 min 48 s | ingest_runs run 66 | 21:56–22:11 UTC |
+| Stored observations | ECCC 6,935,228 rows (442 stations); USGS 8,145,489 rows (10 sites) | `count(*)` per source | 22:25 UTC |
+| Database size | 4,678,573,079 B (`hypertable_size` 4,627,062,784 B) | `pg_database_size` | 22:13 UTC |
+| Bytes per observation row | ≈ 286 B incl. indexes | 2,109,620,224 B / 7,369,690 rows | 21:27 UTC |
+| Raw archive | 2,115 files; 65,417,925 B on disk (1,221,273,593 B raw, 18.7×); 0 write failures | `/v1/health` archive block | 22:24 UTC |
+| ECCC rewrite cadence | every 30 min (Last-Modified 20:31:17–23, 21:01:24–30, 21:31:14–20, 22:01:25–28, 22:31:17) | `raw_objects.last_modified` | 20:31–22:31 UTC |
+| ECCC publication lag after Last-Modified | 2–6 min (22:01:28 file not visible at 22:03:00; visible by 22:07:21) | listing + conditional GET | 22:03–22:07 UTC |
+| ECCC refresh run time | 54–103 s for 429 files (60.3 s with no backfill running) | ingest_runs 3, 46, 75, 88 | 21:03–22:38 UTC |
+| ECCC newest-row lag p50 / p90 | 63.6 / 83.6 min (21:28:33, just before a rewrite); 59.6 / 79.6 min (22:24:36) | SQL / `/v1/health` | 21:28, 22:24 UTC |
+| USGS OGC keyless limit | `x-ratelimit-limit: 1000`; 429s with `retry-after` 88–3,601 s after ≈ 250 requests | response headers | 21:11–21:51 UTC |
+| Real revision observed | 08EE012 flow, 731 rows revised by +1.7 % to +3.0 % (mean +2.2 %) | `observation_revisions` | 22:08 UTC |
+| Steady-state WAL | 290,665,936 B over 24.8 min (one ECCC refresh) | `pg_wal_lsn_diff` | 22:13–22:38 UTC |
+| Archive growth | 832,063 B over 24.8 min → ≈ 48 MB/day | `du -sb` | 22:13–22:38 UTC |
+| Public API latency | `/v1/health` 0.05–0.06 s (cached), `/v1/stations?region=BC&limit=5` 0.37 s | `curl -w` | 21:30 UTC |
+| Tests | 44 passed, 4 live deselected; live: 3 passed, 1 skipped (OGC 429) | `pytest` | 22:25 UTC |
+
+### AC-12 — Monthly cost (ESTIMATE) and disk runway
+
+**All prices below are estimates** from GCP public list prices as recalled for Toronto (`northamerica-northeast2`), on-demand and without discounts. They were **not** read from billing data: the Cloud Billing API is disabled in the project and enabling it was out of scope. Treat them as ±15 %.
+
+| Item | Basis | Est. US$/month |
+|---|---|---|
+| VM e2-standard-2 (2 vCPU, 8 GB) | ≈ US$0.074/h × 730 h (us-central1 list is US$0.067/h; Toronto about 10 % higher) | ≈ 54 |
+| Boot disk pd-balanced 100 GB | ≈ US$0.11/GB-month | ≈ 11 |
+| Daily snapshots (not yet attached) | ≈ US$0.05/GB-month × (~20 GB first full + ~1–3 GB/day changed blocks × 14-day retention) ≈ 35–60 GB | ≈ 2–3 |
+| Static external IPv4 in use | US$0.005/h | ≈ 3.7 |
+| Network egress (API responses only; ingest is ingress) | small | < 1 |
+| **Total** | | **≈ US$71–73/month ≈ CA$97–100** (FX 1.37 assumed) |
+
+Disk runway, from the steady-state window 22:13:19 → 22:38:07 UTC (24.8 min, no backfill, one ECCC refresh plus USGS/NWPS live runs):
+
+| Quantity | Measured | Per day | Note |
+|---|---|---|---|
+| Raw archive | +832,063 B | **≈ 48 MB/day** (× 58) | `du -sb` before and after |
+| Observation rows | ECCC refreshes insert 4,634–4,700 rows each, every 30 min; USGS ≈ 80 rows/h | ≈ 227k rows/day | `ingest_runs` runs 12, 46, 75, 88 |
+| Database | 286 B/row incl. indexes (2,109,620,224 B / 7,369,690 rows) | **≈ 65 MB/day** (estimate: rows × bytes/row) | `pg_database_size` grew only 0.79 MB in the window, because inserts reuse vacuumed space, so the row-based estimate is used |
+| WAL (recycled, not stored; `max_wal_size 2GB`) | +290,665,936 B, almost all from one refresh's 577k `last_seen_at` bumps | ≈ 14 GB/day of writes | counts against disk I/O and snapshot changed blocks, not disk space |
+| Docker logs | capped at 5 × 20 MB per container | bounded ≤ 400 MB | compose `logging` options |
+| **Total disk growth** | | **≈ 113 MB/day** (≈ 170 MB/day with a 1.5× bloat margin) | estimate |
+
+`/` used 20,084,744,192 B of 102,888,095,744 B (19.5 %). 80 % is 82,310,476,595 B, so the headroom is 62.2 GB. **Days until 80 %: ≈ 550 at 113 MB/day, ≈ 370 with the 1.5× margin (estimate).** Further backfills would come out of this headroom (for example the USGS 1987–2004 history).
+
+Snapshot cost refinement: with about 14 GB/day of WAL rewriting the hot chunk's pages, a daily snapshot's changed blocks are likely a few GB. 20 GB base + 14 × ~3 GB ≈ 60 GB ≈ US$3/month (estimate), within the range above.
+
+## Acceptance criteria
+
+| AC | Result | Evidence |
+|---|---|---|
+| AC-1 health green for ECCC, USGS, NWPS | **PASS** | `curl https://<host>/v1/health` at 22:24:36Z → `"status":"green"`. eccc green: lag 34.6 min, station p50 59.6 / p90 79.6, 426 of 431 within 3 h. usgs green: lag 24.6 min, 10 stations (live via the NWIS fallback, D-01.19). nwps green: issuance 6.81 h old. Disk green (19.5 %). Archive 2,115 files, 0 write failures |
+| AC-2 ≥ 400 stations < 3 h; ECCC lag p50 ≤ 90 min | **PASS** | SQL at 21:28:33Z (just before a rewrite, near worst case): 427 stations newer than 3 h; newest-row lag p50 63.6 min, p90 83.6 min |
+| AC-3 ≥ 400 stations with ≥ 25 days of 5-min data | **PASS** | 30-day backfill run 17 `ok`, 442 files, 5,980,015 rows. SQL: 428 stations span ≥ 25 days, 428 have data on ≥ 25 days, 417 also have ≥ 90 % of 5-min level rows over 25 days |
+| AC-4 latest stored row = live file's last row (08MH001, 08MH029, 08MH103) | **PASS** | Two checks (21:29:43Z on the 21:01 files and 21:38:22Z on the 21:31 files). All 3 MATCH both times, including a new 08MH103 row `21:05Z 0.538 m / 10.3 m3/s` (work log) |
+| AC-5 USGS backfilled; 12210700 stage from 2007-10-01 with per-year completeness; Everson peak 52,300 cfs | **PASS** | Backfill run 66 `ok` 285 of 285 chunks, 7,643,117 rows (plus OGC chunks). 12210700 stage from 2007-10-01 08:00Z; per-year completeness 92.5–100 % (table in the work log). `usgs:12211200 flow 2021-11-15 13:40 PST = 52300 ft3/s Approved`. All 10 live sites from their record start or 2004-10-01; 12210500 has no data after 2005 and is excluded (D-01.8) |
+| AC-6 NWPS forecast stored with issued_at; categories as official thresholds | **PASS** | `/v1/official-forecasts/NRKW1` → `issued_at 2026-10-07T15:36:00Z`, 29 points to Oct 14. Categories on `usgs:12210700`: action 144.8, minor 146.5, moderate 148, major 150 ft (also NKSW1, NREW1, NOEW1) |
+| AC-7 archive complete, sha256-verified, hourly count, growth | **PASS** | 1,289 raw objects = 1,289 files at 21:29Z: 0 missing, 0 orphans, all 0444, 0 errors; 1,289 written in the last hour; 5 random files re-verified OK. Growth per day: AC-12 table |
+| AC-8 sentinel and revision counts; sentinels excluded by default | **PASS** | Sentinels: 2 (ECCC level `99999`; 0 in USGS). Revisions: **733**. 731 are a **real** ECCC revision: all 08EE012 discharge values in the 22:01 file were raised by +1.7 % to +3.0 % versus the 20:31 file (raw objects 61 → 1879; levels unchanged). The other 2 are boundary artefacts from the OGC/NWIS overlap (same value, provenance only; D-01.19). Stale (older values refused): 13,073. API: default `count 2` vs `include_sentinels=true` `count 3` |
+| AC-9 survives `docker compose restart` and a VM reboot | **PARTIAL** | `docker compose restart` and `systemctl restart docker` both: all services back, health green, new runs started automatically within seconds (work log). Docker and containerd are `enabled` at boot. **The real VM reboot was not run:** it would end this session. Left for the human (open issue 3) |
+| AC-10 ruff and pytest pass; test count | **PASS** | `ruff check .` → `All checks passed!`; `pytest -q` → **44 passed**, 4 deselected (live); `pytest -m live` → 3 passed, 1 skipped (OGC rate-limited) |
+| AC-11 ≥ 10 decisions; doc updated across ≥ 4 commits; contracts updated | **PASS** | 20 decisions (D-01.1–D-01.20); the stage doc is touched in every one of the branch's commits (10 before the final one); architecture.md, data-contract.md, README.md and product.yaml updated |
+| AC-12 monthly cost estimate; days to 80 % disk | **PASS (estimate)** | Cost ≈ US$71–73/month (≈ CA$97–100), labelled as an estimate. Disk runway from measured growth: see the table below |
+
+## Contract files changed
+
+| File | What changed | Why |
+|---|---|---|
+| `architecture.md` | Data architecture record rewritten to the running system: polling instead of AMQP; TimescaleDB in Docker on GCE instead of managed Postgres; local gzip archive plus daily snapshots instead of Parquet on object storage; Caddy/sslip.io; USGS and NWPS sources; measured volumes and freshness; cost estimate. Components, core schema (actual Stage 1 tables), public API (live vs planned) and deployment updated | Facts changed in this stage (CLAUDE.md rule 5) |
+| `data-contract.md` | Freshness for records 1, 6, 7 replaced with measured latencies and the observed 30-min ECCC rewrite. USGS access method set to OGC API v1 with the keyless 1,000 req/h limit. Lineage diagram set to the real pipeline. SLO table aligned with `/v1/health` thresholds | Prompt: "replace estimated freshness with the latencies you measure" |
+| `README.md` | Data/rights table gains USGS and NOAA NWPS (🟢). ECCC access method changed from AMQP to polling. "How it works" diagram and table (ingestion, storage, serving, deployment), go/no-go "Data access" status, attribution lines, repository layout, a "Run it" section | Prompt: README "How it works" and data table; Parquet/object-storage line replaced |
+| `product.yaml` | `inputs` gains USGS water data and NOAA NWPS | Two new core inputs since Stage 0 |
+| `architecture.md`, `data-contract.md`, `README.md` (end of stage) | ECCC polling every 5 min (D-01.20) and the 30-min rewrite with 2–6 min publication lag; NWIS IV named as the USGS history and live fallback (D-01.19); measured growth per day | Facts changed after the first contract update |
+
+## Open issues and handoff to next stage
+
+**Needs the human**
+
+1. **USGS API key.** The keyless limit is 1,000 requests/hour per IP, and we hit 429 after a burst. Sign up at `https://api.waterdata.usgs.gov/signup/` and add `USGS_API_KEY=<key>` to `.env`, then `docker compose up -d ingest`. Backfills then pace at 1 s instead of 7.2 s. Until then, live USGS and the backfill share the keyless quota.
+2. **Snapshot schedule.** None is attached to the boot disk (`resourcePolicies` empty). The raw archive and the database have **no off-machine copy** until one is. Suggested: a daily snapshot schedule in `northamerica-northeast2` with `--storage-location=northamerica-northeast2`, attached to disk `datathon`.
+3. **Real VM reboot test** (second half of AC-9). Run `sudo reboot`; about 2 min later, `curl https://<host>/v1/health` should be green with new `ingest_runs` after the boot time. The Docker-daemon restart already passed.
+4. Optional: `ACME_EMAIL` in `.env` (expiry notices only).
+5. Decide whether to publish the public hostname in `README.md`. It encodes the VM's IP, so it is kept out of committed docs for now and appears only in the PR/STAGE REPORT.
+
+**For the next stages**
+
+6. **Datamart rewrites every 30 min** (20:31, 21:01, 21:31 UTC observed), not hourly as PLAN.md says. The listing can lag by more than 5 min (D-01.18).
+7. USGS instantaneous history is backfilled from **2004-10-01**. Older 15-min data exists for 12205000 (1987), 12208000 (1995) and 12213100 (1989) if Stage 3 wants it (`floodlead backfill usgs --since 1987-10-01`). 12210500 (Deming) has no data after 2005 and is not ingested.
+8. `last_seen_at` bumps rewrite about 566k observation rows per ECCC refresh, mostly non-HOT updates (measured in the work log). This is fine for now, but it adds WAL and table bloat, and makes snapshots larger. A coarser `last_seen_at` or a lower fillfactor is a Stage 8 candidate.
+9. (fixed at the end of the stage: GET routes also accept `HEAD`.)
+10. Revisions are real and frequent enough to matter. 08EE012's discharge was revised by about +2 % across 2.5 days in one refresh. Training features in Stage 3 must use `observation_revisions` and `first_seen_at` (value as first published), never only the latest value. 2 provenance-only artefact revisions exist (D-01.19).
+11. Stage 2 should key forecasts on the namespaced station IDs, and use `published_at` / `first_seen_at` for leakage-safe features.

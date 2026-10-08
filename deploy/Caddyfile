@@ -1,0 +1,19 @@
+# Automatic HTTPS (Let's Encrypt HTTP-01/TLS-ALPN) for the sslip.io hostname in .env.
+# No ACME email is set: none is configured in .env, and Caddy does not require one.
+{
+	admin off
+}
+
+{$PUBLIC_HOSTNAME} {
+	encode gzip zstd
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+	reverse_proxy api:8000
+	log {
+		output stdout
+		format json
+	}
+}

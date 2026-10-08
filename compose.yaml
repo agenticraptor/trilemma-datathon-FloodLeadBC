@@ -1,0 +1,129 @@
+# FloodLead BC production stack (single GCE VM). Secrets come from .env (gitignored).
+# Never run `docker compose down -v`: the pgdata volume holds the database.
+name: floodlead
+
+x-app: &app
+  build: .
+  image: floodlead-app:latest
+  env_file: .env
+  environment:
+    POSTGRES_HOST: db
+    ARCHIVE_DIR: /archive
+  user: "1001:1002"
+  restart: unless-stopped
+  depends_on:
+    db:
+      condition: service_healthy
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+services:
+  db:
+    image: timescale/timescaledb:2.30.2-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: floodlead
+      POSTGRES_DB: floodlead
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      NO_TS_TUNE: "true"
+    command:
+      - postgres
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - effective_cache_size=1536MB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - max_connections=50
+      - -c
+      - max_worker_processes=8
+      - -c
+      - max_parallel_workers=2
+      - -c
+      - max_parallel_workers_per_gather=1
+      - -c
+      - timescaledb.max_background_workers=2
+      - -c
+      - timescaledb.telemetry_level=off
+      - -c
+      - max_wal_size=2GB
+      - -c
+      - checkpoint_timeout=15min
+      - -c
+      - wal_compression=on
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Loopback only (admin, tests on the VM). Never published publicly.
+    ports:
+      - "127.0.0.1:5432:5432"
+    mem_limit: 2560m
+    shm_size: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U floodlead -d floodlead"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  ingest:
+    <<: *app
+    command: ["floodlead", "ingest"]
+    volumes:
+      - ${ARCHIVE_DIR:-/srv/floodlead/archive}:/archive
+    mem_limit: 1g
+
+  # One-off backfills: `docker compose run -d --name <name> backfill floodlead backfill <what>`.
+  # restart "no" so a finished backfill is never re-run by Docker.
+  backfill:
+    <<: *app
+    restart: "no"
+    profiles: ["backfill"]
+    command: ["floodlead", "backfill", "--help"]
+    volumes:
+      - ${ARCHIVE_DIR:-/srv/floodlead/archive}:/archive
+    mem_limit: 1g
+
+  api:
+    <<: *app
+    command: ["floodlead", "api", "--host", "0.0.0.0", "--port", "8000"]
+    volumes:
+      - ${ARCHIVE_DIR:-/srv/floodlead/archive}:/archive:ro
+    expose:
+      - "8000"
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  caddy:
+    image: caddy:2.11.7-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME:?PUBLIC_HOSTNAME must be set in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+volumes:
+  pgdata: {}
+  caddy_data: {}
+  caddy_config: {}

@@ -1,0 +1,38 @@
+{
+ "lid": "NRKW1",
+ "usgsId": "12210700",
+ "name": "Nooksack River at North Cedarvillle",
+ "latitude": 48.84178209,
+ "longitude": -122.2943258,
+ "state": {
+  "abbreviation": "WA",
+  "name": "Washington"
+ },
+ "rfc": {
+  "abbreviation": "NWRFC",
+  "name": "Northwest River Forecast Center"
+ },
+ "forecastReliability": "Forecasts are issued routinely year-round.",
+ "flood": {
+  "categories": {
+   "major": {
+    "stage": 150,
+    "flow": -9999
+   },
+   "moderate": {
+    "stage": 148,
+    "flow": -9999
+   },
+   "minor": {
+    "stage": 146.5,
+    "flow": -9999
+   },
+   "action": {
+    "stage": 144.8,
+    "flow": -9999
+   }
+  },
+  "stageUnits": "ft",
+  "flowUnits": "cfs"
+ }
+}

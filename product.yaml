@@ -21,6 +21,8 @@ inputs:
   - ECCC historical daily hydrometric data (OGL-Canada)
   - ECCC MSC HRDPS precipitation forecasts (ECCC Data Servers End-use Licence)
   - BC River Forecast Centre advisories (comparison baseline only, link-only)
+  - USGS water data, Nooksack and Sumas gauges in Washington (US public domain)
+  - NOAA NWS National Water Prediction Service official forecasts and flood categories (US public domain)
 outputs:
   - Per-gauge, per-threshold probability of crossing within 6/12/24/48 hours
   - P10/P50/P90 peak level and median hours-to-crossing
