@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="FloodLead BC: how close the Nooksack is to spilling toward Sumas Prairie, with official NOAA forecasts, FloodLead baseline chances and the 2021/2025 replay.">
+<meta name="color-scheme" content="light">
+<title>FloodLead BC: Sumas Prairie overflow watch</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="vendor/uplot/uPlot.min.css">
+<link rel="stylesheet" href="style.css">
+<script src="vendor/uplot/uPlot.iife.min.js" defer></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<div id="snapshot-banner" class="banner" role="status" hidden></div>
+<header class="site-header">
+  <div class="wrap header-row">
+    <a class="brand" href="#/">FloodLead <span>BC</span></a>
+    <nav class="nav" aria-label="Main">
+      <a href="#/" data-route="watch">Overflow watch</a>
+      <a href="#/stations" data-route="stations">All stations</a>
+    </nav>
+  </div>
+</header>
+
+<main id="app" class="wrap" tabindex="-1">
+  <p class="loading">Loading live river data…</p>
+  <noscript><p class="notice">This page needs JavaScript to load river data.</p></noscript>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p class="warning-line"><strong>Not a warning service.</strong> Follow
+      <a href="https://www.emergencyinfobc.gov.bc.ca/" rel="noopener">EmergencyInfoBC</a>, the
+      <a href="https://www2.gov.bc.ca/gov/content/environment/air-land-water/water/drought-flooding-dikes-dams/river-forecast-centre" rel="noopener">BC River Forecast Centre</a>,
+      <a href="https://www.weather.gov/sew/" rel="noopener">NWS Seattle</a> and your local authority's orders.</p>
+    <p class="footer-links">
+      <a href="https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC" rel="noopener">Source code (GitHub)</a> ·
+      <a href="/docs">API documentation</a> ·
+      <span id="health-line">Data feed status: checking…</span>
+    </p>
+    <ul id="attribution" class="attribution">
+      <li>Contains information licensed under the Open Government Licence – Canada.</li>
+      <li>Contains data from Environment and Climate Change Canada.</li>
+      <li>Credit: U.S. Geological Survey.</li>
+      <li>Official forecasts and flood categories: NOAA National Weather Service (not affiliated with or endorsed by NOAA/NWS).</li>
+    </ul>
+  </div>
+</footer>
+</body>
+</html>

@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from floodlead import log
+from floodlead.config import ATTRIBUTION
 
 L = log.get(__name__)
 
@@ -54,6 +55,7 @@ def export(out_dir: str) -> list[str]:
             f = out / f"{slug(path)}.json"
             f.write_text(json.dumps(body, separators=(",", ":"), default=str))
             written.append(f.name)
-    (out / "index.json").write_text(json.dumps({"snapshot_at": snapshot_at, "files": sorted(written)}, indent=1))
+    (out / "index.json").write_text(json.dumps({"snapshot_at": snapshot_at, "files": sorted(written),
+                                                "attribution": ATTRIBUTION}, indent=1))
     L.info("snapshot written", **log.kv(files=len(written), out=str(out)))
     return written
