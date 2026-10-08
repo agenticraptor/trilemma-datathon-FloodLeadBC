@@ -268,6 +268,10 @@ Order from addendum 1 (targets in UTC):
   - `floodlead migrate` → `['003_scores.sql']`. `floodlead score` → run 1, 0 scored (nothing settled before ~00:00Z), 1.1 s.
 - `13:32–13:38` — Committed and pushed the scorer (`stage-02-part2`); deployed ingest and api. Health: issuer green (lag 25 min), scorer green, anchor green (seq 856). `/v1/scores/official` → note "No matched pair has settled yet…". `scripts/verify_ledger.py`: `--api` → OK 856, 1 anchor checked; `--source github` → OK 856 from 1 file; `--from-seq 856` → OK; `--from-seq 500` → `FAIL … must be an anchored seq` (exit 1). `tests/test_verify_script.py` (4 tests, incl. a forged self-consistent chain caught by the anchor). `evaluation.md` rewritten for the live ledger, baselines and scoring.
 - `13:25–13:38` — F2 before-measurement (above) and implementation. `pytest` → 84 passed.
+- `13:39` — F2 deployed: `floodlead migrate` in the recreated ingest → `004_payload_coverage.sql`. Contract files updated (table below).
+- `13:41–13:44` — **AC-6:** `scripts/reproduce_forecast.py --api https://<host> --n 3 --seed 1` rebuilt 3 random ECCC persistence forecasts (seq 584 `eccc:08MH053`, 784 `eccc:08NM249`, 66 `eccc:07FD002`) from the public observations API only, keeping rows with `first_seen_at ≤ created_at`. `input_hash` matches ×3; library 667 paths = 667 ×3; median equal at all 8 horizons ×3 → `ALL MATCH` (2.3 s).
+- `13:44` — **AC-3** on production, each statement inside `BEGIN … ROLLBACK`: `UPDATE` → `ERROR: ledger_entries is append-only (UPDATE not allowed)`; `DELETE` → `… (DELETE not allowed)`; `TRUNCATE ledger_entries CASCADE` → `… (TRUNCATE not allowed)`; a forged genesis `INSERT` → `ERROR: ledger: append must have seq 857 and prev_hash ccf8f76d…`. Ledger still 856 entries.
+- `13:45` — API contract tests for the ledger, forecast, scores, health blocks and replay (`tests/test_api.py`). `pytest` → **92 passed**, 4 live deselected.
 
 ## Measurements
 
