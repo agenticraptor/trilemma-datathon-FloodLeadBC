@@ -27,13 +27,23 @@ next prompt ◄── PASS (merge) ◄── supervisor QA ──► FIX prompt 
 | Finding | Evidence | Consequence |
 |---|---|---|
 | ECCC OGC API real-time data is ~4 h behind (p50 245 min across 416 BC stations) | Queried `hydrometric-realtime` for BC, last 6 h | Do **not** use it as the live source |
-| ECCC Datamart hourly CSVs are ~1 h behind (p50 61 min, p90 91 min, 30 stations sampled); all 429 BC files rewritten at :31 each hour | `dd.weather.gc.ca/today/hydrometric/csv/BC/hourly/` | Primary live source: poll Datamart hourly files after :31 |
+| ECCC Datamart hourly CSVs are ~1 h behind (p50 61 min, p90 91 min, 30 stations sampled); all 429 BC files rewritten at :31 each hour (**corrected in Stage 1:** rewritten every 30 min, at :01 and :31) | `dd.weather.gc.ca/today/hydrometric/csv/BC/hourly/` | Primary live source: poll Datamart hourly files (Stage 1 polls every 5 min) |
 | Datamart `daily` files hold 30 days of 5-min data (8,626 rows for 08MH001) | Same tree, `/daily/` | 30-day backfill source; anything older is lost unless archived |
 | USGS 15-min data for the Nooksack is ~45 min behind; North Cedarville (12210700) has stage since 2007-10-01, flow since 2004-10-15 | USGS site catalog + IV service | Sub-daily training history covering the 2009, 2021 and 2025 floods |
 | Nov 15, 2021 peak at Nooksack River at Everson (12211200): 52,300 cfs at 13:40 PST | USGS IV query | Independent cross-check value for the backfill |
 | NOAA NWRFC publishes an official 7-day forecast for Nooksack at North Cedarville (NWPS `NRKW1`), 6-hourly points, plus official flood stages (action 144.8 ft, minor 146.5, moderate 148, major 150) | `api.water.noaa.gov/nwps/v1/gauges/NRKW1` | Official thresholds and an official forecast to score against, live |
 | NOAA stage and USGS gage height share a datum (both ~138.0 ft on Oct 7) | Same-time readings | Thresholds apply directly to USGS data |
 | The Nooksack overflow at Everson flooded Sumas Prairie in 2021 and Dec 2025 | City of Abbotsford bulletins | The US gauges are core, not optional |
+
+## Facts the supervisor verified during Stage 1 QA (Oct 8, 2026, 00:00–00:20 UTC)
+
+| Finding | Evidence | Consequence |
+|---|---|---|
+| `today/hydrometric/…` returns 404 for a few minutes after 00:00 UTC; the ECCC run at 00:03:50Z failed and recovered by 00:07Z | `/v1/health` and `ingest_runs` | Stage 2 fix F1: fall back to the dated directory `/YYYYMMDD/WXO-DD/hydrometric/csv/BC/…` |
+| The 30-day `daily/` files are written once a day (~08:19Z on Oct 7); for ~8 h after midnight only yesterday's dated `daily/` directory exists | Listings of `today/` and the dated directories | Anything reading `daily/` needs the same fallback |
+| Each ECCC refresh rewrites ~570k unchanged rows (≈ 14 GB/day of WAL) | Stage 1 measurements | Stage 2 fix F2 (moved forward from Stage 8) |
+| The overflow toward Sumas Prairie (USGS 12211195, Overflow at SR 544) first appeared when North Cedarville stood at ~147.5 ft: 4 h 55 min after it crossed minor stage in Nov 2021 (21:30Z → 02:25Z) and 4 h 30 min after in Dec 2025 (20:15Z → 00:45Z) | Public API queries of the backfilled USGS data | The first piece of demonstrable value: the Build Session 2 demo path. Two events only; Stage 2 recomputes it for every event in the record |
+| NOAA can add points to an existing issuance (NRKW1 15:36Z issuance went from 29 to 30 points); the archive keeps the first-fetched value per point | `/v1/official-forecasts/NRKW1` vs api.water.noaa.gov | Correct as built; the ledger must record later-added points too |
 
 ## Value realism (what the supervisor will keep honest)
 
@@ -48,17 +58,45 @@ next prompt ◄── PASS (merge) ◄── supervisor QA ──► FIX prompt 
 |---|---|---|---|
 | 0 | Environment discovery on the existing VM (worker prompt `prompts/STAGE-00-environment.md`) | Oct 7, ~30 min | Can the worker build and deploy without blocking on access, and without disturbing anything already on the VM? |
 | 1 | Foundation + live archive: ingest ECCC Datamart (all BC), USGS Nooksack/Sumas, NOAA official forecasts; raw archive on the VM disk (daily snapshots as the off-machine copy); backfills; minimal public read API | Oct 7, before Build Session 2 (18:00) | Is data that disappears after 30 days now being kept, fresh to ~1 h, and verifiable from outside? |
-| 2 | Forecast ledger + baselines: hourly persistence/trend forecasts, NOAA official forecast archived, hash-chained append-only ledger, scoring | Oct 7 night | Is every forecast fixed in time before the truth arrives, and scored honestly? |
-| 3 | History, thresholds, training sets: daily history (BC), 15-min history (Nooksack), official and station thresholds, upstream links, leakage-safe datasets | Oct 8 AM | Do the labels and features reflect what was knowable at forecast time? |
-| 4 | Models, walk-forward evaluation, calibration, 2021/2025 replays; kill-criteria verdict in `evaluation.md` | Oct 8 PM | Does the model beat persistence and trend honestly, and by how many hours at official flood stages? |
+| 2 | Forecast ledger + baselines + first working app (prompt `prompts/STAGE-02-ledger-app.md`): hourly persistence/trend forecasts, NOAA issuances in a hash-chained append-only ledger anchored hourly to the `ledger` branch, scoring; the Build Session 2 app (Sumas Prairie overflow watch, 2021/2025 replay, snapshot mode); Stage 1 fixes F1–F3 | Oct 7 night → Oct 8 AM (PR by 13:00 PT at the latest) | Is every forecast fixed in time before the truth arrives, and scored honestly? Can the first user get a useful answer from real data today? |
+| 3 | History, thresholds, training sets: daily history (BC), 15-min history (Nooksack), official and station thresholds, upstream links, leakage-safe datasets | Oct 8 PM | Do the labels and features reflect what was knowable at forecast time? |
+| 4 | Models, walk-forward evaluation, calibration, 2021/2025 replays; kill-criteria verdict in `evaluation.md` | Oct 8 night → Oct 9 AM | Does the model beat persistence and trend honestly, and by how many hours at official flood stages? |
 | 5 | Live model in the ledger, scored against baselines and NOAA | Oct 9 AM | Is the live model at least as good as the baselines on live data? |
-| 6 | Web app ("Working in Public"): map, gauge page with forecast fan, thresholds, official forecast, data-as-of, live scores, ledger verification, attribution, disclaimers | Oct 9, before Build Session 3 (18:00) | Can a farmer understand their risk in 30 seconds without help? |
+| 6 | Web app for other users ("Working in Public"), growing the Stage 2 app: map, gauge pages with forecast fan, station thresholds, official forecast, data-as-of, live scores, ledger verification, attribution, disclaimers | Oct 9, before Build Session 3 (18:00) | Can a farmer understand their risk in 30 seconds without help? |
 | 7 | Opt-in alerts: a user sets a level; with their consent, the app calls/texts them and, after they approve, notifies helpers who opted in; consent log, rate limits, replay/demo mode | Oct 9 PM – Oct 10 | Does the right person get the right message at the right time, and only with consent? |
 | 8 | Hardening: CI, monitoring and feed-lag alerts, backups, security review, cost guard, registry metadata | Oct 10–11 | Will it keep running unattended through Demo Day? |
 | 9 | Demo readiness: replay-at-speed, final numbers, README results, demo runbook, fallback recording, farmer interview findings | Oct 11–12 | Can the value be shown in 4 minutes with real numbers? |
 | 10 | Freeze + Demo Day runbook | Oct 13 (freeze at noon) | Nothing changes after noon except the ledger growing |
 
 **Cut order if behind:** precipitation forecasts → calendar holds → non-English voice → challenger models → pooled BC daily model (keep the Nooksack model).
+
+## QA log
+
+| Stage | Verdict | Merged | What the supervisor verified independently | Carried forward |
+|---|---|---|---|---|
+| 0 | PASS | `296bb82` (PR #1) | Environment report vs VM facts; no secrets or internal identifiers in the committed doc | — |
+| 1 | PASS | `fe8208f` (PR #2) | Health green for ECCC, USGS, NOAA; 10 of 10 ECCC rows equal the live files; NOAA NRKW1 issuance equal point for point (30/30); Everson 52,300 cfs and the 2021/2025 peaks present; sentinel and CORS edge cases; `ruff` clean; `pytest` 44 passed including the 18 DB tests (run against `timescale/timescaledb:2.30.2-pg16`); stage doc grew in 11/11 commits | F1 rollover fallback, F2 unchanged-row rewrites, F3 publish the URL → Stage 2. Human: VM reboot test (AC-9), USGS API key, snapshot schedule |
+
+## Build Session 2 requirements (checklist) and where they are met
+
+| Requirement | Where |
+|---|---|
+| Brief written in the author's own words before using an LLM | **Pranay** writes `brief.md` (the worker must not write it) |
+| Demo path Problem → Action → Visible useful result, with value the app already creates | Stage 2 app: Sumas Prairie overflow watch + 2021/2025 replay |
+| Real, permitted data; results supported by it | ECCC (OGL-Canada), USGS and NOAA (public domain); records in `data-contract.md` |
+| Working local app, reproducible from the repo | Stage 2 snapshot mode (`python3 -m http.server -d web 8080`) and `docker compose up` |
+| README: idea and choices, data, run locally, demo path, what works now and what remains | Stage 2, README "Build Session 2 — working app" |
+
+## Open human tasks
+
+| Task | Why | Status |
+|---|---|---|
+| Write `brief.md` in your own words (problem and when you hit it, your real example, evidence, what alternatives leave unresolved, the useful result you want) | Build Session 2 ownership check | open |
+| Create a fine-grained GitHub token (this repo only, Contents read/write) → `LEDGER_GITHUB_TOKEN` in `.env` on the VM | Hourly ledger anchors | open |
+| USGS API key → `USGS_API_KEY` in `.env` | Keyless USGS quota (1,000 requests/h) | open |
+| Daily snapshot schedule on the boot disk (Canada) | Only off-machine copy of the archive and database | open |
+| `sudo reboot` test after the Stage 2 PR, then check `/v1/health` | Stage 1 AC-9 | open |
+| Farmer outreach | Interviews for Demo Day | in progress |
 
 ## Key dates
 
