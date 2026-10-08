@@ -272,6 +272,7 @@ Order from addendum 1 (targets in UTC):
 - `13:41–13:44` — **AC-6:** `scripts/reproduce_forecast.py --api https://<host> --n 3 --seed 1` rebuilt 3 random ECCC persistence forecasts (seq 584 `eccc:08MH053`, 784 `eccc:08NM249`, 66 `eccc:07FD002`) from the public observations API only, keeping rows with `first_seen_at ≤ created_at`. `input_hash` matches ×3; library 667 paths = 667 ×3; median equal at all 8 horizons ×3 → `ALL MATCH` (2.3 s).
 - `13:44` — **AC-3** on production, each statement inside `BEGIN … ROLLBACK`: `UPDATE` → `ERROR: ledger_entries is append-only (UPDATE not allowed)`; `DELETE` → `… (DELETE not allowed)`; `TRUNCATE ledger_entries CASCADE` → `… (TRUNCATE not allowed)`; a forged genesis `INSERT` → `ERROR: ledger: append must have seq 857 and prev_hash ccf8f76d…`. Ledger still 856 entries.
 - `13:45` — API contract tests for the ledger, forecast, scores, health blocks and replay (`tests/test_api.py`). `pytest` → **92 passed**, 4 live deselected.
+- `13:47` — **AC-7 leakage audit** (`scripts/audit_leakage.sql`, 3 min 11 s) over all 852 forecasts at 20:47Z: `data_as_of_after_created_at 0`, `data_as_of_row_not_visible_at_created_at 0`, `inputs_count_mismatch 0`, `horizons_under_30_min 0` of 6,816 horizons. To be re-run over all base times before PR 2.
 
 ## Measurements
 
