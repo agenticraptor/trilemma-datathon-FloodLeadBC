@@ -327,6 +327,10 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
 - `15:16` — **Base 22:00Z** issued by the scheduler.
   - Corrected `persistence-v1` model card appended at **seq 1719** (`supersedes_seq 2`, `change: "method description corrected; parameters and outputs unchanged"`); `trend3h-v1` card unchanged.
   - Issuance: `created_at` 22:15:00.532Z, `inserts_started_at` 22:16:08.736Z, `committed_at` 22:16:09.903Z, so **created → commit = 69.4 s, measured**. Runtime 68.2 s; 857 forecasts (persistence 429, trend 428).
+- `15:31` — **Third anchor** at 22:30:00Z: seq 2577, `ledger/entries/2026/10/08/22.jsonl.gz` 397,541 B, commit `0f17882324d4000f6b1a19f0db9ea636985aa13a`. All three anchors (20:15, 21:30, 22:30) were written with `LEDGER_GITHUB_TOKEN` by the anchor code: the first via `floodlead ledger anchor`, the next two by the scheduled job. None was pushed by hand with git.
+  - `heads.txt` = 3 lines.
+  - `verify_ledger.py --source github` → `OK entries 2577, head fd94c322…df42, anchors_checked 3, files 3`; `--api` → the same.
+  - Publication: 395,114 / 396,798 / 397,541 B per hour.
 
 ## Measurements
 
