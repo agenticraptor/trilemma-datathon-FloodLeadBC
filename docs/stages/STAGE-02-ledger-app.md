@@ -229,7 +229,10 @@ Order from addendum 1 (targets in UTC):
   - `last_seen_at` — when the **current value was last written** (first insert or last revision); no longer bumped on identical re-fetches.
   - `published_at` — publication time of the payload that set the current value.
   - `payload_coverage(station_id, kind, published_at, ts_min, ts_max, raw_object_id, last_seen_at)` — the per-station "last seen": the newest payload of each kind (`eccc:hourly`, `eccc:daily`, `usgs:ogc`, `usgs:nwis`), its time range, and when it was last processed. One row write per station per payload, instead of ~1,300.
-- **After:** measured over the next equivalent refresh (work log).
+- **After (measured, 20:39:33 → 21:07:52Z):** one full ECCC refresh (run 525: 427 files fetched, 2,910 inserted, 0 updated, 561,125 unchanged) plus 3 USGS runs, 2 NWPS runs, both station refreshes and a scorer run.
+  - **0 row updates** on the observation chunks (`n_tup_upd` 24,907,584 → 24,907,584; before: +554,126).
+  - **0 new dead tuples** (232,594 → 232,594; before: +70,313).
+  - **WAL 15,733,024 B** over 28.3 min, vs **139,090,872 B** over 12.6 min before: at least **8.8× less**, in a longer window with more jobs.
 
 ## Work log
 
@@ -273,6 +276,7 @@ Order from addendum 1 (targets in UTC):
 - `13:44` — **AC-3** on production, each statement inside `BEGIN … ROLLBACK`: `UPDATE` → `ERROR: ledger_entries is append-only (UPDATE not allowed)`; `DELETE` → `… (DELETE not allowed)`; `TRUNCATE ledger_entries CASCADE` → `… (TRUNCATE not allowed)`; a forged genesis `INSERT` → `ERROR: ledger: append must have seq 857 and prev_hash ccf8f76d…`. Ledger still 856 entries.
 - `13:45` — API contract tests for the ledger, forecast, scores, health blocks and replay (`tests/test_api.py`). `pytest` → **92 passed**, 4 live deselected.
 - `13:47` — **AC-7 leakage audit** (`scripts/audit_leakage.sql`, 3 min 11 s) over all 852 forecasts at 20:47Z: `data_as_of_after_created_at 0`, `data_as_of_row_not_visible_at_created_at 0`, `inputs_count_mismatch 0`, `horizons_under_30_min 0` of 6,816 horizons. To be re-run over all base times before PR 2.
+- `14:07` — F2 after-measurement (D-02.15): 0 updates and 0 new dead tuples across a full ECCC refresh; WAL 15.7 MB vs 139.1 MB.
 
 ## Measurements
 
@@ -286,6 +290,12 @@ Order from addendum 1 (targets in UTC):
 | Ledger growth (estimate from one issuance) | ≈ 2.85 MB canonical/h → ≈ 68 MB/day of text, ≈ 40 MB/day stored after compression | × 24 | 20:10Z |
 | Snapshot | 43 JSON files, 2.6 MB | `export-demo` | 20:09Z |
 | Screenshots | 15 PNGs, 4.8 MB, 0 browser errors | `scripts/screenshots.cjs` | 20:09Z |
+| First anchor | 856 entries, 395,114 B jsonl.gz, commit `28aefd8` | anchor job | 20:15Z |
+| Publication rate (estimate from one hour) | ≈ 0.4 MB/h → ≈ 285 MB/month on the `ledger` branch | × 720 | 20:15Z |
+| F2 before (one ECCC refresh) | 554,126 row updates, +70,313 dead tuples, WAL 139,090,872 B (12.6 min window) | `pg_stat_user_tables`, `pg_current_wal_lsn()` | 20:25–20:38Z |
+| F2 after (one ECCC refresh) | 0 row updates, +0 dead tuples, WAL 15,733,024 B (28.3 min window, more jobs) | same | 20:39–21:07Z |
+| Leakage audit | 852 forecasts, 0 violations, 0 of 6,816 horizons < 30 min | `scripts/audit_leakage.sql` (3 min 11 s) | 20:47Z |
+| AC-6 reproduction | 3/3 forecasts: input_hash and 8/8 medians match from the public API | `scripts/reproduce_forecast.py` (2.3 s) | 20:43Z |
 
 ## Acceptance criteria
 
