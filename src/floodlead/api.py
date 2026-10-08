@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import statistics
 import threading
@@ -19,7 +20,7 @@ from fastapi.responses import JSONResponse
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
-from floodlead import db
+from floodlead import db, replay
 from floodlead.config import ATTRIBUTION, REPO_URL, get_settings
 
 MAX_WINDOW = timedelta(days=7)
@@ -68,6 +69,14 @@ _state: dict[str, Any] = {}
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _state["pool"] = db.pool(min_size=1, max_size=4)
+
+    def warm() -> None:  # the replay takes ~9 s cold; compute it once at start so visitors never wait
+        try:
+            _replay()
+        except Exception:  # noqa: BLE001 - warming is best effort
+            pass
+
+    threading.Thread(target=warm, name="warm-replay", daemon=True).start()
     try:
         yield
     finally:
@@ -344,10 +353,11 @@ def observations(
     since: str | None = Query(None, description="ISO 8601 UTC; default until - 24 h"),
     until: str | None = Query(None, description="ISO 8601 UTC; default now"),
     include_sentinels: bool = Query(False, description="include flagged no-data codes (value is null)"),
+    days: int | None = Query(None, ge=1, le=7, description="window length ending at `until` (default 1 day)"),
 ) -> dict[str, Any]:
     """Observations in SI units (m, m3/s) with the raw published value. At most 7 days per call."""
     t1 = _parse_time(until, "until") or datetime.now(UTC)
-    t0 = _parse_time(since, "since") or t1 - timedelta(hours=24)
+    t0 = _parse_time(since, "since") or t1 - timedelta(days=days or 1)
     if t1 <= t0:
         raise HTTPException(400, "until must be after since")
     if t1 - t0 > MAX_WINDOW:
@@ -398,3 +408,135 @@ def official_forecasts(
         "note": "Official NOAA NWS forecast, stored and served unmodified. Not affiliated with or endorsed "
                 "by NOAA/NWS.",
     })
+
+
+_REPLAY_TTL_S = 3600
+
+
+def _replay() -> dict[str, Any]:
+    def build() -> dict[str, Any]:
+        with _pool().connection() as conn:
+            r = replay.compute(conn)
+        r["gauges"] = {
+            "cedarville": {"station_id": replay.CEDARVILLE, "name": "Nooksack River at North Cedarville, WA",
+                           "stages_ft": replay.CEDARVILLE_STAGES_FT},
+            "overflow": {"station_id": replay.OVERFLOW, "name": "Nooksack River overflow at SR 544, Everson, WA",
+                         "stages_ft": replay.OVERFLOW_STAGES_FT, "record_begins": r.pop("overflow_record_begins"),
+                         "note": "Reported only while water was flowing until 2026-10-01; continuous since."},
+            "everson": {"station_id": replay.EVERSON, "name": "Nooksack River at Everson, WA",
+                        "stages_ft": {"action": replay.EVERSON_ACTION_FT}},
+        }
+        r["caveats"] = replay.CAVEATS
+        r["method"] = (replay.__doc__ or "").strip()
+        return r
+
+    return _cached("replay", _REPLAY_TTL_S, build)
+
+
+@app.api_route("/v1/replay/overflow", methods=["GET", "HEAD"])
+def replay_overflow() -> dict[str, Any]:
+    """Every North Cedarville minor-stage event since 2007 and when the Sumas Prairie overflow (Overflow at SR 544)
+    began, computed from stored USGS data. Approved historical data, not what was visible in real time."""
+    return _wrap(dict(_replay()))
+
+
+@app.api_route("/v1/replay/overflow/{event_id}/series", methods=["GET", "HEAD"])
+def replay_series(event_id: str) -> dict[str, Any]:
+    """Levels (ft, as published) at North Cedarville, the overflow gauge and Everson around one event."""
+    ev = next((e for e in _replay()["events"] if e["event_id"] == event_id), None)
+    if ev is None:
+        raise HTTPException(404, f"unknown event {event_id!r}; see /v1/replay/overflow")
+
+    def build() -> dict[str, Any]:
+        with _pool().connection() as conn:
+            return replay.series(conn, ev)
+
+    return _wrap(dict(_cached(f"replay-series-{event_id}", _REPLAY_TTL_S, build)))
+
+
+SPEC_URL = f"{REPO_URL}/blob/main/docs/ledger-spec.md"
+_ENTRY_COLS = "seq, entry_type, created_at, canonical, prev_hash, entry_hash"
+
+
+def _entry(r: dict[str, Any]) -> dict[str, Any]:
+    return {"seq": r["seq"], "entry_type": r["entry_type"], "created_at": r["created_at"],
+            "canonical": r["canonical"], "prev_hash": r["prev_hash"], "entry_hash": r["entry_hash"]}
+
+
+@app.api_route("/v1/ledger", methods=["GET", "HEAD"])
+def ledger_page(after_seq: int = Query(0, ge=0), limit: int = Query(500, ge=1, le=1000)) -> dict[str, Any]:
+    """Ledger entries in seq order, with the exact canonical text that was hashed. Verify with
+    entry_hash = sha256(prev_hash + "\\n" + canonical); see the spec."""
+    rows = _q(f"SELECT {_ENTRY_COLS} FROM ledger_entries WHERE seq > %s ORDER BY seq LIMIT %s", (after_seq, limit))
+    entries = [_entry(r) for r in rows]
+    return _wrap({"after_seq": after_seq, "limit": limit, "count": len(entries),
+                  "next_after_seq": entries[-1]["seq"] if len(entries) == limit else None,
+                  "entries": entries, "spec_url": SPEC_URL})
+
+
+def _anchor() -> dict[str, Any] | None:
+    try:
+        rows = _q("SELECT seq, entry_hash, anchored_at, commit_sha, commit_url, entries_path, status"
+                  " FROM ledger_anchors WHERE status = 'ok' ORDER BY anchor_id DESC LIMIT 1")
+    except Exception:  # noqa: BLE001 - table absent before migration 002
+        return None
+    if not rows:
+        return {"status": "pending", "note": "hourly anchoring to the `ledger` branch starts in Stage 2 part 2"}
+    a = rows[0]
+    age_h = (datetime.now(UTC) - a["anchored_at"]).total_seconds() / 3600
+    return {**{k: a[k] for k in ("seq", "entry_hash", "anchored_at", "commit_sha", "commit_url", "entries_path")},
+            "status": "ok" if age_h <= 2 else "stale"}
+
+
+@app.api_route("/v1/ledger/head", methods=["GET", "HEAD"])
+def ledger_head() -> dict[str, Any]:
+    """The newest ledger entry and the latest external anchor."""
+    rows = _q(f"SELECT {_ENTRY_COLS} FROM ledger_entries ORDER BY seq DESC LIMIT 1")
+    if not rows:
+        raise HTTPException(404, "the ledger has no entries yet")
+    r = rows[0]
+    return _wrap({"seq": r["seq"], "entry_hash": r["entry_hash"], "created_at": r["created_at"],
+                  "entry_type": r["entry_type"], "anchor": _anchor(), "spec_url": SPEC_URL})
+
+
+@app.api_route("/v1/ledger/{seq}", methods=["GET", "HEAD"])
+def ledger_entry(seq: int) -> dict[str, Any]:
+    rows = _q(f"SELECT {_ENTRY_COLS} FROM ledger_entries WHERE seq = %s", (seq,))
+    if not rows:
+        raise HTTPException(404, f"no ledger entry {seq}")
+    return _wrap({**_entry(rows[0]), "spec_url": SPEC_URL})
+
+
+FORECAST_LABEL = "FloodLead baseline (persistence / trend), live skill being measured"
+
+
+@app.api_route("/v1/stations/{station_id}/forecast", methods=["GET", "HEAD"])
+def station_forecast(station_id: str) -> dict[str, Any]:
+    """The latest FloodLead baseline forecast per model (as fixed in the ledger, with its seq and hash), plus the
+    linked NOAA NWS official forecast's latest issuance, unmodified."""
+    rows = _q("SELECT DISTINCT ON (model) seq, entry_hash, created_at, canonical FROM ledger_entries"
+              " WHERE entry_type = 'forecast' AND station_id = %s AND base_time > now() - interval '3 days'"
+              " ORDER BY model, base_time DESC", (station_id,))
+    st = _q("SELECT links FROM stations WHERE station_id = %s", (station_id,))
+    if not rows and not st:
+        raise HTTPException(404, f"unknown station {station_id!r}")
+    if not rows:
+        raise HTTPException(404, f"no FloodLead forecast issued for {station_id} in the last 3 days")
+    models = []
+    for r in rows:
+        d = json.loads(r["canonical"])["data"]
+        models.append({"model": d["model"], "seq": r["seq"], "entry_hash": r["entry_hash"],
+                       "created_at": r["created_at"], **{k: v for k, v in d.items() if k != "model"}})
+    official = None
+    lid = ((st[0]["links"] or {}) if st else {}).get("nwps_lid")
+    if lid:
+        pts = _q("SELECT issued_at, valid_at, stage_ft, flow_kcfs FROM official_forecasts WHERE lid = %(lid)s AND"
+                 " issued_at = (SELECT max(issued_at) FROM official_forecasts WHERE lid = %(lid)s) ORDER BY valid_at",
+                 {"lid": lid})
+        if pts:
+            official = {"lid": lid, "issued_at": pts[0]["issued_at"],
+                        "label": "NOAA NWS official forecast (unmodified)",
+                        "points": [{"valid_at": p["valid_at"], "stage_ft": p["stage_ft"], "flow_kcfs": p["flow_kcfs"]}
+                                   for p in pts]}
+    return _wrap({"station_id": station_id, "generated_at": datetime.now(UTC), "label": FORECAST_LABEL,
+                  "models": models, "official": official, "spec_url": SPEC_URL})

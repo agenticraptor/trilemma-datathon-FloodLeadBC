@@ -35,7 +35,8 @@ class Settings(BaseSettings):
     http_timeout_s: float = 60.0
     http_max_parallel: int = 4  # per source, also during backfills
 
-    eccc_base: str = "https://dd.weather.gc.ca/today/hydrometric/csv/BC"
+    eccc_base: str = "https://dd.weather.gc.ca/today/hydrometric/csv/BC"  # alias; last-resort fallback (F1)
+    eccc_root: str = "https://dd.weather.gc.ca"  # dated directories: /YYYYMMDD/WXO-DD/hydrometric/csv/BC/
     eccc_ogc_base: str = "https://api.weather.gc.ca"
     usgs_ogc_base: str = "https://api.waterdata.usgs.gov/ogcapi/v1"
     nwps_base: str = "https://api.water.noaa.gov/nwps/v1"

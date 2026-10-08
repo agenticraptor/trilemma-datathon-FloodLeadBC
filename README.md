@@ -4,14 +4,108 @@
 
 FloodLead BC is a flood lead-time forecaster for BC farmers and riverside households. It turns the federal real-time hydrometric feed into a calibrated probability that a specific gauge will cross a level the user chose ("check pumps", "move cattle", "leave") within the next 6–48 hours. When the risk passes the user's own threshold, an agent calls them, waits for approval, and then texts the people on their action list. Every forecast is written to a public, hash-chained ledger and scored against what the river actually did.
 
-> **Status:** Build Session 1 (Framing) complete, entering Build Session 2 — Datathon Season 2026, Trilemma Foundation × Northeastern University Vancouver.
-> **Not an official warning service.** Always follow EmergencyInfoBC and your local authority's evacuation orders.
+> **Live app:** **https://34-130-109-216.sslip.io/** — Sumas Prairie overflow watch, station picker, replay of the 2021 and 2025 overflows · [API docs](https://34-130-109-216.sslip.io/docs) · [health](https://34-130-109-216.sslip.io/v1/health)
+> **Brief:** [Brief (AI-drafted at the author's request)](brief.md)
+> **Status:** Build Session 2 — working app (see [below](#build-session-2--working-app)). Datathon Season 2026, Trilemma Foundation × Northeastern University Vancouver.
+> **Not an official warning service.** Always follow EmergencyInfoBC, the BC River Forecast Centre, NWS Seattle and your local authority's orders.
 
 ---
 
 ## One sentence
 
 BC's flood advisories describe whole basins in cubic metres per second and return periods; FloodLead tells one farmer, in hours, when their gauge will reach the level at which they must act, and starts that action for them.
+
+## Build Session 2 — working app
+
+**Live:** https://34-130-109-216.sslip.io/ — a static app and a read-only API on one VM in Toronto, serving real data that is ingested continuously (ECCC every 5 min, USGS every 15 min, NOAA every 30 min).
+
+### The idea, and the choices behind it
+
+One real situation, end to end, with value the app already creates: **an atmospheric river is coming. Will the Nooksack spill over toward Sumas Prairie, as it did in November 2021 and December 2025 when it flooded farms and closed Highway 1, and how many hours would we have?**
+
+- **The US gauges are core.** The water that floods Sumas Prairie comes over the Nooksack's overflow path at Everson, so the app watches USGS North Cedarville (12210700, with NOAA's official flood stages and forecast) and the Overflow at SR 544 gauge (12211195). BC gauges are all ingested too (442 stations).
+- **Keep what disappears.** ECCC's real-time files only hold 30 days, so every raw payload is archived immutably (sha256-indexed) from Oct 7 ([D-01.7](docs/stages/STAGE-01-live-archive.md)).
+- **Honest numbers only.** The replay below is computed from stored data by the API, not typed in. FloodLead's own forecasts are written to a hash-chained public ledger *before* the truth is known, and scored against persistence, trend and NOAA ([Stage 2 doc](docs/stages/STAGE-02-ledger-app.md)).
+- **No build step.** A static page (`web/`), a pinned chart library vendored with its licence, a strict Content-Security-Policy and no third-party requests. A **snapshot mode** keeps the app usable offline.
+
+### Data used (all real, all permitted)
+
+| Source | What the app uses | Licence |
+|---|---|---|
+| USGS Water Data (OGC API v1; NWIS IV for history) | North Cedarville, Everson and Overflow at SR 544 levels: live, and 15-min history since 2007 | US public domain |
+| NOAA NWS National Water Prediction Service | Official flood stages (action 144.8 / minor 146.5 / moderate 148 / major 150 ft) and the official 7-day forecast for North Cedarville (NRKW1), shown unmodified | US public domain (NWS conditions) |
+| ECCC Water Survey of Canada (Datamart) | All real-time BC gauges in the station picker | Open Government Licence – Canada |
+
+Full records: [`data-contract.md`](data-contract.md).
+
+### Demo path (problem → action → visible result)
+
+1. **Problem:** a storm is forecast; a farmer on Sumas Prairie wants to know whether the overflow is coming and how long they have.
+2. **Action:** open the app → *Sumas Prairie overflow watch*:
+   - see North Cedarville now against the official flood stages, with data time and age;
+   - see NOAA's official forecast and FloodLead's baseline chances of crossing each stage within 6, 12, 24 and 48 h;
+   - type a personal level and get the chance of reaching it, plus the earliest hour with ≥ 10 % and ≥ 50 % chance;
+   - open the replay.
+3. **Visible result:** the live distance to each stage, and from the replay how many hours the gauge gave before the overflow began:
+
+| Event | Minor stage (146.5 ft) crossed | Overflow first record (SR 544) | Hours after minor | North Cedarville then | Peak at North Cedarville |
+|---|---|---|---|---|---|
+| 2015-11-13 ¹ | 2015-11-13 19:45Z | 2015-11-14 09:15Z (3.84 ft) | 13 h 30 min | 145.79 ft | 147.92 ft at 2015-11-14 02:45Z |
+| 2015-11-18 | 2015-11-18 00:45Z | 2015-11-18 06:45Z (4.25 ft) | 6 h 00 min | 147.92 ft | 148.53 ft at 2015-11-18 04:00Z |
+| 2016-01-28 | 2016-01-28 19:30Z | no overflow recorded | — | — | 147.18 ft at 2016-01-28 22:30Z |
+| 2017-11-23 | 2017-11-23 13:00Z | 2017-11-23 19:25Z (3.97 ft) | 6 h 25 min | 147.60 ft | 148.13 ft at 2017-11-23 16:00Z |
+| 2018-11-02 | 2018-11-02 15:30Z | no overflow recorded | — | — | 146.73 ft at 2018-11-02 15:45Z |
+| 2018-11-27 | 2018-11-27 14:00Z | no overflow recorded | — | — | 147.04 ft at 2018-11-27 17:25Z |
+| 2020-02-01 | 2020-02-01 11:45Z | 2020-02-01 16:55Z (4.13 ft) | 5 h 10 min | 148.44 ft | 148.85 ft at 2020-02-01 17:25Z |
+| **2021-11-14** | **2021-11-14 21:30Z** | **2021-11-15 02:25Z (3.81 ft)** | **4 h 55 min** | **147.56 ft** | **150.76 ft at 2021-11-16 00:50Z** |
+| 2021-11-28 | 2021-11-28 22:45Z | 2021-11-28 22:50Z (3.56 ft) | 0 h 05 min | 146.68 ft | 147.26 ft at 2021-11-29 03:15Z |
+| 2022-11-05 | 2022-11-05 05:45Z | no overflow recorded | — | — | 146.93 ft at 2022-11-05 09:00Z |
+| 2023-12-05 | 2023-12-05 18:15Z | no overflow recorded | — | — | 146.86 ft at 2023-12-05 19:00Z |
+| 2024-01-28 | 2024-01-28 16:30Z | no overflow recorded | — | — | 147.30 ft at 2024-01-28 20:00Z |
+| **2025-12-10** | **2025-12-10 20:15Z** | **2025-12-11 00:45Z (3.56 ft)** | **4 h 30 min** | **147.47 ft** | **150.44 ft at 2025-12-11 10:30Z** |
+| 2026-03-20 | 2026-03-20 21:45Z | 2026-03-21 01:30Z (3.54 ft) | 3 h 45 min | 146.20 ft | 146.60 ft at 2026-03-20 22:15Z |
+
+¹ The overflow gauge's record begins during this event, so it is left out of the summary.
+
+**Summary (from [`/v1/replay/overflow`](https://34-130-109-216.sslip.io/v1/replay/overflow), computed 2026-10-08 19:51Z):**
+- In **7 of 13** minor-stage events since the overflow gauge began (Nov 2015), water reached the overflow path.
+- North Cedarville stood at **146.20–148.44 ft (median 147.56 ft)** when it began, **0.1–6.4 h after minor stage (median 4.9 h)**.
+- 6 events crossed minor stage without a recorded overflow, with peaks up to 147.30 ft. The ranges overlap, so no single level separates "overflow" from "no overflow". The app offers 146.2 ft (the lowest onset seen) as a suggested personal level, labelled as an empirical observation, not an official threshold.
+
+**Caveats:**
+- This is approved historical data, not what was visible in real time.
+- There are few events.
+- Until 2026-10-01 the overflow gauge reported only while water was flowing, which is what makes its first record mean onset. It now reports continuously, so onset is taken as its first record ≥ 3.6 ft.
+- The overflow path changes after big floods. The 2021-11-28 overflow began 5 min after minor stage, two weeks after the record flood.
+
+The supervisor's independent figures for 2021 (4 h 55 min, 147.56–147.63 ft) and 2025 (4 h 30 min, 147.47–147.53 ft) agree. The Dec 2025 peak is a plateau (150.44 ft from 10:30Z to 11:00Z): the API reports when it was first reached.
+
+### Run it locally
+
+```bash
+# 1. Snapshot mode: no setup, real data recorded from the live API (banner shows the snapshot time)
+python3 -m http.server -d web 8080          # → http://localhost:8080
+
+# 2. Full stack on a machine with Docker (needs a .env: PUBLIC_HOSTNAME, POSTGRES_PASSWORD, ARCHIVE_DIR)
+docker compose up -d                         # db, ingest, api, caddy (+ backfills: see "Run it" below)
+uv run floodlead export-demo                 # refresh web/data/snapshot/ from the database
+```
+
+### What works now, and what remains before Build Session 3
+
+| Works now (Oct 8) | Next in this stage (part 2) | Before Build Session 3 (Oct 9) |
+|---|---|---|
+| Live ingestion of 442 BC gauges, 10 Nooksack/Sumas gauges and NOAA official forecasts; immutable raw archive; public API; overflow watch; replay; station picker; snapshot mode. **Hourly baseline forecasts** (`persistence-v1`, `trend3h-v1`) for ~426 gauges with chances of crossing each stage and any personal level, fixed in a [hash-chained public ledger](docs/ledger-spec.md) since 2026-10-08 20:00Z (verify: `GET /v1/ledger`) | Scoring against what the river did, next to persistence, trend and NOAA's official forecast; hourly anchors and the ledger entries published to the `ledger` branch; a standard-library verifier | BC station thresholds (Stage 3), so BC farmers get the same "chance of crossing" view; the first trained model is Stage 4 |
+
+FloodLead's forecasts are **baselines** (what the river did after similar recent states), labelled "live skill being measured". No skill number is claimed until the scorer produces one.
+
+**Screenshots** (headless Chromium, `scripts/screenshots.cjs`):
+- [overflow watch, desktop](docs/stages/img/stage-02/overflow-watch-desktop-full.png)
+- [overflow watch, 375 px](docs/stages/img/stage-02/overflow-watch-375px-full.png)
+- [personal level](docs/stages/img/stage-02/personal-level-375px.png)
+- [replay](docs/stages/img/stage-02/replay-desktop.png)
+- [chances](docs/stages/img/stage-02/chances-desktop.png)
+- [ledger panel](docs/stages/img/stage-02/ledger-desktop.png)
 
 ## Build Session 1 evidence
 
@@ -181,7 +275,7 @@ ECCC Datamart (BC) · USGS Water Data (Nooksack, Sumas) · NOAA NWPS (official f
 | Layer | Choice |
 |---|---|
 | Ingestion | Python scheduler polling ECCC Datamart (all 429 BC hourly files), USGS (10 sites, 15-min) and NOAA NWPS; 30-day Datamart and USGS history backfills; HRDPS basin subsetting later |
-| Storage | TimescaleDB (Postgres 16) in Docker on the VM; every raw payload archived on local disk (gzip, sha256-indexed, never overwritten), with daily disk snapshots as the off-machine copy; DuckDB for offline training |
+| Storage | TimescaleDB (Postgres 16) in Docker on the VM; every raw payload archived on local disk (gzip, sha256-indexed, never overwritten). **There is no off-machine copy of the raw archive or the database** (disk snapshots were declined; accepted risk); the forecast ledger itself is published hourly to the `ledger` branch; DuckDB for offline training |
 | Model | LightGBM quantile regression + isotonic calibration; discrete-time hazard for time-to-crossing |
 | Serving | FastAPI read-only public API behind Caddy (automatic HTTPS): `/v1/health`, stations, observations, official forecasts; hourly scoring later |
 | Agent | State machine (detect → compose → call → await approval → notify → escalate); voice + SMS provider |

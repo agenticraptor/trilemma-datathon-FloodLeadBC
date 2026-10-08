@@ -56,7 +56,7 @@ data_architecture:
     raw_archive: >-
       every fetched payload gzipped to $ARCHIVE_DIR/raw/<source>/YYYY/MM/DD/HH/<name>.<sha8>.gz on the VM's
       boot disk, 0444, never overwritten or deleted, indexed with sha256 in raw_objects; identical payloads stored once
-    off_machine_copy: daily persistent-disk snapshots in northamerica-northeast2 (to be attached by the human; none yet)
+    off_machine_copy: none. Disk snapshots were declined by the owner (Oct 8; accepted risk): a disk loss loses the raw archive and the database. The forecast ledger entries and chain heads are published hourly to the `ledger` branch of the repository (Stage 2).
     offline: DuckDB/pandas over SQL extracts for training (Stage 3+)
   transformation: SI units (m, m3/s) with raw value and unit kept; sentinel flags; revisions in observation_revisions
   orchestration: in-process scheduler in the ingest container; one-off backfill containers (docker compose run)
@@ -71,7 +71,7 @@ data_architecture:
     on_failure: one failing file/site never stops the others; failures recorded in ingest_runs; archive write
       failures logged loudly and recorded, ingestion continues
   cost (estimate, list prices, not billing data):
-    infra: ~US$70/month (~CA$95) for e2-standard-2 + 100 GB pd-balanced + static IP + snapshots, Toronto
+    infra: ~US$68-70/month (~CA$93-96) for e2-standard-2 + 100 GB pd-balanced + static IP, Toronto (no snapshots)
   complexity_justification: >-
     Single-node Postgres/Timescale handles this volume with headroom; Kafka, Airflow and object storage are
     deliberately avoided. Data refreshes every 15-30 min at the source, so polling is as fresh as push.
@@ -169,6 +169,6 @@ Planned:
 
 - One GCE VM in Toronto (`northamerica-northeast2`, e2-standard-2: 2 vCPU, 7.7 GiB RAM + 4 GiB swap, 100 GB pd-balanced), static external IP, hostname `<ip-with-dashes>.sslip.io`.
 - Docker Compose (`compose.yaml`): `db` (timescale/timescaledb:2.30.2-pg16, ≤ 2.5 GiB, loopback-only port), `ingest` (≤ 1 GiB), `api` (≤ 512 MiB), `caddy` (caddy:2.11.7-alpine, ≤ 256 MiB, ports 80/443), all `restart: unless-stopped`; one-off `backfill` containers (`restart: "no"`).
-- No managed Postgres and no object storage: Postgres data (named volume) and the raw archive (`/srv/floodlead/archive`) live on the boot disk; daily disk snapshots in the same Canadian region are the off-machine copy (to be attached by the human).
+- No managed Postgres and no object storage: Postgres data (named volume) and the raw archive (`/srv/floodlead/archive`) live on the boot disk. **There is no off-machine copy of either** (disk snapshots declined by the owner on Oct 8; accepted risk). The live track record survives a disk loss because the ledger entries and chain heads are published hourly to the `ledger` branch.
 - Personal data (from Stage 7) stays in Canada on this VM, encrypted at rest.
 - Secrets only in `.env` on the VM (gitignored). GitHub Actions for tests in Stage 8.

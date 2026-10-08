@@ -13,7 +13,7 @@ import json
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -34,6 +34,42 @@ _LISTING_RE = re.compile(
 
 def listing_url(kind: str) -> str:
     return f"{get_settings().eccc_base}/{kind}/"
+
+
+def dated_base(kind: str, day: date) -> str:
+    return f"{get_settings().eccc_root}/{day:%Y%m%d}/WXO-DD/hydrometric/csv/BC/{kind}/"
+
+
+def candidate_bases(kind: str, now: datetime) -> list[str]:
+    """F1: dated directory for the current UTC date first, then the previous date, then the `today/` alias.
+
+    `today/` returned 404 for a few minutes after 00:00 UTC on Oct 8; the dated directories are the stable
+    location. The 30-day `daily/` files are written once a day (~08:20Z), so for ~8 h after midnight only the
+    previous date's `daily/` exists."""
+    d = now.astimezone(UTC).date()
+    return [dated_base(kind, d), dated_base(kind, d - timedelta(days=1)), listing_url(kind)]
+
+
+def fetch_listing(
+    c: httpx.Client, kind: str, now: datetime | None = None
+) -> tuple[str, dict[str, datetime], list[dict[str, Any]]]:
+    """Return (base URL that served the listing, files, fallbacks tried). A 404 or an empty listing moves on to
+    the next candidate; inside the rollover window that is expected, not an error."""
+    tried: list[dict[str, Any]] = []
+    for base in candidate_bases(kind, now or datetime.now(UTC)):
+        try:
+            f = http.fetch(c, base, attempts=2)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                tried.append({"url": base, "status": 404})
+                continue
+            raise
+        files = parse_listing(f.content.decode("utf-8", "replace"))
+        if not files:
+            tried.append({"url": base, "status": f.status, "files": 0})
+            continue
+        return base, files, tried
+    raise RuntimeError(f"no ECCC {kind} listing available; tried {tried}")
 
 
 def parse_listing(html: str) -> dict[str, datetime]:
@@ -96,12 +132,11 @@ def ingest_files(
     """Fetch the `kind` ('hourly' | 'daily') listing and ingest files that changed since the
     last successful fetch. Returns the ingest run id."""
     s = get_settings()
-    base = listing_url(kind)
     with pool.connection() as conn, http.client() as c:
         conn.autocommit = True
         with store.Run(conn, SOURCE, job) as run:
-            lst = http.fetch(c, base)
-            files = parse_listing(lst.content.decode("utf-8", "replace"))
+            base, files, fallbacks = fetch_listing(c, kind)
+            run.details.update({"listing_dir": base, "listing_fallbacks": fallbacks})
             state = ingest.load_fetch_state(conn, base)
             todo: list[tuple[str, datetime | None]] = []
             for name, listed in sorted(files.items()):

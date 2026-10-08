@@ -173,3 +173,15 @@ def test_same_value_from_ogc_and_nwis_is_not_a_revision(conn: psycopg.Connection
     changed = dataclasses.replace(nwis, quality={**nwis.quality, "approval_status": "Provisional"})
     r = _upsert(conn, [changed], datetime(2026, 10, 7, 23, 0, tzinfo=UTC))
     assert r.updated == 1
+
+
+def test_issuer_never_uses_rows_first_seen_after_created_at(conn: psycopg.Connection) -> None:
+    from floodlead import issuer
+
+    created = datetime(2026, 10, 7, 21, 0, tzinfo=UTC)
+    early = store.Obs("usgs:1", datetime(2026, 10, 7, 20, 0, tzinfo=UTC), "level", 1.0, 1.0, "m", {}, False, None)
+    late = store.Obs("usgs:1", datetime(2026, 10, 7, 20, 15, tzinfo=UTC), "level", 9.0, 9.0, "m", {}, False, None)
+    _upsert(conn, [early], created - timedelta(minutes=30))  # first seen before created_at
+    _upsert(conn, [late], created + timedelta(minutes=5))  # first seen after created_at: must be invisible
+    rows = issuer._rows(conn, "usgs:1", created - timedelta(hours=3), created, created)
+    assert [v for _, v in rows] == [1.0]
