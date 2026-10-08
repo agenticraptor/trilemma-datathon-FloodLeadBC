@@ -277,6 +277,12 @@ Order from addendum 1 (targets in UTC):
 - `13:45` — API contract tests for the ledger, forecast, scores, health blocks and replay (`tests/test_api.py`). `pytest` → **92 passed**, 4 live deselected.
 - `13:47` — **AC-7 leakage audit** (`scripts/audit_leakage.sql`, 3 min 11 s) over all 852 forecasts at 20:47Z: `data_as_of_after_created_at 0`, `data_as_of_row_not_visible_at_created_at 0`, `inputs_count_mismatch 0`, `horizons_under_30_min 0` of 6,816 horizons. To be re-run over all base times before PR 2.
 - `14:07` — F2 after-measurement (D-02.15): 0 updates and 0 new dead tuples across a full ECCC refresh; WAL 15.7 MB vs 139.1 MB.
+- `14:30` — **Second hourly issuance on schedule:**
+  - The 8 `official_forecast` entries (seq 857–864) were written first, then base 21:00Z: `created_at` 21:15:00.526Z, 853 forecasts (persistence 427, trend 426; seq 865–1717), issuance seq 1718. Runtime 67.5 s, 166.3 MB peak. Skipped: 14 with no level in 3 h; 2+2 small libraries; 1 trend with < 50 % coverage.
+  - `code_commit 3db93ac` (on `origin/stage-02-part2`).
+  - **Second anchor** at 21:30:00Z: `ledger/entries/2026/10/08/21.jsonl.gz`, 396,798 B, commit `debf0dd215fc2b7d8a899be59ffb9c33c94c71c5`.
+  - `verify_ledger.py --api` and `--source github` both → `OK entries 1718, head 6a8f0bef…9e83, anchors_checked 2`.
+  - Health: issuer green (0 gaps in 24 h), anchor green (seq 1718).
 
 ## Measurements
 
