@@ -81,21 +81,21 @@ next prompt ◄── PASS (merge) ◄── supervisor QA ──► FIX prompt 
 
 | Requirement | Where |
 |---|---|
-| Brief written in the author's own words before using an LLM | **Pranay** writes `brief.md` (the worker must not write it) |
+| Brief written in the author's own words before using an LLM | Not met as written: Pranay asked the supervisor to draft it. [`brief.md`](../../brief.md) is AI-drafted and labelled so |
 | Demo path Problem → Action → Visible useful result, with value the app already creates | Stage 2 app: Sumas Prairie overflow watch + 2021/2025 replay |
 | Real, permitted data; results supported by it | ECCC (OGL-Canada), USGS and NOAA (public domain); records in `data-contract.md` |
 | Working local app, reproducible from the repo | Stage 2 snapshot mode (`python3 -m http.server -d web 8080`) and `docker compose up` |
 | README: idea and choices, data, run locally, demo path, what works now and what remains | Stage 2, README "Build Session 2 — working app" |
 
-## Open human tasks
+## Human tasks
 
 | Task | Why | Status |
 |---|---|---|
-| Write `brief.md` in your own words (problem and when you hit it, your real example, evidence, what alternatives leave unresolved, the useful result you want) | Build Session 2 ownership check | open |
-| Create a fine-grained GitHub token (this repo only, Contents read/write) → `LEDGER_GITHUB_TOKEN` in `.env` on the VM | Hourly ledger anchors | open |
-| USGS API key → `USGS_API_KEY` in `.env` | Keyless USGS quota (1,000 requests/h) | open |
-| Daily snapshot schedule on the boot disk (Canada) | Only off-machine copy of the archive and database | open |
-| `sudo reboot` test after the Stage 2 PR, then check `/v1/health` | Stage 1 AC-9 | open |
+| `brief.md` | Build Session 2 ownership check | Pranay asked the supervisor to write it (Oct 8). Committed to `main`, labelled as AI-drafted |
+| Fine-grained GitHub token → `LEDGER_GITHUB_TOKEN` in `.env` | Hourly ledger anchors | done (Oct 8) |
+| USGS API key → `USGS_API_KEY` in `.env` | Keyless USGS quota (1,000 requests/h) | done (Oct 8); ingest must be recreated to pick it up |
+| Daily snapshot schedule on the boot disk | Off-machine copy of the archive and database | **Declined by the owner (Oct 8). Accepted risk:** a disk loss would lose the raw archive and database. Mitigation: the ledger entries themselves are published hourly to the `ledger` branch (Stage 2 addendum), so the live track record survives |
+| VM reboot test (Stage 1 AC-9) | Unattended recovery | Moved to the worker: last step of Stage 2, after the PR is open; the supervisor verifies recovery from outside |
 | Farmer outreach | Interviews for Demo Day | in progress |
 
 ## Key dates
