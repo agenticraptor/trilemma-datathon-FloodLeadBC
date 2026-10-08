@@ -67,10 +67,12 @@ Full records: [`data-contract.md`](data-contract.md).
 
 ¹ The overflow gauge's record begins during this event, so it is left out of the summary.
 
-**Summary (from [`/v1/replay/overflow`](https://34-130-109-216.sslip.io/v1/replay/overflow), computed 2026-10-08 19:51Z):**
-- In **7 of 13** minor-stage events since the overflow gauge began (Nov 2015), water reached the overflow path.
-- North Cedarville stood at **146.20–148.44 ft (median 147.56 ft)** when it began, **0.1–6.4 h after minor stage (median 4.9 h)**.
-- 6 events crossed minor stage without a recorded overflow, with peaks up to 147.30 ft. The ranges overlap, so no single level separates "overflow" from "no overflow". The app offers 146.2 ft (the lowest onset seen) as a suggested personal level, labelled as an empirical observation, not an official threshold.
+**Summary** (from [`/v1/replay/overflow`](https://34-130-109-216.sslip.io/v1/replay/overflow); updated after supervisor QA on 2026-10-08):
+
+- **The rule the data supports:** 7 of 13 minor-stage events since Nov 2015 were followed by water on the overflow path, a median **4.9 h later (0.1–6.4 h)**.
+- **No single level separates overflow from no overflow:** peaks were 146.6–150.8 ft in events with an overflow and 146.7–147.3 ft in events without one. The ranges overlap.
+- **The level at onset is not a trigger level:** it ranged 146.20–148.44 ft. In March 2026 the overflow first appeared on the falling limb, about 3 h after North Cedarville peaked at 146.6 ft.
+- **The app's suggested personal level** is therefore the **official NWS minor flood stage, 146.5 ft**, together with that rule.
 
 **Caveats:**
 - This is approved historical data, not what was visible in real time.
