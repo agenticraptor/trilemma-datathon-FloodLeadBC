@@ -291,6 +291,12 @@ Order from addendum 1 (targets in UTC):
 
 | File | What changed | Why |
 |---|---|---|
+| `README.md` | Live URL at the top (F3). "Brief (AI-drafted at the author's request)" link. "Build Session 2 — working app" section with the computed replay table, run-locally steps, works-now/remains, screenshots. No-snapshot wording | Parts F/G, F3, addendum items 2 and 4 |
+| `architecture.md` | No off-machine copy (snapshots declined). Forecast ledger, F2 write rules, growth with ledger and scores (~230 MB/day, ~270 days to 80 %, estimate). Components (ledger, issuer, anchor, scorer, static web). Stage 2 tables as built. API rows for replay, forecast, ledger and scores. Scheduler jobs. Cost without snapshots | Facts changed in this stage |
+| `evaluation.md` | Live ledger cadence, horizons, leakage, the new stale rule (150/120 min, replacing "> 30 min"), hourly anchors and published entries, baseline definitions incl. the 6 h trend cap, scoring rules (quantile-score CRPS and its measured bias, event window, paired skill, ≥ 30 events), NOAA matched comparison | Prompt "Documentation" |
+| `data-contract.md` | Lineage: forecasts as ledger entries with `input_hash` and library hash; F2 meanings and `payload_coverage` | Facts changed |
+| `docs/ledger-spec.md` | New: public specification with golden vector | Part A.8 |
+| `docs/stages/STAGE-01-live-archive.md` | Dated note on open issue 2 (snapshots declined) | Addendum item 2 |
 
 ## Open issues and handoff to next stage
 

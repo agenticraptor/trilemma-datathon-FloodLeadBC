@@ -72,6 +72,19 @@ data_architecture:
       failures logged loudly and recorded, ingestion continues
   cost (estimate, list prices, not billing data):
     infra: ~US$68-70/month (~CA$93-96) for e2-standard-2 + 100 GB pd-balanced + static IP, Toronto (no snapshots)
+  forecast_ledger (Stage 2): >-
+    One global append-only SHA-256 chain (ledger_entries), enforced by DB triggers on insert; hourly issuance at
+    HH:15 of persistence-v1 and trend3h-v1 for ~426 gauges (852 forecasts/h, 72 s, 184 MB peak); NOAA issuances as
+    official_forecast entries; hourly anchor at HH:30 commits the new entries (jsonl.gz, ~0.4 MB/h) and the head to
+    the `ledger` branch; scorer at HH:40 writes derived forecast_scores and a materialised summary.
+  observation_write_rules (Stage 2, F2): >-
+    identical re-fetches write 0 observation rows; last_seen_at = when the current value was last written (insert
+    or revision); published_at = publication time of the payload that set it; the per-station "last seen" is
+    payload_coverage (newest payload per station and kind, with its time range), which also guards against older
+    payloads overwriting values a newer payload covered.
+  growth_with_ledger (estimate, Oct 8): >-
+    archive ~48 MB/day + observations ~65 MB/day + ledger ~40 MB/day stored (2.85 MB/h canonical text) + scores
+    ~80 MB/day (6,816 horizon scores/h) = ~230 MB/day; 62 GB of headroom to 80 % of the disk => ~270 days.
   complexity_justification: >-
     Single-node Postgres/Timescale handles this volume with headroom; Kafka, Airflow and object storage are
     deliberately avoided. Data refreshes every 15-30 min at the source, so polling is as fresh as push.
@@ -87,12 +100,14 @@ data_architecture:
 | Feature builder | SQL + pandas/polars | Lags, slopes, upstream travel-time lags, antecedent flow, forecast precip |
 | Models | LightGBM quantile + isotonic calibration; discrete-time hazard for time-to-crossing | CPU only |
 | Baselines | Persistence, linear trend, RFC level, CLEVER/COFFEE, Flood Hub | Same scoring code path as the model |
-| Ledger | Append-only table; `sha256(prev_hash ‖ canonical_json(row))` | Daily head hash committed to `ledger/heads.txt` |
-| Scorer | Brier, CRPS, reliability bins, lead time, FAR | Runs hourly as truth arrives |
+| Ledger | `ledger_entries` (migration 002); `entry_hash = sha256(prev_hash + "\n" + canonical)`; DB trigger re-checks every insert; advisory-locked appends | Hourly anchor: new entries + head committed to `ledger/` on the `ledger` branch ([spec](docs/ledger-spec.md)) |
+| Issuer | `src/floodlead/issuer.py`, `baselines.py` (numpy) | Hourly at HH:15; empirical error-path baselines; gaps instead of backdating |
+| Anchor | `src/floodlead/anchor.py` (GitHub Git Data API, fine-grained token) | Hourly at HH:30; one commit per anchor; never `main`, never force |
+| Scorer | `src/floodlead/scorer.py`: quantile-score CRPS, MAE, coverage, PIT, Brier; paired skill; NOAA matched pairs | Hourly at HH:40; derived table `forecast_scores`, summary in `score_summaries` |
 | Agent | Explicit state machine | `detect → compose → call_user → await_approval → notify_contacts → escalate` |
 | Messaging | Voice + SMS provider with Canadian numbers | Webhooks for keypress and replies |
 | Public API | FastAPI + uvicorn behind Caddy | `/v1/health`, stations, observations, official forecasts (Stage 1) |
-| Web | Next.js PWA | Gauge chart + forecast fan, threshold setup, ledger viewer |
+| Web | Static `web/` (vanilla JS, uPlot 1.6.32 vendored), served by Caddy under `default-src 'self'` | Overflow watch, replay, station picker, personal level (device only), ledger panel; snapshot mode from `floodlead export-demo` |
 | Observability | Prometheus + Grafana; structured JSON logs | Feed lag, ingest rate, model latency, alert outcomes |
 
 ## Core schema
@@ -121,6 +136,24 @@ fetch_state(url PK, last_modified, last_status, checked_at)        -- conditiona
 backfill_chunks(job, key, chunk_start, chunk_end, rows)             -- resumable backfills
 schema_migrations(version, applied_at)
 ```
+
+Stage 2 tables (migrations 002–004):
+
+```sql
+ledger_entries(seq bigint PK, entry_type, created_at, canonical text, prev_hash, entry_hash UNIQUE,
+               station_id, model, base_time, lid)          -- append-only; insert trigger checks seq, link, hash
+ledger_anchors(anchor_id, seq, entry_hash, anchored_at, commit_sha, commit_url, entries_path, entries_bytes,
+               status, error_text)                          -- append-only
+scorer_runs(scorer_run_id, started_at, finished_at, status, scored, rescored, details)
+forecast_scores(seq, h, station_id, source, model, base_time, valid_at, stale_inputs, status,
+                truth_ts, truth_m, truth_first_seen_at, truth_revision_count, q50_m, crps, ae_median,
+                in_50, in_80, in_90, pit_bin, event_status, window_coverage, window_max_m, events jsonb,
+                noaa jsonb, scored_at, scorer_run_id)     -- derived; PK (seq, h); rewritten on truth revision
+score_summaries(scorer_run_id PK, generated_at, body jsonb)
+payload_coverage(station_id, kind, published_at, ts_min, ts_max, raw_object_id, last_seen_at)  -- PK (station_id, kind)
+```
+
+The Stage 1 sketch below of `forecast`/`score` is superseded by these: a forecast is a `forecast` ledger entry whose `canonical` JSON carries `q`, `qmax` and `p_exceed` per horizon (see the spec).
 
 Planned for later stages (unchanged design):
 
@@ -153,14 +186,15 @@ Live since Stage 1 (read-only; OpenAPI at `/docs`; every response carries `attri
 | GET | `/v1/stations/{id}` | One station, including official thresholds |
 | GET | `/v1/stations/{id}/observations?param=&since=&until=&include_sentinels=` | SI values plus raw values, at most 7 days per call; sentinels excluded by default |
 | GET | `/v1/official-forecasts/{lid}?issued_after=` | NOAA NWS official forecasts, unmodified |
+| GET | `/v1/replay/overflow`, `/v1/replay/overflow/{event_id}/series` | Every North Cedarville minor-stage event and the Sumas Prairie overflow onset, computed from stored data |
+| GET | `/v1/stations/{id}/forecast` | Latest FloodLead baseline forecast per model (seq, hash, q, qmax, p_exceed) + NOAA's latest issuance, unmodified |
+| GET | `/v1/ledger?after_seq=&limit=`, `/v1/ledger/head`, `/v1/ledger/{seq}` | Ledger entries with canonical text and hashes; head with the latest anchor |
+| GET | `/v1/scores/summary?source=&model=&horizon=`, `/v1/scores/official?lid=` | Materialised scorer output with its run ID |
 
 Planned:
 
 | Method | Path | Returns |
 |---|---|---|
-| GET | `/v1/stations/{id}/forecast` | Latest forecast: `p_exceed`, `q10/q50/q90`, `issued_at`, `model_version` |
-| GET | `/v1/ledger?since=` | Ledger rows with hashes |
-| GET | `/v1/scores/summary` | Live skill vs each baseline |
 | POST | `/v1/thresholds` | Create a personal threshold (authenticated) |
 | POST | `/v1/webhooks/voice`, `/v1/webhooks/sms` | Provider callbacks |
 | GET | `/llms.txt` | Agent-readable product description |
@@ -168,7 +202,7 @@ Planned:
 ## Deployment
 
 - One GCE VM in Toronto (`northamerica-northeast2`, e2-standard-2: 2 vCPU, 7.7 GiB RAM + 4 GiB swap, 100 GB pd-balanced), static external IP, hostname `<ip-with-dashes>.sslip.io`.
-- Docker Compose (`compose.yaml`): `db` (timescale/timescaledb:2.30.2-pg16, ≤ 2.5 GiB, loopback-only port), `ingest` (≤ 1 GiB), `api` (≤ 512 MiB), `caddy` (caddy:2.11.7-alpine, ≤ 256 MiB, ports 80/443), all `restart: unless-stopped`; one-off `backfill` containers (`restart: "no"`).
+- Docker Compose (`compose.yaml`; scheduler jobs in `ingest`: ECCC every 5 min, USGS 15 min, NWPS 30 min, `ledger-issue` HH:15, `ledger-anchor` HH:30, `scorer` HH:40, station metadata daily): `db` (timescale/timescaledb:2.30.2-pg16, ≤ 2.5 GiB, loopback-only port), `ingest` (≤ 1 GiB), `api` (≤ 512 MiB), `caddy` (caddy:2.11.7-alpine, ≤ 256 MiB, ports 80/443), all `restart: unless-stopped`; one-off `backfill` containers (`restart: "no"`).
 - No managed Postgres and no object storage: Postgres data (named volume) and the raw archive (`/srv/floodlead/archive`) live on the boot disk. **There is no off-machine copy of either** (disk snapshots declined by the owner on Oct 8; accepted risk). The live track record survives a disk loss because the ledger entries and chain heads are published hourly to the `ledger` branch.
 - Personal data (from Stage 7) stays in Canada on this VM, encrypted at rest.
 - Secrets only in `.env` on the VM (gitignored). GitHub Actions for tests in Stage 8.
