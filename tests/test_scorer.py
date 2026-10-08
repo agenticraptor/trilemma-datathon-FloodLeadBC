@@ -68,7 +68,8 @@ def test_window_coverage_rule() -> None:
 def fresh(test_dsn: str) -> Iterator[psycopg.Connection]:
     with db.connect(test_dsn, autocommit=True) as c:
         c.execute("SET session_replication_role = replica")
-        c.execute("TRUNCATE forecast_scores, score_summaries, scorer_runs, ledger_anchors, ledger_entries,"
+        c.execute("TRUNCATE forecast_scores, forecast_scores_naive, score_summaries, scorer_runs, ledger_anchors,"
+                  " ledger_entries,"
                   " observations, observation_revisions, official_forecasts, raw_objects, stations")
         c.execute("SET session_replication_role = DEFAULT")
         yield c
@@ -124,8 +125,13 @@ def test_issue_then_score_end_to_end(fresh: psycopg.Connection, test_dsn: str) -
         assert scorer.run(pool, now=created + timedelta(hours=53))["scored"] == 0
         summ = fresh.execute("SELECT body FROM score_summaries ORDER BY scorer_run_id DESC LIMIT 1").fetchone()[0]
         g = [x for x in summ["groups"] if x["model"] == "trend3h-v1" and x["h"] == 6][0]
-        assert g["n"] == 1 and "crpss_vs_persistence" in g
+        assert g["n"] == 1 and set(g["skill_vs"]) == {"persistence-v1", "persistence-naive"}
         assert g["brier"]["official"]["note"] == "too few events to judge"
+        # Pure persistence is scored from the persistence-v1 entries: CRPS equals the absolute error.
+        nv = fresh.execute("SELECT count(*), bool_and(crps = abs(truth_m - q50_m)) FROM forecast_scores_naive"
+                           " WHERE status = 'scored'").fetchone()
+        assert nv == (8, True)
+        assert [x for x in summ["groups"] if x["model"] == "persistence-naive" and x["h"] == 6][0]["coverage"] is None
     finally:
         pool.close()
 

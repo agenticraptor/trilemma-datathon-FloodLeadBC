@@ -39,12 +39,13 @@ Both live baselines use the same uncertainty method: point path + the same model
 - ECCC: the trailing 30 days;
 - USGS: the trailing 30 days plus the same season (± 30 days) in every prior year.
 
-1. **`persistence-v1`** — the level stays at its value at `data_as_of`.
-2. **`trend3h-v1`** — what a person watching the chart does: least-squares slope over the 3 h ending at `data_as_of` (≥ 50 % of the window's points required), applied for at most **6 h** and then held. The 6 h cap stops the 48 h trend from becoming a strawman.
-3. **NOAA NWS official forecast** (NRKW1, NKSW1), compared on matched pairs (below).
-4. RFC advisory level mapped to a probability *(planned)*.
-5. RFC CLEVER / COFFEE where published *(planned)*.
-6. Google Flood Hub where it covers the gauge *(planned)*.
+1. **`persistence-naive`** (pure persistence, the **headline baseline** for skill and for Demo Day): the level at `data_as_of` as a point forecast at every horizon, so its CRPS is the absolute error. The scorer computes it from the `persistence-v1` entries, where the value is already fixed; no extra ledger entries are needed.
+2. **`persistence-v1`** — **not** "the level stays the same". It is the current level **plus the station's typical historical change over that lead**, from empirical error paths, so its median can drift (08MH001 at 20:00Z: 1.515 m at `data_as_of`, q50 1.5135 m at 1 h). Its model card was corrected on Oct 8 (same parameters).
+3. **`trend3h-v1`** — what a person watching the chart does: least-squares slope over the 3 h ending at `data_as_of` (≥ 50 % of the window's points required), applied for at most **6 h** and then held. The 6 h cap stops the 48 h trend from becoming a strawman.
+4. **NOAA NWS official forecast** (NRKW1, NKSW1), compared on matched pairs (below).
+5. RFC advisory level mapped to a probability *(planned)*.
+6. RFC CLEVER / COFFEE where published *(planned)*.
+7. Google Flood Hub where it covers the gauge *(planned)*.
 
 ## Live scoring rules (`src/floodlead/scorer.py`, hourly at HH:40)
 
@@ -53,7 +54,7 @@ Both live baselines use the same uncertainty method: point path + the same model
 - **Event truth:** max over `(data_as_of, valid_at]`, the same window as `qmax` and `p_exceed`. It includes the feed-latency gap the forecaster could not see. Fewer than 80 % of the window's points → `insufficient_truth`.
 - **Rescoring:** scores are rewritten when a truth observation is revised.
 - **CRPS:** approximated by the **quantile score**, 2 × mean pinball loss over the 7 quantile levels. It equals the absolute error for a point forecast. It is measured to be **19 % below** the exact CRPS in expectation for a calibrated normal forecast; it is applied identically to every model, so it ranks models but its absolute values are not exact CRPS.
-- **Skill:** CRPSS and BSS vs persistence on **paired samples only** (same station, base time and horizon, both scored, neither stale). "Too few events to judge" is shown instead of a skill number below 30 events.
+- **Skill:** CRPSS and BSS against **both** `persistence-v1` and `persistence-naive`, on **paired samples only** (same station, base time and horizon, both scored, neither stale). "Too few events to judge" is shown instead of a skill number below 30 events.
 - **NOAA matched comparison:**
   - base times at 00/06/12/18Z and horizons that are multiples of 6 h;
   - NOAA's latest issuance whose points were fetched by our `created_at`, compared at the same `valid_at`;
@@ -89,7 +90,7 @@ Both live baselines use the same uncertainty method: point path + the same model
 
 ## Demo Day numbers to show
 
-1. Live skill vs persistence and trend at 12 h and 24 h, from the ledger.
+1. Live skill vs pure persistence (`persistence-naive`) and trend at 12 h and 24 h, from the ledger.
 2. Live reliability curve.
 3. Lead time gained in the 2021 replay.
 4. False-alarm ratio per season from the backtest.

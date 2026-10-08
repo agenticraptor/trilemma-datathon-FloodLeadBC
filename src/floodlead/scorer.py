@@ -120,6 +120,49 @@ def score_one(d: dict[str, Any], hz: dict[str, Any], created_at: datetime,
     return out
 
 
+NAIVE = "persistence-naive"
+
+
+def score_naive(d: dict[str, Any], s: dict[str, Any]) -> dict[str, Any]:
+    """Pure persistence from a persistence-v1 entry: the level at data_as_of as a point forecast at every horizon.
+    Its quantile score equals the absolute error; coverage and PIT do not apply to a point forecast."""
+    lvl = d["level_at_data_as_of_m"]
+    out = {k: s.get(k) for k in ("status", "truth_ts", "truth_m", "truth_first_seen_at", "truth_revision_count",
+                                 "event_status", "window_coverage", "window_max_m", "valid_at")}
+    out.update(q50_m=lvl, in_50=None, in_80=None, in_90=None, pit_bin=None, noaa=None, events={})
+    if s["status"] == "scored":
+        out["crps"] = out["ae_median"] = abs(s["truth_m"] - lvl)
+    if s["event_status"] == "ok":
+        levels = {t["key"]: t["level_m"] for t in d["thresholds"]}
+        for k, ev in s["events"].items():
+            p = 1.0 if lvl >= levels[k] else 0.0
+            out["events"][k] = {"p": p, "outcome": ev["outcome"], "brier": (p - ev["outcome"]) ** 2}
+    return out
+
+
+def _row(seq: int, hz_h: int, sid: str, model: str, base: datetime, d: dict[str, Any], s: dict[str, Any],
+         now: datetime, run_id: int) -> tuple:
+    return (seq, hz_h, sid, sid.split(":", 1)[0], model, base, s["valid_at"], d["stale_inputs"], s["status"],
+            s.get("truth_ts"), s.get("truth_m"), s.get("truth_first_seen_at"), s.get("truth_revision_count"),
+            s.get("q50_m"), s.get("crps"), s.get("ae_median"), s.get("in_50"), s.get("in_80"), s.get("in_90"),
+            s.get("pit_bin"), s["event_status"], s["window_coverage"], s["window_max_m"], Jsonb(s["events"]),
+            Jsonb(s["noaa"]) if s.get("noaa") else None, now, run_id)
+
+
+_UPSERT = (" (seq, h, station_id, source, model, base_time, valid_at,"
+           " stale_inputs, status, truth_ts, truth_m, truth_first_seen_at, truth_revision_count, q50_m,"
+           " crps, ae_median, in_50, in_80, in_90, pit_bin, event_status, window_coverage, window_max_m,"
+           " events, noaa, scored_at, scorer_run_id) VALUES (" + ", ".join(["%s"] * 27) + ")"
+           " ON CONFLICT (seq, h) DO UPDATE SET status = EXCLUDED.status, truth_ts = EXCLUDED.truth_ts,"
+           " truth_m = EXCLUDED.truth_m, truth_first_seen_at = EXCLUDED.truth_first_seen_at,"
+           " truth_revision_count = EXCLUDED.truth_revision_count, crps = EXCLUDED.crps,"
+           " ae_median = EXCLUDED.ae_median, in_50 = EXCLUDED.in_50, in_80 = EXCLUDED.in_80,"
+           " in_90 = EXCLUDED.in_90, pit_bin = EXCLUDED.pit_bin, event_status = EXCLUDED.event_status,"
+           " window_coverage = EXCLUDED.window_coverage, window_max_m = EXCLUDED.window_max_m,"
+           " events = EXCLUDED.events, noaa = EXCLUDED.noaa, scored_at = EXCLUDED.scored_at,"
+           " scorer_run_id = EXCLUDED.scorer_run_id")
+
+
 def _noaa_point(conn: psycopg.Connection, lid: str, created_at: datetime, asof: datetime, valid: datetime
                 ) -> dict[str, Any] | None:
     iss = conn.execute("SELECT max(issued_at) FROM official_forecasts WHERE lid = %s AND fetched_at <= %s",
@@ -178,7 +221,8 @@ def run(pool: ConnectionPool, now: datetime | None = None) -> dict[str, Any]:
                 " AND ts BETWEEN %s AND %s ORDER BY ts", (sid, t_lo, t_hi)).fetchall()
             obs = [(r[0], r[1], r[2], r[3]) for r in obs_rows]
             changed = [(r[0], r[4]) for r in obs_rows]
-            batch = []
+            batch: list[tuple] = []
+            naive: list[tuple] = []
             for seq, created, d in parsed:
                 asof = datetime.fromisoformat(d["data_as_of"].replace("Z", "+00:00"))
                 for hz in d["horizons"]:
@@ -199,27 +243,14 @@ def run(pool: ConnectionPool, now: datetime | None = None) -> dict[str, Any]:
                     if lid and base.hour % 6 == 0 and hz["h"] % 6 == 0:
                         noaa = _noaa_point(conn, lid, created, asof, valid)
                     s = score_one(d, hz, created, obs, noaa)
-                    batch.append((seq, hz["h"], sid, sid.split(":", 1)[0], d["model"], base, valid,
-                                  d["stale_inputs"], s["status"], s.get("truth_ts"), s.get("truth_m"),
-                                  s.get("truth_first_seen_at"), s.get("truth_revision_count"), s.get("q50_m"),
-                                  s.get("crps"), s.get("ae_median"), s.get("in_50"), s.get("in_80"), s.get("in_90"),
-                                  s.get("pit_bin"), s["event_status"], s["window_coverage"], s["window_max_m"],
-                                  Jsonb(s["events"]), Jsonb(s["noaa"]) if s["noaa"] else None, now, run_id))
+                    batch.append(_row(seq, hz["h"], sid, d["model"], base, d, s, now, run_id))
+                    if d["model"] == "persistence-v1":
+                        naive.append(_row(seq, hz["h"], sid, NAIVE, base, d, score_naive(d, s), now, run_id))
             if batch:
                 with conn.transaction(), conn.cursor() as cur:
-                    cur.executemany(
-                        "INSERT INTO forecast_scores (seq, h, station_id, source, model, base_time, valid_at,"
-                        " stale_inputs, status, truth_ts, truth_m, truth_first_seen_at, truth_revision_count, q50_m,"
-                        " crps, ae_median, in_50, in_80, in_90, pit_bin, event_status, window_coverage, window_max_m,"
-                        " events, noaa, scored_at, scorer_run_id) VALUES (" + ", ".join(["%s"] * 27) + ")"
-                        " ON CONFLICT (seq, h) DO UPDATE SET status = EXCLUDED.status, truth_ts = EXCLUDED.truth_ts,"
-                        " truth_m = EXCLUDED.truth_m, truth_first_seen_at = EXCLUDED.truth_first_seen_at,"
-                        " truth_revision_count = EXCLUDED.truth_revision_count, crps = EXCLUDED.crps,"
-                        " ae_median = EXCLUDED.ae_median, in_50 = EXCLUDED.in_50, in_80 = EXCLUDED.in_80,"
-                        " in_90 = EXCLUDED.in_90, pit_bin = EXCLUDED.pit_bin, event_status = EXCLUDED.event_status,"
-                        " window_coverage = EXCLUDED.window_coverage, window_max_m = EXCLUDED.window_max_m,"
-                        " events = EXCLUDED.events, noaa = EXCLUDED.noaa, scored_at = EXCLUDED.scored_at,"
-                        " scorer_run_id = EXCLUDED.scorer_run_id", batch)
+                    cur.executemany("INSERT INTO forecast_scores" + _UPSERT, batch)
+                    if naive:
+                        cur.executemany("INSERT INTO forecast_scores_naive" + _UPSERT, naive)
         summary = summarise(conn, run_id, now)
         runtime = round(time.monotonic() - t0, 1)
         conn.execute("UPDATE scorer_runs SET finished_at = now(), status = 'ok', scored = %s, rescored = %s,"
@@ -230,55 +261,57 @@ def run(pool: ConnectionPool, now: datetime | None = None) -> dict[str, Any]:
                 "n_scored_total": summary["totals"]["scored"]}
 
 
+SKILL_PAIRS = (("trend3h-v1", "persistence-v1"), ("trend3h-v1", NAIVE), ("persistence-v1", NAIVE))
+
+
 def summarise(conn: psycopg.Connection, run_id: int, now: datetime) -> dict[str, Any]:
-    """Materialise the summary: by model x horizon x source (non-stale, scored), paired skill vs persistence,
-    Brier per threshold family with event counts, and the NOAA matched comparison."""
+    """Materialise the summary: by model x horizon x source (non-stale, scored; includes persistence-naive), paired
+    skill (CRPSS, BSS) of each model against persistence-v1 and against pure persistence (persistence-naive), Brier
+    per threshold family with event counts, and the NOAA matched comparison."""
     q = conn.execute
-    tot = q("SELECT count(*) FILTER (WHERE status = 'scored'), count(*) FILTER (WHERE status = 'no_truth'),"
-            " count(*) FILTER (WHERE stale_inputs), min(base_time), max(valid_at) FROM forecast_scores").fetchone()
+    tot = q("SELECT count(*) FILTER (WHERE status = 'scored' AND model <> %s), count(*) FILTER (WHERE status ="
+            " 'no_truth' AND model <> %s), count(*) FILTER (WHERE stale_inputs AND model <> %s), min(base_time),"
+            " max(valid_at) FROM all_scores", (NAIVE, NAIVE, NAIVE)).fetchone()
     rows = q("SELECT model, h, source, count(*), count(DISTINCT station_id), count(DISTINCT base_time::date),"
              " avg(crps), avg(ae_median), avg(in_50::int)::float, avg(in_80::int)::float, avg(in_90::int)::float"
-             " FROM forecast_scores WHERE status = 'scored' AND NOT stale_inputs GROUP BY 1, 2, 3 ORDER BY 1, 3, 2"
+             " FROM all_scores WHERE status = 'scored' AND NOT stale_inputs GROUP BY 1, 2, 3 ORDER BY 1, 3, 2"
              ).fetchall()
-    pairs = {(r[0], r[1]): r[2:] for r in q(
-        "SELECT t.h, t.source, count(*), avg(t.crps), avg(p.crps) FROM forecast_scores t JOIN forecast_scores p"
-        " ON p.station_id = t.station_id AND p.base_time = t.base_time AND p.h = t.h AND p.model = 'persistence-v1'"
-        " WHERE t.model = 'trend3h-v1' AND t.status = 'scored' AND p.status = 'scored'"
-        " AND NOT t.stale_inputs AND NOT p.stale_inputs GROUP BY 1, 2").fetchall()}
     fam = "CASE WHEN e.k LIKE 'official:%%' THEN 'official' ELSE e.k END"
     brier = defaultdict(dict)
     for model, h, src, family, n, events, mb in q(
             f"SELECT model, h, source, {fam}, count(*), sum((e.v->>'outcome')::int), avg((e.v->>'brier')::float)"
-            " FROM forecast_scores, jsonb_each(events) AS e(k, v) WHERE status = 'scored' AND NOT stale_inputs"
+            " FROM all_scores, jsonb_each(events) AS e(k, v) WHERE status = 'scored' AND NOT stale_inputs"
             " AND event_status = 'ok' GROUP BY 1, 2, 3, 4").fetchall():
         brier[(model, h, src)][family] = {"n": n, "events": int(events or 0), "brier": mb}
-    bss = {}
-    for h, src, family, n, events, bt, bp in q(
-            f"SELECT t.h, t.source, {fam}, count(*), sum((e.v->>'outcome')::int), avg((e.v->>'brier')::float),"
-            " avg((p.events->e.k->>'brier')::float) FROM forecast_scores t CROSS JOIN LATERAL jsonb_each(t.events)"
-            " AS e(k, v) JOIN forecast_scores p ON p.station_id = t.station_id AND p.base_time = t.base_time"
-            " AND p.h = t.h AND p.model = 'persistence-v1' AND p.events ? e.k WHERE t.model = 'trend3h-v1'"
-            " AND t.status = 'scored' AND p.status = 'scored' AND NOT t.stale_inputs AND NOT p.stale_inputs"
-            " AND t.event_status = 'ok' GROUP BY 1, 2, 3").fetchall():
-        bss[(h, src, family)] = {"n_pairs": n, "events": int(events or 0),
-                                 "bss_vs_persistence": (None if events is None or events < MIN_EVENTS or not bp
-                                                        else round(1 - bt / bp, 4)),
-                                 "note": None if events is not None and events >= MIN_EVENTS
-                                 else "too few events to judge"}
+    skill: dict[tuple[str, int, str], dict[str, Any]] = defaultdict(dict)
+    for target, ref in SKILL_PAIRS:
+        for h, src, n, mt, mr in q(
+                "SELECT t.h, t.source, count(*), avg(t.crps), avg(r.crps) FROM all_scores t JOIN all_scores r"
+                " ON r.station_id = t.station_id AND r.base_time = t.base_time AND r.h = t.h AND r.model = %s"
+                " WHERE t.model = %s AND t.status = 'scored' AND r.status = 'scored' AND NOT t.stale_inputs"
+                " AND NOT r.stale_inputs GROUP BY 1, 2", (ref, target)).fetchall():
+            skill[(target, h, src)][ref] = {"n_pairs": n, "crpss": None if not mr else round(1 - mt / mr, 4),
+                                            "paired_crps": {target: mt, ref: mr}, "bss": {}}
+        for h, src, family, n, events, bt, br in q(
+                f"SELECT t.h, t.source, {fam}, count(*), sum((e.v->>'outcome')::int), avg((e.v->>'brier')::float),"
+                " avg((r.events->e.k->>'brier')::float) FROM all_scores t CROSS JOIN LATERAL jsonb_each(t.events)"
+                " AS e(k, v) JOIN all_scores r ON r.station_id = t.station_id AND r.base_time = t.base_time"
+                " AND r.h = t.h AND r.model = %s AND r.events ? e.k WHERE t.model = %s AND t.status = 'scored'"
+                " AND r.status = 'scored' AND NOT t.stale_inputs AND NOT r.stale_inputs AND t.event_status = 'ok'"
+                " GROUP BY 1, 2, 3", (ref, target)).fetchall():
+            ok = events is not None and events >= MIN_EVENTS
+            skill[(target, h, src)].setdefault(ref, {"n_pairs": 0, "crpss": None, "bss": {}})["bss"][family] = {
+                "n_pairs": n, "events": int(events or 0),
+                "value": round(1 - bt / br, 4) if ok and br else None,
+                "note": None if ok else "too few events to judge"}
     groups = []
     for model, h, src, n, st, days, crps, mae, c50, c80, c90 in rows:
         g: dict[str, Any] = {"model": model, "h": h, "source": src, "n": n, "stations": st, "days": days,
                              "mean_crps_m": crps, "mae_median_m": mae,
-                             "coverage": {"25-75": c50, "10-90": c80, "5-95": c90}, "brier": {}}
-        if model == "trend3h-v1" and (h, src) in pairs:
-            n_p, mt, mp = pairs[(h, src)]
-            g["crpss_vs_persistence"] = {"n_pairs": n_p, "value": None if not mp else round(1 - mt / mp, 4),
-                                         "paired_crps": {"trend3h-v1": mt, "persistence-v1": mp}}
+                             "coverage": None if model == NAIVE else {"25-75": c50, "10-90": c80, "5-95": c90},
+                             "brier": {}, "skill_vs": skill.get((model, h, src), {})}
         for family, b in brier.get((model, h, src), {}).items():
-            entry = {**b, "note": None if b["events"] >= MIN_EVENTS else "too few events to judge"}
-            if model == "trend3h-v1" and (h, src, family) in bss:
-                entry["bss_vs_persistence"] = bss[(h, src, family)]
-            g["brier"][family] = entry
+            g["brier"][family] = {**b, "note": None if b["events"] >= MIN_EVENTS else "too few events to judge"}
         groups.append(g)
     official = []
     for lid, model, h, n, mae, noaa_mae, lead in q(
@@ -291,10 +324,18 @@ def summarise(conn: psycopg.Connection, run_id: int, now: datetime) -> dict[str,
             "window": {"first_base_time": tot[3].strftime("%Y-%m-%dT%H:%M:%SZ") if tot[3] else None,
                        "last_valid_at": tot[4].strftime("%Y-%m-%dT%H:%M:%SZ") if tot[4] else None},
             "totals": {"scored": tot[0], "no_truth": tot[1], "stale_excluded": tot[2]},
+            "models": {"persistence-v1": "current level + the station's typical historical change over the lead "
+                                         "(empirical error paths); not 'the level stays the same'",
+                       "trend3h-v1": "last 3 h least-squares trend, applied for at most 6 h, then held",
+                       NAIVE: "pure persistence: the level at data_as_of as a point forecast at every horizon "
+                              "(scored from the persistence-v1 entries; CRPS = absolute error)"},
             "rules": {"settle_h": 3, "truth_tolerance_min": 10, "event_window": "(data_as_of, valid_at]",
-                      "min_window_coverage": MIN_COVERAGE, "crps": "quantile score: 2 x mean pinball loss (7 levels)",
-                      "skill": "paired samples only (same station, base time, horizon)",
-                      "min_events_for_skill": MIN_EVENTS, "stale": "stale-input forecasts excluded"},
+                      "min_window_coverage": MIN_COVERAGE,
+                      "crps": "quantile score: 2 x mean pinball loss (7 levels); ~19 % below exact CRPS for a "
+                              "calibrated normal forecast",
+                      "skill": "paired samples only (same station, base time, horizon); vs persistence-v1 and vs "
+                               "persistence-naive", "min_events_for_skill": MIN_EVENTS,
+                      "stale": "stale-input forecasts excluded"},
             "groups": groups, "official": official}
     q("INSERT INTO score_summaries (scorer_run_id, generated_at, body) VALUES (%s, %s, %s)",
       (run_id, now, Jsonb(body)))

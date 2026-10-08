@@ -148,7 +148,8 @@ def _append_forecast(conn: psycopg.Connection) -> int:
 def lclient(client: TestClient, conn: psycopg.Connection) -> Iterator[TestClient]:
     yield client
     conn.execute("SET session_replication_role = replica")
-    conn.execute("TRUNCATE forecast_scores, score_summaries, scorer_runs, ledger_anchors, ledger_entries")
+    conn.execute("TRUNCATE forecast_scores, forecast_scores_naive, score_summaries, scorer_runs, ledger_anchors,"
+                  " ledger_entries")
     conn.execute("SET session_replication_role = DEFAULT")
 
 

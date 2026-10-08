@@ -80,3 +80,17 @@ def test_rewritten_history_is_caught_by_the_anchor(tmp_path: Path, capsys: pytes
         prev = e["entry_hash"]
     assert _run(_write(tmp_path, forged, [(8, honest[7]["entry_hash"])])) == 1
     assert "anchor" in capsys.readouterr().out
+
+
+def test_script_requires_genesis_with_zero_prev_hash(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    e = _chain(3)
+    # Re-label entry 1 as a forecast and rehash the whole chain consistently: it must still fail.
+    prev = ledger.ZERO_HASH
+    for x in e:
+        if x["seq"] == 1:
+            x["entry_type"] = "forecast"
+            x["canonical"] = x["canonical"].replace('"entry_type":"genesis"', '"entry_type":"forecast"')
+        x["prev_hash"], x["entry_hash"] = prev, ledger.entry_hash(prev, x["canonical"])
+        prev = x["entry_hash"]
+    assert _run(_write(tmp_path, e, [])) == 1
+    assert "FAIL seq 1" in capsys.readouterr().out

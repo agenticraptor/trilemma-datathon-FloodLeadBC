@@ -40,7 +40,8 @@ CAVEATS = [
     "it now reports continuously, so onset is taken as its first record at or above its NWS action stage (3.6 ft).",
     "The overflow path can change after big floods (the 2021-11-28 overflow began almost exactly at minor stage, "
     "two weeks after the record November 2021 flood).",
-    "An empirical observation, not an official threshold. Follow EmergencyInfoBC, NWS Seattle and local orders.",
+    "The suggested personal level is the official NWS minor flood stage; the overflow statistics are empirical "
+    "observations, not official thresholds. Follow EmergencyInfoBC, NWS Seattle and local orders.",
 ]
 
 
@@ -148,24 +149,36 @@ def summarise(events: list[dict[str, Any]]) -> dict[str, Any]:
     def stats(xs: list[float]) -> dict[str, float] | None:
         return {"min": xs[0], "median": round(statistics.median(xs), 2), "max": xs[-1]} if xs else None
 
-    max_peak_without = max((e["peak_ft"] for e in no_ov if e["peak_ft"] is not None), default=None)
-    suggested = None
-    text = None
-    if onset:
-        # The lowest onset level seen, rounded down to 0.1 ft: the conservative choice for a personal level.
-        suggested = int(onset[0] * 10) / 10
-        text = (f"In {len(ov)} of {len(op)} minor-stage events since the overflow gauge began (Nov 2015), water "
-                f"reached the overflow path; North Cedarville stood at {onset[0]:.2f}-{onset[-1]:.2f} ft "
-                f"(median {statistics.median(onset):.2f} ft) when it began, "
-                f"{hours[0]:.1f}-{hours[-1]:.1f} h after minor stage (median {statistics.median(hours):.1f} h). "
-                + (f"{len(no_ov)} events crossed minor stage without a recorded overflow (peaks up to "
-                   f"{max_peak_without:.2f} ft)." if no_ov else ""))
+    peaks_with = sorted(e["peak_ft"] for e in ov if e["peak_ft"] is not None)
+    peaks_without = sorted(e["peak_ft"] for e in no_ov if e["peak_ft"] is not None)
+
+    def rng(xs: list[float]) -> dict[str, float] | None:
+        return {"min": xs[0], "max": xs[-1]} if xs else None
+
+    # Supervisor QA (addendum 2, item 1): the level at onset is not a trigger level (e.g. March 2026: the overflow
+    # began on the falling limb, ~3 h after the peak). Suggest the official minor stage plus the rule the data supports.
+    rule = sep = None
+    if ov and hours:
+        rule = (f"{len(ov)} of {len(op)} minor-stage events since Nov 2015 were followed by water on the overflow "
+                f"path, a median {statistics.median(hours):.1f} h later ({hours[0]:.1f}–{hours[-1]:.1f} h).")
+    if peaks_with and peaks_without:
+        overlap = peaks_without[-1] >= peaks_with[0]
+        sep = (f"Peaks {'overlap' if overlap else 'do not overlap'} (overflow {peaks_with[0]:.1f}–"
+               f"{peaks_with[-1]:.1f} ft, no overflow {peaks_without[0]:.1f}–{peaks_without[-1]:.1f} ft): "
+               + ("no single level separates them." if overlap else "but with so few events this is not a rule."))
     return {
         "events_total": len(events), "events_with_gauge": len(op), "events_with_overflow": len(ov),
-        "events_without_overflow": len(no_ov), "max_peak_without_overflow_ft": max_peak_without,
+        "events_without_overflow": len(no_ov),
+        "max_peak_without_overflow_ft": peaks_without[-1] if peaks_without else None,
         "onset_cedarville_ft": stats(onset), "hours_after_minor": stats(hours),
-        "suggested_personal_level_ft": suggested, "suggested_text": text,
-        "suggested_label": "empirical observation, not an official threshold",
+        "peaks_with_overflow_ft": peaks_with, "peaks_without_overflow_ft": peaks_without,
+        "peak_range_with_overflow_ft": rng(peaks_with), "peak_range_without_overflow_ft": rng(peaks_without),
+        "separation_text": sep,
+        "suggested_personal_level_ft": CEDARVILLE_STAGES_FT["minor"],
+        "suggested_label": "NWS minor flood stage (official)",
+        "suggested_text": rule,
+        "onset_note": "The North Cedarville level when the overflow first appeared is not a trigger level: in March "
+                      "2026 it first appeared on the falling limb, about 3 h after the peak.",
     }
 
 

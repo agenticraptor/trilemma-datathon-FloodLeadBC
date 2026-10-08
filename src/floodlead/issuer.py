@@ -36,10 +36,13 @@ MIN_LIBRARY = 50  # error paths needed to issue a station-model forecast
 
 MODEL_CARDS = {
     "persistence-v1": {
-        "method": "Point path: the level at data_as_of for every lead. Uncertainty: empirical error paths of the "
-                  "same method on the station's own history (rows first seen before created_at), sampled across "
-                  "past origins and indexed by lead from data_as_of; q, qmax and p_exceed come from point + error "
-                  "samples.",
+        "method": "Point path: the level at data_as_of, held for every lead. The published distribution is point + "
+                  "empirical error paths of this method on the station's own history (rows first seen before "
+                  "created_at), sampled across past origins and indexed by lead from data_as_of. So q, qmax and "
+                  "p_exceed, including the median, are the current level plus the station's historical changes over "
+                  "that lead (for example a median slightly below the current level when the river usually falls): "
+                  "it is not 'the level stays the same'. Pure persistence (the level at data_as_of as a point "
+                  "forecast at every horizon) is scored separately as persistence-naive, from these same entries.",
     },
     "trend3h-v1": {
         "method": "Point path: last observed level + least-squares slope over the 3 h ending at data_as_of "
@@ -274,9 +277,14 @@ def run(pool: ConnectionPool, now: datetime | None = None, dry_run: bool = False
             # Model cards: a new card whenever a model's parameters change (or on first use).
             for model in bl.MODELS:
                 card = card_data(model)
-                last = conn.execute("SELECT canonical FROM ledger_entries WHERE entry_type = 'model_card'"
+                last = conn.execute("SELECT seq, canonical FROM ledger_entries WHERE entry_type = 'model_card'"
                                     " AND model = %s ORDER BY seq DESC LIMIT 1", (model,)).fetchone()
-                if last is None or json.loads(last[0])["data"]["params_hash"] != card["params_hash"]:
+                prev = json.loads(last[1])["data"] if last else None
+                if prev is None or prev["params_hash"] != card["params_hash"] or prev["method"] != card["method"]:
+                    if prev is not None:
+                        card["supersedes_seq"] = last[0]
+                        card["change"] = ("parameters changed" if prev["params_hash"] != card["params_hash"] else
+                                          "method description corrected; parameters and outputs unchanged")
                     head.append(ledger.Pending("model_card", card, created_at, model=model))
             # Gaps: every base time after the last issuance/gap that has neither.
             last_base = conn.execute("SELECT max(base_time) FROM ledger_entries WHERE entry_type IN"
@@ -298,6 +306,7 @@ def run(pool: ConnectionPool, now: datetime | None = None, dry_run: bool = False
                                                    "reason": reason}, created_at, base_time=base))
                 written = ledger.append(conn, head)
                 return {"status": "gap", "base_time": ledger.ts(base), "entries": len(written)}
+            inserts_started = conn.execute("SELECT clock_timestamp()").fetchone()[0]
             written = ledger.append(conn, head + pend)
             fseqs = [e.seq for e in written if e.entry_type == "forecast"]
             counts: dict[str, int] = {}
@@ -308,7 +317,12 @@ def run(pool: ConnectionPool, now: datetime | None = None, dry_run: bool = False
                 "stations_with_recent_level": len(stations_live), "forecasts": counts,
                 "forecast_seq": [fseqs[0], fseqs[-1]] if fseqs else None, "skipped": skipped,
                 "runtime_s": round(runtime, 1), "peak_rss_mb": round(peak_mb, 1), "code_commit": ledger.code_commit(),
+                # Addendum 2, item 6: created_at is the data cut-off and the start of computation; these are database
+                # clock readings taken when the inserts began and just before this (last) insert, so the delay
+                # between created_at and the commit is measured. The transaction commits right after this insert.
+                "inserts_started_at": ledger.ts(inserts_started, ms=True),
             }
+            issuance["committed_at"] = ledger.ts(conn.execute("SELECT clock_timestamp()").fetchone()[0], ms=True)
             written += ledger.append(conn, [ledger.Pending("issuance", issuance, created_at, base_time=base)])
         L.info("issuance written", **log.kv(base_time=ledger.ts(base), entries=len(written), forecasts=counts,
                                             skipped=skipped, runtime_s=round(runtime, 1),

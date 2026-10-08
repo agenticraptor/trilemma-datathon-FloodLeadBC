@@ -234,6 +234,33 @@ Order from addendum 1 (targets in UTC):
   - **0 new dead tuples** (232,594 → 232,594; before: +70,313).
   - **WAL 15,733,024 B** over 28.3 min, vs **139,090,872 B** over 12.6 min before: at least **8.8× less**, in a longer window with more jobs.
 
+### D-02.16 — Addendum 2 (supervisor QA of part 1) applied
+
+PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
+
+1. **Suggested personal level.** Replaced 146.2 ft, the March 2026 onset level, which came on the falling limb about 3 h after the 146.6 ft peak, so it is not a trigger level.
+   - The suggestion is now the **official NWS minor flood stage, 146.5 ft**, with the rule "7 of 13 minor-stage events since Nov 2015 were followed by water on the overflow path, a median 4.9 h later (0.1–6.4 h)".
+   - The summary lists the peaks with and without an overflow, and says they overlap (overflow 146.6–150.8 ft, none 146.7–147.3 ft), so no single level separates them.
+   - API fields: `suggested_*`, `peaks_*`, `separation_text`, `onset_note`. README and app updated.
+2. **375 px horizontal scroll** (uPlot live legend 451 px) — fixed in `web/` by the frontend agent; `scripts/screenshots.cjs` now records `scrollWidth` per page (see work log).
+3. **Clipped chances tables** on desktop — fixed in `web/` (work log).
+4. **Persistence named honestly** (D-02.17).
+5. **Verifier gap:** `ledger.verify_rows` now requires entry 1 to be a genesis entry with a zero `prev_hash` whenever seq 1 is verified (the check used to run only when `start_seq is None`). `scripts/verify_ledger.py` already required it; both are now tested with a self-consistent chain whose entry 1 is not a valid genesis.
+6. **`created_at` defined exactly** in `docs/ledger-spec.md`: the data cut-off and the start of computation; entries are inserted about 70 s later and anchored at HH:30. Issuance entries from base 22:00Z onward carry `inserts_started_at` and `committed_at` (database `clock_timestamp()` just before the inserts and just before the last insert).
+7. **Deploy only code in an open PR.** PR 2 was opened as a **draft** (#4) at 21:50Z, before any further deploy. Production had run part-2 code without an open PR since 20:18Z; that was the worker's error. From Stage 3 on, deploys come only from a branch with an open PR.
+8. **Snapshot ages** relative to `snapshot_at`, and the **POSIX-locale crash**: fixed in `web/` (work log).
+9. **First live rollover (F1):** the ECCC runs from 23:55 to 00:20Z will be recorded in the work log.
+
+### D-02.17 — `persistence-v1` is "level + typical change"; pure persistence is scored as `persistence-naive`
+
+- **Context:** `persistence-v1`'s median is the current level plus the station's median historical change over the lead. Ledger seq 562: `eccc:08MH001` level at `data_as_of` 1.515 m, q50 1.5135 m at 1 h. Calling it "the level stays the same" was wrong.
+- **Choice:**
+  - Keep the model, with its outputs unchanged. Append a corrected `model_card` with the same `params_hash`, plus `supersedes_seq` and `change: "method description corrected; parameters and outputs unchanged"`. The issuer now appends a card whenever the method text changes, not only the parameters.
+  - Score **pure persistence** as `persistence-naive`: the `level_at_data_as_of_m` already fixed in each `persistence-v1` entry, used as a point forecast at every horizon. CRPS = absolute error (tested). Event probability is 1 if the level is already at or above the threshold, else 0. No coverage or PIT for a point forecast. The scores go to the new table `forecast_scores_naive`; the view `all_scores` unions both. Migration `005` adds a table and a view only, so no `pg_dump` was needed.
+  - The summary reports, for every model, CRPSS and BSS against **both** `persistence-v1` and `persistence-naive` (`skill_vs`).
+  - `evaluation.md`: baseline 1 and the Demo Day headline mean the naive one. The app labels the model "Persistence + typical drift".
+- **Why:** honest naming, and a skill headline against the baseline people actually mean.
+
 ## Work log
 
 - `12:41` — `git checkout main && git pull` → `9e414f1` ("Stage 2 addendum: timeline reset, app first, two PRs before the mentor review"). PR #2 shows as `MERGED`. Read the prompt, addendum 1, PLAN.md and `brief.md`. `git checkout -b stage-02-ledger-app`.
@@ -284,6 +311,8 @@ Order from addendum 1 (targets in UTC):
   - `verify_ledger.py --api` and `--source github` both → `OK entries 1718, head 6a8f0bef…9e83, anchors_checked 2`.
   - Health: issuer green (0 gaps in 24 h), anchor green (seq 1718).
 - `14:31` — **PR #3 merged** by the supervisor at 21:30:49Z (`4efdd81`, "QA PASS"; no file changes beyond the PR). Merged `origin/main` into `stage-02-part2` (`7cd60e6`, no rewrite of pushed history), so part 2 now builds on the merged `main`, as addendum 1 asks.
+- `14:40–14:52` — Addendum 2 received (`05cd1fa`). Merged `main` into `stage-02-part2` (`5846a73`). **Opened draft PR #4** at 21:50Z: https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC/pull/4. Started a frontend agent for items 2, 3 and 8 and the UI parts of 1 and 4.
+- `14:52–14:58` — Backend: replay summary (item 1); `verify_rows` genesis check plus 2 tests (item 5); corrected persistence card, card supersession, `inserts_started_at`/`committed_at` (items 4 and 6); `persistence-naive` scoring, migration 005, summary vs both references (item 4); spec and `evaluation.md` text. `pytest` → **94 passed**.
 
 ## Measurements
 

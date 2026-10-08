@@ -153,8 +153,9 @@ def verify_rows(rows: Iterable[tuple[int, str, str, str, str]], start_prev: str 
     for seq, etype, canonical, prev, eh in rows:
         if expected_seq is not None and seq != expected_seq:
             return VerifyResult(False, n, first, last, last_hash, f"seq gap: expected {expected_seq}, got {seq}", seq)
-        if expected_seq is None and seq == 1 and prev != ZERO_HASH:
-            return VerifyResult(False, n, first, last, last_hash, "genesis prev_hash is not zero", seq)
+        # Entry 1 must be a genesis entry with a zero prev_hash, however verification was started (addendum 2, 5).
+        if seq == 1 and (prev != ZERO_HASH or etype != "genesis"):
+            return VerifyResult(False, n, first, last, last_hash, "entry 1 must be genesis with a zero prev_hash", seq)
         if expected_prev is not None and prev != expected_prev:
             return VerifyResult(False, n, first, last, last_hash, "prev_hash does not link to the previous entry", seq)
         if entry_hash(prev, canonical) != eh:
