@@ -26,18 +26,42 @@ def _upsert(conn: psycopg.Connection, rows: list[store.Obs], now: datetime) -> s
         return store.upsert_observations(conn, rows, None, now=now)
 
 
-def test_insert_then_identical_refetch_changes_only_last_seen(conn: psycopg.Connection) -> None:
+def test_identical_refetch_writes_zero_observation_rows(conn: psycopg.Connection) -> None:
+    """F2: an identical re-fetch writes 0 observation rows (no new tuple versions: xmin unchanged)."""
     t1 = datetime(2026, 10, 7, 21, 0, tzinfo=UTC)
     r1 = _upsert(conn, _rows(), t1)
     assert (r1.inserted, r1.updated, r1.unchanged) == (16, 0, 0)
+    before = conn.execute("SELECT ts, param, xmin::text FROM observations ORDER BY 1, 2").fetchall()
     t2 = t1 + timedelta(hours=1)
     r2 = _upsert(conn, _rows(), t2)
     assert (r2.inserted, r2.updated, r2.unchanged, r2.stale) == (0, 0, 16, 0)
+    assert conn.execute("SELECT ts, param, xmin::text FROM observations ORDER BY 1, 2").fetchall() == before
     row = conn.execute(
         "SELECT first_seen_at, last_seen_at, revision_count, revised_at FROM observations"
         " WHERE station_id = 'eccc:08MH001' AND param = 'level' ORDER BY ts LIMIT 1").fetchone()
-    assert row == (t1, t2, 0, None)
+    assert row == (t1, t1, 0, None)  # last_seen_at = when the current value was last written
     assert conn.execute("SELECT count(*) FROM observation_revisions").fetchone()[0] == 0
+
+
+def test_older_payload_cannot_revise_a_value_a_newer_payload_covered(conn: psycopg.Connection) -> None:
+    """F2 guard: hourly H1 (07:31) sets v1; hourly H2 (08:31) repeats v1 (no write, but its coverage is recorded);
+    the 30-day file D published 08:20, between them, carries v0. D is older than H2, which covered the timestamp,
+    so D is stale and must not flip the value."""
+    conn.execute("TRUNCATE payload_coverage")
+    rows = _rows()[:2]
+    t = datetime(2026, 10, 8, 0, 0, tzinfo=UTC)
+    h1 = [dataclasses.replace(r, published_at=t + timedelta(hours=7, minutes=31)) for r in rows]
+    h2 = [dataclasses.replace(r, published_at=t + timedelta(hours=8, minutes=31)) for r in rows]
+    d = [dataclasses.replace(r, published_at=t + timedelta(hours=8, minutes=20), raw_value=9.0, value=9.0)
+         for r in rows]
+    for batch, kind in ((h1, "eccc:hourly"), (h2, "eccc:hourly")):
+        with conn.transaction():
+            store.upsert_observations(conn, batch, None, now=t + timedelta(hours=9), kind=kind)
+    with conn.transaction():
+        r = store.upsert_observations(conn, d, None, now=t + timedelta(hours=9), kind="eccc:daily")
+    assert (r.updated, r.stale) == (0, 2)
+    assert conn.execute("SELECT count(*) FROM observation_revisions").fetchone()[0] == 0
+    conn.execute("TRUNCATE payload_coverage")
 
 
 def test_changed_value_is_revised_and_history_appended(conn: psycopg.Connection) -> None:

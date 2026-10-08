@@ -217,6 +217,20 @@ Order from addendum 1 (targets in UTC):
 - **anchor:** age of the last `ok` anchor, same thresholds, plus errors in the last 24 h. Amber "pending" before the first anchor.
 - **Why 75/135 min:** the jobs are hourly, so one missed run turns amber and two turn red. The overall status is the worst of all blocks.
 
+### D-02.15 — F2: identical re-fetches write nothing; a `payload_coverage` table keeps the out-of-order guard
+
+- **Context:** each ECCC refresh rewrote about 555–577k unchanged observation rows (`last_seen_at`, and `published_at = GREATEST(…)`). Measured before the fix, over one refresh (20:25:44 → 20:38:21Z, run 511 plus a USGS and an NWPS run): **554,126 row updates** on the observation chunks (482,808 HOT), 5,916 inserts, +70,313 dead tuples, and **WAL 0x3FCB964F8 − 0x3F46F0940** (bytes in the measurements table).
+- **Options considered:** (a) keep bumping `last_seen_at` but only every N hours; (b) stop writing unchanged rows entirely, and move "last seen" to a small per-station table outside the hypertable.
+- **Choice:** (b). It is a code change plus one **new** table (`migrations/004_payload_coverage.sql`). No existing table is altered, so no `pg_dump` was required.
+  - The unchanged path only **counts** rows: an identical re-fetch writes **0** observation rows, proven in tests by unchanged `xmin`.
+  - **Out-of-order guard kept.** A differing incoming value is stale if the stored row's `published_at` is newer, **or** if a newer payload (of any kind) for that station already covered that timestamp. Without the second rule, an older 30-day file published between two identical hourly files could flip a value back. This is tested with exactly that scenario.
+- **Meanings from now on (also in `architecture.md`):**
+  - `first_seen_at` — when the row was first stored.
+  - `last_seen_at` — when the **current value was last written** (first insert or last revision); no longer bumped on identical re-fetches.
+  - `published_at` — publication time of the payload that set the current value.
+  - `payload_coverage(station_id, kind, published_at, ts_min, ts_max, raw_object_id, last_seen_at)` — the per-station "last seen": the newest payload of each kind (`eccc:hourly`, `eccc:daily`, `usgs:ogc`, `usgs:nwis`), its time range, and when it was last processed. One row write per station per payload, instead of ~1,300.
+- **After:** measured over the next equivalent refresh (work log).
+
 ## Work log
 
 - `12:41` — `git checkout main && git pull` → `9e414f1` ("Stage 2 addendum: timeline reset, app first, two PRs before the mentor review"). PR #2 shows as `MERGED`. Read the prompt, addendum 1, PLAN.md and `brief.md`. `git checkout -b stage-02-ledger-app`.
@@ -252,6 +266,8 @@ Order from addendum 1 (targets in UTC):
   - Fixes on the way: `upsert_station_meta` needs `name`; `avg(int)` returns `Decimal` (cast to float); ledger test cleanup must also truncate `forecast_scores`.
   - `pytest` → **83 passed** (twice).
   - `floodlead migrate` → `['003_scores.sql']`. `floodlead score` → run 1, 0 scored (nothing settled before ~00:00Z), 1.1 s.
+- `13:32–13:38` — Committed and pushed the scorer (`stage-02-part2`); deployed ingest and api. Health: issuer green (lag 25 min), scorer green, anchor green (seq 856). `/v1/scores/official` → note "No matched pair has settled yet…". `scripts/verify_ledger.py`: `--api` → OK 856, 1 anchor checked; `--source github` → OK 856 from 1 file; `--from-seq 856` → OK; `--from-seq 500` → `FAIL … must be an anchored seq` (exit 1). `tests/test_verify_script.py` (4 tests, incl. a forged self-consistent chain caught by the anchor). `evaluation.md` rewritten for the live ledger, baselines and scoring.
+- `13:25–13:38` — F2 before-measurement (above) and implementation. `pytest` → 84 passed.
 
 ## Measurements
 

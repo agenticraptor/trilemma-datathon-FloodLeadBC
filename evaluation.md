@@ -18,19 +18,47 @@ No performance number in this repo is claimed in advance. Every number comes fro
 | Leakage controls | Precipitation features use forecasts as issued; where unavailable for old years, the "oracle-weather" variant is reported separately. Observations lagged by real publication latency. No revised values as features. |
 | Thresholds | Generic 2-year return-period level per station, plus user-style levels |
 
-## Online: live public ledger
+## Online: live public ledger (running since 2026-10-08 20:00Z)
 
-- Every hourly forecast for every station, from the first day of ingestion, appended with a SHA-256 chain.
-- The chain head is committed daily to `ledger/heads.txt` in this repo.
-- Scores update as truth arrives; the summary endpoint shows skill vs every baseline.
+Spec: [`docs/ledger-spec.md`](docs/ledger-spec.md). Decisions: `docs/stages/STAGE-02-ledger-app.md` (D-02.7 to D-02.14).
+
+- **Cadence.** Every hour, for every gauge with a non-sentinel level observation newer than 3 h (≈ 426 of ~440): `base_time` = top of the UTC hour, run at HH:15.
+  - Horizons are 1, 3, 6, 12, 18, 24, 36 and 48 h (`valid_at = base_time + h`); a horizon with `valid_at − created_at` < 30 min is dropped.
+  - A run more than 30 min late writes a `gap` entry instead. Forecasts are never backdated and gaps are never filled.
+- **Leakage.** Only observations with `ts ≤ created_at` and `first_seen_at ≤ created_at` are used. Each forecast records `input_hash` and its error library's hash.
+- **Stale inputs.** A forecast is flagged `stale_inputs` when `created_at − data_as_of` exceeds the source's green lag threshold: 150 min for ECCC, 120 min for USGS. This replaces the earlier "> 30 min" rule, which assumed a much faster feed than ECCC's measured 40–90 min. Stale forecasts are issued and recorded, but left out of the default score summary and suppressed from alerts.
+- **Ledger.** One global append-only chain, `entry_hash = sha256(prev_hash + "\n" + canonical)`. It is enforced by database triggers on insert and rejects UPDATE, DELETE and TRUNCATE.
+  - This is tamper-evident, not tamper-proof: a superuser can disable triggers.
+  - Each hour the anchor job commits that hour's entries (`ledger/entries/YYYY/MM/DD/HH.jsonl.gz`) and a `heads.txt` line to the `ledger` branch of this repository. The track record therefore survives the VM.
+  - `scripts/verify_ledger.py --source github` verifies the chain from those files alone.
+- **NOAA official forecasts** go into the same chain unmodified (`official_forecast` entries, one per fetch that brought new points).
 
 ## Baselines (same scoring code)
 
-1. Persistence — level stays the same.
-2. Linear trend extrapolation over the last 3 h — what a person watching the chart does.
-3. RFC advisory level mapped to a probability.
-4. RFC CLEVER / COFFEE where published.
-5. Google Flood Hub where it covers the gauge.
+Both live baselines use the same uncertainty method: point path + the same model's empirical error paths from the station's own history, sampled across past origins and indexed by lead from `data_as_of`. The libraries are:
+- ECCC: the trailing 30 days;
+- USGS: the trailing 30 days plus the same season (± 30 days) in every prior year.
+
+1. **`persistence-v1`** — the level stays at its value at `data_as_of`.
+2. **`trend3h-v1`** — what a person watching the chart does: least-squares slope over the 3 h ending at `data_as_of` (≥ 50 % of the window's points required), applied for at most **6 h** and then held. The 6 h cap stops the 48 h trend from becoming a strawman.
+3. **NOAA NWS official forecast** (NRKW1, NKSW1), compared on matched pairs (below).
+4. RFC advisory level mapped to a probability *(planned)*.
+5. RFC CLEVER / COFFEE where published *(planned)*.
+6. Google Flood Hub where it covers the gauge *(planned)*.
+
+## Live scoring rules (`src/floodlead/scorer.py`, hourly at HH:40)
+
+- **Settling:** a horizon is scored once `valid_at` is ≥ 3 h old.
+- **Level truth:** the observation at `valid_at`, else the nearest within ±10 min, else `no_truth` (counted, never imputed).
+- **Event truth:** max over `(data_as_of, valid_at]`, the same window as `qmax` and `p_exceed`. It includes the feed-latency gap the forecaster could not see. Fewer than 80 % of the window's points → `insufficient_truth`.
+- **Rescoring:** scores are rewritten when a truth observation is revised.
+- **CRPS:** approximated by the **quantile score**, 2 × mean pinball loss over the 7 quantile levels. It equals the absolute error for a point forecast. It is measured to be **19 % below** the exact CRPS in expectation for a calibrated normal forecast; it is applied identically to every model, so it ranks models but its absolute values are not exact CRPS.
+- **Skill:** CRPSS and BSS vs persistence on **paired samples only** (same station, base time and horizon, both scored, neither stale). "Too few events to judge" is shown instead of a skill number below 30 events.
+- **NOAA matched comparison:**
+  - base times at 00/06/12/18Z and horizons that are multiples of 6 h;
+  - NOAA's latest issuance whose points were fetched by our `created_at`, compared at the same `valid_at`;
+  - metrics: absolute error, and Brier with p ∈ {0, 1} for the official categories; NOAA's own lead (`valid_at − issuedTime`) is reported, since NOAA issues about once a day.
+- **Summary:** materialised after every scorer run with its `scorer_run_id`: `GET /v1/scores/summary`, `GET /v1/scores/official`. No performance number appears in the docs or UI except as output of this scorer, with its run ID.
 
 ## Metrics
 
@@ -38,7 +66,7 @@ No performance number in this repo is claimed in advance. Every number comes fro
 |---|---|
 | Brier score and Brier skill score vs persistence | Accuracy of crossing probabilities |
 | Reliability diagram, expected calibration error (ECE) | Whether "70%" means 70% |
-| CRPS (from P10/P50/P90) | Accuracy of the level forecast |
+| CRPS (quantile score over 7 levels: 0.05 … 0.95) | Accuracy of the level forecast |
 | Hit rate, false-alarm ratio | Alert usefulness |
 | Median lead time gained over advisory | The headline value |
 | Feed lag p95, alert-to-call p95 | System reliability |
@@ -56,7 +84,7 @@ No performance number in this repo is claimed in advance. Every number comes fro
 ## Rollback triggers
 
 - Any build where ECE regresses above 0.05 fails CI.
-- Any forecast issued with stale inputs (> 30 min) is flagged in the ledger and suppressed from alerts.
+- Any forecast issued with stale inputs (input age above the source's green lag: 150 min ECCC, 120 min USGS) is flagged in the ledger, left out of the default score summary and suppressed from alerts.
 - A model version that underperforms persistence on the live ledger for 48 consecutive hours is rolled back.
 
 ## Demo Day numbers to show
