@@ -242,13 +242,16 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
    - The suggestion is now the **official NWS minor flood stage, 146.5 ft**, with the rule "7 of 13 minor-stage events since Nov 2015 were followed by water on the overflow path, a median 4.9 h later (0.1–6.4 h)".
    - The summary lists the peaks with and without an overflow, and says they overlap (overflow 146.6–150.8 ft, none 146.7–147.3 ft), so no single level separates them.
    - API fields: `suggested_*`, `peaks_*`, `separation_text`, `onset_note`. README and app updated.
-2. **375 px horizontal scroll** (uPlot live legend 451 px) — fixed in `web/` by the frontend agent; `scripts/screenshots.cjs` now records `scrollWidth` per page (see work log).
-3. **Clipped chances tables** on desktop — fixed in `web/` (work log).
+2. **375 px horizontal scroll** (the uPlot live legend was 451 px): the legend now wraps to the chart width (317 px at 375 px), one series per line on narrow screens. `scripts/screenshots.cjs` records `scrollWidth` vs the viewport for every page and width in `layout-check.txt`, listing any element wider than the viewport. Result: **scrollWidth = viewport on all 4 pages at 1280 and 375 px**, live and in snapshot mode.
+3. **Clipped chances tables:** the chances and personal-level cards are now full width, and all horizon columns are visible at 1280 px (checked visually). At 375 px tables scroll inside their box with a right-edge fade and a "scroll →" hint.
 4. **Persistence named honestly** (D-02.17).
 5. **Verifier gap:** `ledger.verify_rows` now requires entry 1 to be a genesis entry with a zero `prev_hash` whenever seq 1 is verified (the check used to run only when `start_seq is None`). `scripts/verify_ledger.py` already required it; both are now tested with a self-consistent chain whose entry 1 is not a valid genesis.
 6. **`created_at` defined exactly** in `docs/ledger-spec.md`: the data cut-off and the start of computation; entries are inserted about 70 s later and anchored at HH:30. Issuance entries from base 22:00Z onward carry `inserts_started_at` and `committed_at` (database `clock_timestamp()` just before the inserts and just before the last insert).
 7. **Deploy only code in an open PR.** PR 2 was opened as a **draft** (#4) at 21:50Z, before any further deploy. Production had run part-2 code without an open PR since 20:18Z; that was the worker's error. From Stage 3 on, deploys come only from a branch with an open PR.
-8. **Snapshot ages** relative to `snapshot_at`, and the **POSIX-locale crash**: fixed in `web/` (work log).
+8. **Snapshot ages and the POSIX locale.**
+   - Ages are computed per response, relative to the snapshot's `snapshot_at` ("48 min before the snapshot"), so live and snapshot data mixed on one page both read correctly. The chart's "now" line becomes a "snapshot" line.
+   - **POSIX locale:** uPlot runs `new Intl.NumberFormat(navigator.language)` at load. The new `web/locale-guard.js` (same-origin, loaded before uPlot; it does nothing for a valid tag) maps an invalid tag to `en-CA`, or else wraps `Intl.NumberFormat`/`DateTimeFormat` to fall back for invalid tags. Every chart also gets explicit formatters, and the sorts use an explicit locale.
+   - Result with `navigator.language = 'en-US@posix'`: **0 page errors**, both charts drawn.
 9. **First live rollover (F1):** the ECCC runs from 23:55 to 00:20Z will be recorded in the work log.
 
 ### D-02.17 — `persistence-v1` is "level + typical change"; pure persistence is scored as `persistence-naive`
@@ -313,6 +316,14 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
 - `14:31` — **PR #3 merged** by the supervisor at 21:30:49Z (`4efdd81`, "QA PASS"; no file changes beyond the PR). Merged `origin/main` into `stage-02-part2` (`7cd60e6`, no rewrite of pushed history), so part 2 now builds on the merged `main`, as addendum 1 asks.
 - `14:40–14:52` — Addendum 2 received (`05cd1fa`). Merged `main` into `stage-02-part2` (`5846a73`). **Opened draft PR #4** at 21:50Z: https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC/pull/4. Started a frontend agent for items 2, 3 and 8 and the UI parts of 1 and 4.
 - `14:52–14:58` — Backend: replay summary (item 1); `verify_rows` genesis check plus 2 tests (item 5); corrected persistence card, card supersession, `inserts_started_at`/`committed_at` (items 4 and 6); `persistence-naive` scoring, migration 005, summary vs both references (item 4); spec and `evaluation.md` text. `pytest` → **94 passed**.
+- `15:00–15:08` — Frontend agent finished items 2, 3, 8 and the UI parts of 1 and 4 (files: `web/app.js`, `style.css`, `index.html`, new `locale-guard.js`, `web/README.md`, `scripts/screenshots.cjs`).
+  - Worker review: `locale-guard.js` read in full; no `innerHTML`/`eval` added; no "stays the same" wording left.
+  - Screenshot sample personal level changed 146.2 → 147.0 ft (146.2 was the old suggestion, and sat 0.3 ft from the minor line).
+  - `floodlead export-demo` refreshed the snapshot (43 files; replay with the new summary; ledger head 1718 with anchor `ok`). `tests/test_web.py` 16 passed.
+  - **Independent re-run of the screenshots:**
+    - live: all 4 pages `scrollWidth = viewport` at 1280 and 375 px; legends 1034/317 px; `page errors (all pages): 0; with navigator.language=en-US@posix: 0`;
+    - snapshot mode (local `http.server`, no API): same layout results; banner "Snapshot from Thu, Oct 8, 15:03 PDT (Oct 8, 22:03 UTC)"; ages "48 min before the snapshot"; 0 page errors (console shows only the expected `/v1` 404s that trigger the fallback).
+  - Screenshots and both checks committed under `docs/stages/img/stage-02/`.
 
 ## Measurements
 

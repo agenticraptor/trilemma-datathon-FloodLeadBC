@@ -130,9 +130,14 @@ main:focus { outline: none; }
 
 /* Charts */
 .chart { width: 100%; min-height: 120px; margin-top: 8px; }
-.chart .u-legend { font-size: .82rem; text-align: left; }
+.chart { max-width: 100%; }
+.chart .u-legend { font-size: .82rem; text-align: left; max-width: 100%; }
+/* uPlot's inline live legend: let every series item wrap within the chart width (never wider than the page) */
+.chart .u-legend.u-inline, .chart .u-legend.u-inline tbody { max-width: 100%; }
+.chart .u-legend.u-inline tr { max-width: 100%; margin-right: 12px; }
 .chart .u-legend .u-series > * { padding: 2px 4px; }
-.chart .u-legend th { font-weight: 600; }
+.chart .u-legend th { font-weight: 600; white-space: normal; overflow-wrap: anywhere; max-width: 100%; text-align: left; }
+.chart .u-legend td.u-value { white-space: nowrap; }
 .legend-key { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0 0; padding: 0; list-style: none; font-size: .85rem; color: var(--muted); }
 .legend-key li { display: flex; align-items: center; gap: 6px; }
 .swatch { display: inline-block; width: 22px; height: 0; border-top: 3px solid currentColor; vertical-align: middle; }
@@ -155,9 +160,21 @@ main:focus { outline: none; }
 .tag-noaa { background: var(--noaa-soft); color: #143f80; }
 .tag-fl { background: var(--fl-soft); color: #3d5a54; }
 .tag-emp { background: #f3e8f0; color: #6e1446; }
+.tag-official { background: #fdeedd; color: #7a3f00; }
+.model-explain { font-size: .88rem; color: var(--muted); border-left: 3px solid var(--fl); padding-left: 8px; margin-top: 8px; }
 
 /* Tables */
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+/* Scroll cue: right-edge fade + "scroll →" hint, only while the table is wider than its box */
+.table-scroll { position: relative; max-width: 100%; }
+.table-scroll .scroll-hint { display: none; margin: 0 0 2px; text-align: right; font-size: .78rem; color: var(--muted); }
+.table-scroll.has-overflow .scroll-hint { display: block; }
+.table-scroll.has-overflow::after {
+  content: ""; position: absolute; top: 1.4em; right: 0; bottom: 0; width: 28px; pointer-events: none;
+  background: linear-gradient(to right, rgba(255,255,255,0), rgba(255,255,255,.95));
+}
+.table-scroll.has-overflow.at-end::after { display: none; }
+th.wrap { white-space: normal; min-width: 7em; }
 table { border-collapse: collapse; width: 100%; font-size: .92rem; }
 th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { font-weight: 600; color: var(--muted); font-size: .82rem; white-space: nowrap; }
@@ -215,6 +232,21 @@ input[type="search"] { width: 100%; max-width: 32em; }
 .station-list .lvl { text-align: right; font-variant-numeric: tabular-nums; font-size: .9rem; }
 .count-line { color: var(--muted); font-size: .9rem; margin-top: 8px; }
 
+/* Replay: peaks with / without an overflow */
+.peaks { margin: 6px 0 14px; padding: 10px 12px; background: var(--soft); border-radius: 8px; }
+.peak-strip { margin: 6px 0 8px; }
+.peak-row { display: flex; align-items: center; gap: 8px; min-height: 22px; }
+.peak-name { flex: 0 0 9.5em; font-size: .82rem; color: var(--muted); }
+.peak-track, .peak-axis { position: relative; flex: 1 1 auto; height: 18px; min-width: 0; margin-right: 10px; }
+.peak-track { border-bottom: 1px solid var(--line); }
+.peak-dot { position: absolute; top: 3px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; border: 2px solid #fff; }
+.peak-dot.with { background: #0b7a8a; }
+.peak-dot.without { background: #6b7680; }
+.peak-minor { position: absolute; top: 0; bottom: -1px; border-left: 2px dashed var(--minor); }
+.peak-axis span { position: absolute; top: 0; transform: translateX(-50%); font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.peak-lists { list-style: none; margin: 0 0 8px; padding: 0; font-size: .88rem; }
+.peak-lists li { margin-bottom: 2px; }
+
 /* Lists */
 .caveats { margin: 8px 0 0; padding-left: 1.2em; font-size: .9rem; color: var(--muted); }
 .caveats li { margin-bottom: 4px; }
@@ -228,6 +260,11 @@ input[type="search"] { width: 100%; max-width: 32em; }
 .footer-links { overflow-wrap: anywhere; }
 
 @media (max-width: 480px) {
+  .peak-name { flex-basis: 6.5em; }
+  /* one legend row per series; label, colon and live value flow as text so long labels wrap cleanly */
+  .chart .u-legend.u-inline tr { display: block; margin-right: 0; }
+  .chart .u-legend.u-inline th, .chart .u-legend.u-inline td, .chart .u-legend.u-inline th > .u-label { display: inline; }
+  .chart .u-legend .u-series > * { padding: 1px 2px; }
   h1 { font-size: 1.35rem; }
   .big { font-size: 1.8rem; }
   .card { padding: 12px; }

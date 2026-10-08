@@ -95,8 +95,15 @@ keeps the `attribution` array.
   (blue, dashed with markers).
 - FloodLead forecasts (metres in the API) are labelled **FloodLead baseline (persistence / trend), live skill
   being measured** (muted grey-green, median plus 10–90 % band), never styled like NOAA's.
+- Model names: **Persistence + typical drift (persistence-v1)** (the current level plus the station's
+  typical past change over the same lead time, from its own history) and **Trend over 3 h, held after 6 h
+  (trend3h-v1)** (the last 3 h trend, applied for at most 6 h).
 - Times: Pacific (America/Vancouver) and UTC. Every reading shows its data time and age; real-time data
-  is labelled provisional.
+  is labelled provisional. Data from a snapshot file shows its age relative to that file's `snapshot_at`
+  ("53 min before the snapshot"), not the viewer's clock.
+- Locale: all number and date formatting uses explicit locales; `locale-guard.js` (loaded before uPlot)
+  replaces an invalid `navigator.language` such as `en-US@posix`, which would otherwise make uPlot throw
+  at load.
 
 ## Personal level
 
