@@ -301,6 +301,8 @@ Order from addendum 1 (targets in UTC):
 | `data-contract.md` | Lineage: forecasts as ledger entries with `input_hash` and library hash; F2 meanings and `payload_coverage` | Facts changed |
 | `docs/ledger-spec.md` | New: public specification with golden vector | Part A.8 |
 | `docs/stages/STAGE-01-live-archive.md` | Dated note on open issue 2 (snapshots declined) | Addendum item 2 |
+| `product.yaml` | `status: spec → prototype`, `maturity 1 → 2` (`Prototype`), output: the overflow-watch app | Status changed: a deployed app and hourly forecasts (values from the schema's `status` enum: idea, spec, prototype, mvp, showcase, active, archived) |
+| `README.md` (part 2) | "Check the forecasts yourself": both verifier modes, the reproduction script, the scores endpoint | Part G / AC-2 |
 
 ## Open issues and handoff to next stage
 

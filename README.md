@@ -91,6 +91,17 @@ docker compose up -d                         # db, ingest, api, caddy (+ backfil
 uv run floodlead export-demo                 # refresh web/data/snapshot/ from the database
 ```
 
+### Check the forecasts yourself
+
+Every FloodLead forecast is fixed in a public, hash-chained ledger **before** the river reaches it, and published hourly to the [`ledger` branch](https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC/tree/ledger). Spec: [`docs/ledger-spec.md`](docs/ledger-spec.md).
+
+```bash
+python3 scripts/verify_ledger.py --api https://34-130-109-216.sslip.io   # verify the chain via the API (stdlib only)
+python3 scripts/verify_ledger.py --source github                         # verify from the published files alone
+uv run python scripts/reproduce_forecast.py --api https://34-130-109-216.sslip.io --n 3   # recompute forecasts
+curl https://34-130-109-216.sslip.io/v1/scores/summary                    # live scores, with the scorer run ID
+```
+
 ### What works now, and what remains before Build Session 3
 
 | Works now (Oct 8) | Next in this stage (part 2) | Before Build Session 3 (Oct 9) |

@@ -1,9 +1,9 @@
 # Machine-readable mirror of https://build.trilemma.foundation/schemas/product.schema.json
 id: floodlead-bc
 name: FloodLead BC
-status: spec
-maturity: 1
-maturity_label: Spec
+status: prototype
+maturity: 2
+maturity_label: Prototype
 scope: external
 archetype: forecasting-product
 category: natural-hazards
@@ -28,6 +28,7 @@ outputs:
   - P10/P50/P90 peak level and median hours-to-crossing
   - Voice and SMS alerts with user approval before contacts are notified
   - Public append-only, SHA-256 chained forecast ledger with live scores
+  - Sumas Prairie overflow watch web app (live level vs official stages, NOAA forecast, baseline chances, personal level, 2021/2025 replay)
 repo: https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC
 tags:
   - floods
