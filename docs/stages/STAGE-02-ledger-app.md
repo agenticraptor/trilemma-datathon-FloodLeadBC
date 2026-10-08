@@ -283,6 +283,7 @@ Order from addendum 1 (targets in UTC):
   - **Second anchor** at 21:30:00Z: `ledger/entries/2026/10/08/21.jsonl.gz`, 396,798 B, commit `debf0dd215fc2b7d8a899be59ffb9c33c94c71c5`.
   - `verify_ledger.py --api` and `--source github` both → `OK entries 1718, head 6a8f0bef…9e83, anchors_checked 2`.
   - Health: issuer green (0 gaps in 24 h), anchor green (seq 1718).
+- `14:31` — **PR #3 merged** by the supervisor at 21:30:49Z (`4efdd81`, "QA PASS"; no file changes beyond the PR). Merged `origin/main` into `stage-02-part2` (`7cd60e6`, no rewrite of pushed history), so part 2 now builds on the merged `main`, as addendum 1 asks.
 
 ## Measurements
 
