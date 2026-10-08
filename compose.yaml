@@ -3,7 +3,10 @@
 name: floodlead
 
 x-app: &app
-  build: .
+  build:
+    context: .
+    args:
+      GIT_SHA: ${GIT_SHA:-unknown}  # export GIT_SHA=$(git rev-parse HEAD) before building
   image: floodlead-app:latest
   env_file: .env
   environment:

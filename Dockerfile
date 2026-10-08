@@ -15,6 +15,10 @@ COPY src ./src
 COPY migrations ./migrations
 RUN uv sync --frozen --no-dev
 
+# The deployed commit, recorded in ledger genesis/model cards/issuances (pass --build-arg GIT_SHA=$(git rev-parse HEAD)).
+ARG GIT_SHA=unknown
+ENV FLOODLEAD_GIT_SHA=$GIT_SHA
+
 # Same uid/gid as the VM user that owns ARCHIVE_DIR, so archive files keep one owner.
 USER 1001:1002
 CMD ["floodlead", "ingest"]
