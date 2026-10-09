@@ -1,0 +1,48 @@
+{
+ "pedts": "HGIFZ",
+ "issuedTime": "2026-10-08T15:12:00Z",
+ "wfo": "SEW",
+ "timeZone": "PST8PDT",
+ "primaryName": "Stage",
+ "primaryUnits": "ft",
+ "secondaryName": "Flow",
+ "secondaryUnits": "kcfs",
+ "data": [
+  {
+   "validTime": "2026-10-08T18:00:00Z",
+   "generatedTime": "2026-10-08T15:27:41Z",
+   "primary": 138.05,
+   "secondary": 0.734
+  },
+  {
+   "validTime": "2026-10-09T00:00:00Z",
+   "generatedTime": "2026-10-08T15:27:41Z",
+   "primary": 138.01,
+   "secondary": 0.689
+  },
+  {
+   "validTime": "2026-10-09T06:00:00Z",
+   "generatedTime": "2026-10-08T15:27:41Z",
+   "primary": 137.94,
+   "secondary": 0.614
+  },
+  {
+   "validTime": "2026-10-09T12:00:00Z",
+   "generatedTime": "2026-10-08T15:27:41Z",
+   "primary": 137.93,
+   "secondary": 0.603
+  },
+  {
+   "validTime": "2026-10-18T06:00:00Z",
+   "generatedTime": "2026-10-08T15:27:41Z",
+   "primary": 138.32,
+   "secondary": 1.07
+  },
+  {
+   "validTime": "2026-10-18T12:00:00Z",
+   "generatedTime": "2026-10-08T15:27:41Z",
+   "primary": 138.31,
+   "secondary": 1.05
+  }
+ ]
+}

@@ -186,6 +186,7 @@ Order from addendum 1 (targets in UTC):
 ### D-02.12 — NOAA issuances in the ledger: one entry per fetch, values exactly as received
 
 - **Context:** NOAA keeps the same `issuedTime` and appends points: NRKW1's 2026-10-07 15:36Z issuance gained one point at each 6-hourly refresh (29 → 32 points by Oct 8).
+  - **Corrected in D-02.18:** NOAA did not append points. The combined `stageflow` endpoint cuts NRKW1's forecast at request time + 7 days, so each fetch revealed more of an issuance that was complete from the start.
 - **Choice:**
   - For each NOAA issuance, one `official_forecast` entry per fetch that brought new points, in fetch order: `part = "issuance"` for the first, `"added points"` for later ones. Each carries the points exactly as stored (stage ft, flow kcfs, `generated_at`), NOAA's `issuedTime`, our true `fetched_at` and the raw payload's sha256.
   - No unit conversion or rounding is applied; conversion to metres happens only in scoring.
@@ -263,6 +264,27 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
   - The summary reports, for every model, CRPSS and BSS against **both** `persistence-v1` and `persistence-naive` (`skill_vs`).
   - `evaluation.md`: baseline 1 and the Demo Day headline mean the naive one. The app labels the model "Persistence + typical drift".
 - **Why:** honest naming, and a skill headline against the baseline people actually mean.
+
+### D-02.18 — NOAA forecasts come from `stageflow/forecast`; the "added points" were our endpoint's 7-day cut
+
+- **Context (found during the AC-5 check, 01:17Z Oct 9):**
+  - For NRKW1's 15:12Z Oct 8 issuance, `gauges/NRKW1/stageflow` (combined observed + forecast, the endpoint we used) returned 30 points ending Oct 16 00Z.
+  - `gauges/NRKW1/stageflow/forecast` returned the same `issuedTime` with **40 points, ending Oct 18 12Z**, and all 30 shared points were identical.
+  - Across all 7 NRKW1 fetches held, the last point we received is exactly the last 6-hourly point at or before `fetched_at + 7 days`. For example, fetched Oct 8 12:05Z → last point Oct 15 12:00Z.
+  - NKSW1 is not cut: both endpoints give 40 points.
+  - So D-02.12's "NOAA appends points" was wrong. The issuance was complete when issued, and our endpoint revealed it a little more at each fetch.
+- **Choice:**
+  - `nwps.ingest_live` now takes forecast rows from `stageflow/forecast` (archived as `stageflow_forecast_<lid>`).
+  - It still archives the combined `stageflow` payload, because the module keeps NWPS observed series raw. That adds 6 requests per 30 min, so `items_fetched` goes from 12 to 18.
+  - `parse_forecast` accepts both shapes.
+  - Existing ledger entries are not touched (append-only). The 10 NRKW1 points not yet held (Oct 16 06Z – Oct 18 12Z) enter `official_forecasts` at the next NWPS run and the ledger at the next hourly run, as `part = "added points"` with their true `fetched_at`.
+  - The spec now defines `"added points"` as points first seen at a later fetch, and says why there were such entries before Oct 9.
+- **Effect on scoring:** none so far. NOAA matched pairs use horizons ≤ 48 h, and every cut point was more than 7 days ahead.
+- **Why:** AC-5 asks for the issuance point for point as NOAA publishes it. The ledger must hold what NOAA issued, not what one endpoint's window showed.
+- **Tests:**
+  - `test_nwps_forecast_only_endpoint_parses_the_whole_issuance`, using the new real fixture `nwps_stageflow_forecast_NRKW1.json`, trimmed to its first 4 and last 2 points.
+  - A bare-shape case in `test_nwps_missing_forecast_gives_no_rows`.
+  - The live test now asserts that the forecast-only points include every combined-endpoint point.
 
 ## Work log
 

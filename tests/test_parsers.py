@@ -101,8 +101,21 @@ def test_nwps_forecast_parse_unmodified() -> None:
     assert (rows[0]["stage_ft"], rows[0]["flow_kcfs"]) == (138.05, 0.734)  # exactly as published
 
 
+def test_nwps_forecast_only_endpoint_parses_the_whole_issuance() -> None:
+    # gauges/{lid}/stageflow/forecast returns the forecast object itself, including points beyond the
+    # combined endpoint's request time + 7 days cut (D-02.18).
+    issued, rows = nwps.parse_forecast(json.loads(fixture_bytes("nwps_stageflow_forecast_NRKW1.json")))
+    assert issued == datetime(2026, 10, 8, 15, 12, tzinfo=UTC)
+    assert len(rows) == 6
+    assert rows[-1]["valid_at"] == datetime(2026, 10, 18, 12, 0, tzinfo=UTC)
+    assert (rows[-1]["stage_ft"], rows[-1]["flow_kcfs"]) == (138.31, 1.05)
+    assert rows[-1]["generated_at"] == datetime(2026, 10, 8, 15, 27, 41, tzinfo=UTC)
+
+
 def test_nwps_missing_forecast_gives_no_rows() -> None:
     issued, rows = nwps.parse_forecast({"forecast": {"issuedTime": "0001-01-01T00:00:00Z", "data": []}})
+    assert issued is None and rows == []
+    issued, rows = nwps.parse_forecast({"issuedTime": "0001-01-01T00:00:00Z", "data": []})
     assert issued is None and rows == []
 
 

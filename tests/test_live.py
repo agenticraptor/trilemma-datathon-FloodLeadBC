@@ -54,6 +54,11 @@ def test_usgs_nwis_iv_fallback_returns_recent_stage_and_flow() -> None:
 
 def test_nwps_nrkw1_has_official_forecast() -> None:
     with http.client() as c:
-        f = http.fetch(c, "https://api.water.noaa.gov/nwps/v1/gauges/NRKW1/stageflow")
-    issued, rows = nwps.parse_forecast(json.loads(f.content))
+        whole = http.fetch(c, "https://api.water.noaa.gov/nwps/v1/gauges/NRKW1/stageflow/forecast")
+        combined = http.fetch(c, "https://api.water.noaa.gov/nwps/v1/gauges/NRKW1/stageflow")
+    issued, rows = nwps.parse_forecast(json.loads(whole.content))
+    issued_c, rows_c = nwps.parse_forecast(json.loads(combined.content))
     assert issued is not None and len(rows) >= 10
+    # The forecast-only endpoint holds every point the combined one shows (and more when it cuts at +7 days).
+    if issued_c == issued:
+        assert {r["valid_at"] for r in rows_c} <= {r["valid_at"] for r in rows}

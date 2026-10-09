@@ -12,5 +12,6 @@ Small **real** payloads, trimmed. They were taken on 2026-10-07 from the raw arc
 | `nwis_iv_12211200_2021-11.json` | USGS legacy NWIS IV (`waterservices.usgs.gov/nwis/iv/`), Everson, Nov 2021 | per series the first 2 values and the 2 values at the peak (2021-11-15 13:40 PST) |
 | `nwps_gauge_NRKW1.json` | NOAA NWPS `gauges/NRKW1` | only identity, `flood.categories`, units |
 | `nwps_stageflow_NRKW1.json` | NOAA NWPS `gauges/NRKW1/stageflow` (issued 2026-10-07T15:36Z) | last 3 observed points, first 4 forecast points |
+| `nwps_stageflow_forecast_NRKW1.json` | NOAA NWPS `gauges/NRKW1/stageflow/forecast`, fetched 2026-10-09 01:17Z (issued 2026-10-08T15:12Z; 40 points, while `stageflow` gave 30) | first 4 points + last 2 (Oct 18 06Z and 12Z, beyond the combined endpoint's 7-day cut) |
 
 Credits: Contains information licensed under the Open Government Licence – Canada; contains data from Environment and Climate Change Canada. Credit: U.S. Geological Survey. NOAA National Weather Service (not affiliated with or endorsed by NOAA/NWS).

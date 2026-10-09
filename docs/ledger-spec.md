@@ -67,6 +67,8 @@ Golden vector (also in `tests/test_ledger.py`; check with `printf '%s\n%s' "$pre
   - So the delay between `created_at` and the commit is measured, not assumed.
 - **`gap`**: `base_time`, `detected_at`, `reason`. Written for a base time with no issuance: either the run started more than 30 min late, or no run happened (written by the next run).
 - **`official_forecast`** (Stage 2 part 2): a NOAA NWS issuance exactly as received (stage in ft, flow in kcfs, valid times, `generatedTime`, NOAA's `issuedTime`), with our `fetched_at` and the sha256 of the raw payload.
+  - `part = "issuance"` is the first fetch of an issuance. `part = "added points"` carries points of the same issuance first seen at a later fetch, with that fetch's `fetched_at`.
+  - Before 2026-10-09 ~01:30Z, NRKW1's "added points" came from our endpoint, not from NOAA: the combined `gauges/{lid}/stageflow` cut that gauge's forecast at request time + 7 days. Forecast rows now come from `gauges/{lid}/stageflow/forecast`, which returns the whole issuance.
 
 ## 5. Issuance rules
 

@@ -95,7 +95,7 @@ Yellow sources are never core dependencies. If their terms do not allow the inte
   url: https://api.water.noaa.gov/nwps/v1/
   license: US Public Domain (NWS)
   license_url: https://www.weather.gov/disclaimer
-  access_method: NWPS REST API (gauges/{lid}, gauges/{lid}/stageflow)
+  access_method: NWPS REST API (gauges/{lid}; gauges/{lid}/stageflow/forecast for official forecasts, because gauges/{lid}/stageflow cuts some gauges' forecasts at request time + 7 days; gauges/{lid}/stageflow archived raw)
   commercial_use: true
   redistribution: true
   attribution_required: true    # credit NOAA/NWS; required by our own honesty rules

@@ -4,6 +4,10 @@ Every distinct forecast issuance (keyed by issuedTime) is stored unmodified in
 official_forecasts. Flood categories become `official_thresholds` on the matching USGS station.
 NWPS observed series duplicate USGS gauge data, so they are archived raw but not loaded into
 observations (USGS is the system of record for observations).
+
+Forecast rows come from `gauges/{lid}/stageflow/forecast`, not from the combined `gauges/{lid}/stageflow`:
+the combined endpoint cuts some gauges' forecasts at request time + 7 days (NRKW1, Stage 2 D-02.18), so an
+issuance seemed to gain one point every 6 h. The forecast-only endpoint returns the whole issuance.
 """
 
 from __future__ import annotations
@@ -58,7 +62,8 @@ def thresholds_from_gauge(g: dict[str, Any], raw_object_id: int | None) -> dict[
 
 
 def parse_forecast(payload: dict[str, Any]) -> tuple[datetime | None, list[dict[str, Any]]]:
-    fc = payload.get("forecast") or {}
+    """Parse `stageflow/forecast` (the forecast object itself) or `stageflow` (wrapped in `forecast`)."""
+    fc = (payload.get("forecast") if "forecast" in payload else payload) or {}
     issued = _ts(fc.get("issuedTime"))
     rows = []
     for d in fc.get("data") or []:
@@ -126,18 +131,20 @@ def ingest_live(pool: ConnectionPool, job: str = "live") -> int:
             for lid in GAUGES:
                 try:
                     g = http.fetch(c, f"{base}/gauges/{lid}")
-                    sf = http.fetch(c, f"{base}/gauges/{lid}/stageflow")
-                    run.items_fetched += 2
+                    sf = http.fetch(c, f"{base}/gauges/{lid}/stageflow")  # observed + forecast, archived only
+                    fc = http.fetch(c, f"{base}/gauges/{lid}/stageflow/forecast")  # the whole issuance
+                    run.items_fetched += 3
                     with conn.transaction():
                         gref = archive.store(conn, s.archive_dir, SOURCE, f"gauge_{lid}", g)
-                        sref = archive.store(conn, s.archive_dir, SOURCE, f"stageflow_{lid}", sf)
+                        archive.store(conn, s.archive_dir, SOURCE, f"stageflow_{lid}", sf)
+                        fref = archive.store(conn, s.archive_dir, SOURCE, f"stageflow_forecast_{lid}", fc)
                     gj = json.loads(g.content)
                     usgs_id = gj.get("usgsId")
-                    issued_at, rows = parse_forecast(json.loads(sf.content))
+                    issued_at, rows = parse_forecast(json.loads(fc.content))
                     with conn.transaction():
                         if usgs_id:
                             attach_to_station(conn, usgs_id, lid, gj, gref.raw_object_id)
-                        new = store_forecast(conn, lid, rows, sf.fetched_at, sref.raw_object_id)
+                        new = store_forecast(conn, lid, rows, fc.fetched_at, fref.raw_object_id)
                     run.rows.inserted += new
                     issued[lid] = {"issued_at": issued_at.isoformat() if issued_at else None,
                                    "points": len(rows), "new_rows": new, "usgs_id": usgs_id}
