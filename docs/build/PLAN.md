@@ -49,7 +49,7 @@ next prompt ◄── PASS (merge) ◄── supervisor QA ──► FIX prompt 
 
 | Finding | Evidence | Consequence |
 |---|---|---|
-| Archived official NWS flood warnings for North Cedarville (H-VTEC `NRKW1`) exist for Nov 2021 and Dec 2025 in the Iowa Environmental Mesonet text archive (`FLWSEW`, `FLSSEW`) | `retrieve.py?pil=FLWSEW&sdate=…` | The honest comparator for "hours of warning" |
+| Archived official NWS flood warnings for North Cedarville (H-VTEC `NRKW1`) exist for every year 2015–2026 in the Iowa Environmental Mesonet text archive (`FLWSEW`, `FLSSEW`); download whole years, because partial downloads miss events | `retrieve.py?pil=FLWSEW&sdate=YYYY-01-01&edate=YYYY+1-01-01&limit=9999&fmt=text` | The honest comparator for "hours of warning" |
 | **Corrected:** first official North Cedarville flood warnings came at 11:50 AM PST Nov 14, 2021 (≈ 1 h 40 min before the minor crossing; forecast crest 148.9 ft vs 150.76 ft observed) and 10:17 PM PST Dec 9, 2025 (≈ 14 h before the minor crossing; forecast crest 148.4 ft vs ≈ 150.5 ft). In both floods the upgrade to "major" came after the overflow had begun. An earlier row here said ≈ 0 h and ≈ 6 h; that came from a wrong pairing of issuance times | NEW-product headers and texts in IEM `FLWSEW` | The official forecasts give upstream lead; their systematic low first crest is a testable gap |
 | Live baselines (Oct 8–9) do not beat pure persistence on median accuracy; their CRPSS against naive is inflated by the quantile-score approximation | `/v1/scores/summary` run 29; supervisor recomputation | Fair CRPS first (Stage 3 F1); no skill claim until then |
 
@@ -86,6 +86,31 @@ Sourced review: [`docs/research/satellite-imagery-for-flood-prediction.md`](../r
 
 Worker instructions: [Stage 3 addendum 2](prompts/STAGE-03-addendum-2.md).
 
+## Go/no-go: will farmers get more time, and can they trust the alerts? (Oct 9, ~22:10 UTC)
+
+The owner asked whether to go all in, or to pivot to a project with clearer value. The supervisor counted every official North Cedarville warning since the SR 544 overflow gauge began (Nov 14, 2015 to Oct 9, 2026, 10.9 years). The counts below are descriptive statistics of official warnings and gauge readings. They are not claims about FloodLead's model.
+
+| Tier (frozen in [addendum 3](prompts/STAGE-03-addendum-3.md)) | Alerts | Followed by an overflow | Followed by an overflow ≥ 5 ft (the 2020, 2021 and 2025 class) | Time before overflow onset |
+|---|---|---|---|---|
+| Heads-up: any NWS North Cedarville warning | 18 (1.7 per year) | 7 (39%, 95% CI 17–64%) | 4 (22%) | 2.2–18.5 h (7 overflows) |
+| Prepare: NWS forecast of moderate or worse | 8 (0.7 per year) | 6 (75%, CI 35–97%) | 4 (50%, CI 16–84%) | large overflows: 4.0–18.5 h; all 4 flagged |
+| Move now: SR 544 ≥ 5.0 ft (chosen after seeing the data) | 4 | 4 | 4 (CI 40–100%) | fires 0.8–3.5 h after onset |
+
+- **Decision: GO, no pivot.**
+  - The product is a tiered relay that states its odds: Heads-up, Prepare, Move now.
+  - Its value can be shown in real numbers now.
+  - The model is a candidate upgrade to Prepare. It ships only if it wins under the protocol.
+- **Extra time against the City's first alert:**
+  - 2021: Prepare fired at 11:50 AM on Nov 14, ≈ 12 h before Abbotsford's first alert. Move now fired at 8:00 PM, ≈ 4–5 h before that alert.
+  - 2025: Prepare fired at 10:17 PM on Dec 9, at night. That is ≈ 18 h before Abbotsford's alert, or ≈ 9–10 h if held to 7 AM. Move now fired at 8:15 PM on Dec 10, after the City's alert and ≈ 3 h before its order.
+  - Most of this time comes from relay, not forecast skill.
+- **Limits:**
+  - only 4 large overflows in 11 years, so the intervals are wide;
+  - the 5.0 ft trigger is post hoc;
+  - the 2026 bridge may change the overflow gauge's behaviour;
+  - no farmer has yet confirmed that these actions match their tiers.
+- **Supervisor's error, caught:** a first pass on partial-year downloads suggested that NWS missed the Nov 28, 2021 overflow. The whole-year archive shows a moderate warning at 1:29 AM that day. Addendum 3 adds a completeness test.
+
 ## Value realism (what the supervisor will keep honest)
 
 - **Effective lead time = forecast horizon − data latency.** With ~1 h latency, a "6 h" forecast gives ~5 h of real warning. Every forecast stores `data_as_of`; the UI shows it.
@@ -101,7 +126,7 @@ Worker instructions: [Stage 3 addendum 2](prompts/STAGE-03-addendum-2.md).
 | 1 | Foundation + live archive: ingest ECCC Datamart (all BC), USGS Nooksack/Sumas, NOAA official forecasts; raw archive on the VM disk (daily snapshots as the off-machine copy); backfills; minimal public read API | Oct 7, before Build Session 2 (18:00) | Is data that disappears after 30 days now being kept, fresh to ~1 h, and verifiable from outside? |
 | 2 | Forecast ledger + baselines + first working app (prompt `prompts/STAGE-02-ledger-app.md`): hourly persistence/trend forecasts, NOAA issuances in a hash-chained append-only ledger anchored hourly to the `ledger` branch, scoring; the Build Session 2 app (Sumas Prairie overflow watch, 2021/2025 replay, snapshot mode); Stage 1 fixes F1–F3 | Oct 8 PM (started 12:30 PT): PR 1 (app + ledger) by ~16:30 PT so it is on `main` before the mentors look; PR 2 (scoring, anchors, verification) after ([addendum 1](prompts/STAGE-02-addendum-1.md)) | Is every forecast fixed in time before the truth arrives, and scored honestly? Can the first user get a useful answer from real data today? |
 | 3 | Working in public + history (prompt `prompts/STAGE-03-public-history.md`). Part 1 (Build Session 3): fair CRPS, in-app feedback, Fraser Valley gauge list, BC typical-yearly-peak levels in the ledger, help panel, track-record page. Part 2: ECCC daily history and annual peaks, rainfall (if the human approves the sources), upstream links, leakage-safe training sets, event catalogue | Oct 9: PR 1 by ~16:30 PT, merged before Build Session 3 (18:00 PT); PR 2 Oct 10 AM | Can someone other than Pranay find their gauge, understand it in 30 seconds, see an honest track record and tell us what they think? Do the training labels and features reflect only what was knowable at issue time? |
-| 4 | Value, measured honestly (per [Stage 3 addendum 1](prompts/STAGE-03-addendum-1.md)): (a) model-free relay and trigger rules, replayed on every event since 2015 against Abbotsford's alerts, orders and the 7-hour rule; (b) the official-forecast scorecard; (c) a calibrated model for North Cedarville ≥ 148/150 ft and SR 544 overflow onset, tested once on held-out floods against persistence, trend, the relay rules and the NWS warnings as issued, with ablations and exact confidence intervals | Oct 10 | Is any gain real, and is it the model's or the relay's? |
+| 4 | Value, measured honestly (per [Stage 3 addendum 1](prompts/STAGE-03-addendum-1.md), tiers frozen in [addendum 3](prompts/STAGE-03-addendum-3.md)): (a) model-free relay and trigger rules, replayed on every event since 2015 against Abbotsford's alerts, orders and the 7-hour rule; (b) the official-forecast scorecard; (c) a calibrated model for North Cedarville ≥ 148/150 ft and SR 544 overflow onset, tested once on held-out floods against persistence, trend, the relay rules and the NWS warnings as issued, with ablations and exact confidence intervals | Oct 10 | Is any gain real, and is it the model's or the relay's? |
 | 5 | Live model in the ledger, scored against baselines and NOAA | Oct 10 | Is the live model at least as good as the baselines on live data? |
 | 6 | Web app for other users ("Working in Public"), growing the Stage 2 app: map, gauge pages with forecast fan, station thresholds, official forecast, data-as-of, live scores, ledger verification, attribution, disclaimers. For Build Session 3 (Oct 9, 18:00 PT) the deployed Stage 2 app plus Stage 3 thresholds is the product others use | Oct 10 | Can a farmer understand their risk in 30 seconds without help? |
 | 7 | Opt-in alerts, the delivery gap nobody fills: a farmer sets staged levels (prepare, move); with recorded consent the app texts or calls them, day/night policy by tier, and after their approval notifies helpers who opted in; consent log, rate limits, replay/demo mode. Needs an SMS/voice provider: free trial, sending only to the human's verified numbers | Oct 11 | Does the right person get the right message at the right time, only with consent, and in daylight when the tier allows? |
