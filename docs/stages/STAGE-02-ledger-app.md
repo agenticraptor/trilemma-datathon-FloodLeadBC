@@ -368,6 +368,24 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
   - The latest NRKW1 issuance (`issuedTime` 2026-10-08T15:12Z) compared with `api.water.noaa.gov/nwps/v1/gauges/NRKW1/stageflow/forecast` at 00:26Z: **all 30 points we hold match exactly** (stage ft and flow kcfs).
   - NOAA had appended 10 more points (Oct 16 06Z – Oct 18 12Z) after our 00:05Z fetch. The 00:35Z fetch and the 01:15Z run should add them, and the comparison will be repeated then.
 - `17:31` — **AC-7 interim:** `scripts/audit_leakage.sql` over 4,269 forecasts (base times 20Z–00Z) → `0 | 0 | 0 | 0` of 34,152 horizons, in 4 min 36 s. The final run, after base 01:00Z, will cover all six base times.
+- `17:40` — **First settled scores** (scorer run 9, 00:40:00Z, **7.0 s**): 852 candidates, giving 852 rows (426 per model) plus 426 `persistence-naive` rows. All are h = 1 from base 20:00Z, the only horizon settled so far (`valid_at + 3 h ≤ now`).
+  - `/v1/scores/summary` totals: `scored 848, no_truth 4, stale_excluded 2`.
+  - These numbers come from **one base time and one horizon**. They are measurements to check the pipeline, not results.
+
+    | Model | Source | n | Mean CRPS (m) | MAE median (m) | 5–95 / 10–90 / 25–75 coverage | Paired CRPSS |
+    |---|---|---|---|---|---|---|
+    | persistence-naive | eccc | 413 | 0.0275 | 0.0275 | — | — |
+    | persistence-v1 | eccc | 413 | 0.0152 | 0.0282 | 0.889 / 0.801 / 0.574 | 0.448 vs naive |
+    | trend3h-v1 | eccc | 413 | 0.0174 | 0.0331 | 0.867 / 0.751 / 0.499 | −0.147 vs v1; 0.367 vs naive |
+    | persistence-naive | usgs | 10 | 0.0073 | 0.0073 | — | — |
+    | persistence-v1 | usgs | 10 | 0.0045 | 0.0058 | 1.0 / 0.8 / 0.5 | 0.391 vs naive |
+    | trend3h-v1 | usgs | 10 | 0.0040 | 0.0060 | 0.9 / 0.8 / 0.4 | 0.108 vs v1; 0.457 vs naive |
+
+  - **Rise events checked by hand:** 9 stations had a +0.25 m rise in their window, with 5 at +0.5 m and none at +1.0 m.
+    - 7 of the 9 are **tidal**: Comox Harbour, Campbell River at Argonaut Wharf, and the lower Fraser at Steveston, North Arm, Deas Island and Port Mann, plus Campbell River at Campbell River.
+    - Peace River above Alces is **regulated** (dam releases).
+    - These are real changes in level, not data errors. But rise thresholds at tidal stations measure the tide, not flooding, so tidal and regulated stations need a flag before any rise-event skill is reported (open issue).
+  - `forecast_scores` 565,248 B for 852 rows; `forecast_scores_naive` 335,872 B for 426 rows. These are small tables with fixed index overhead; the per-row size is re-measured at the end for the disk runway.
 
 ## Measurements
 
