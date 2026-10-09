@@ -297,6 +297,20 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - Raising `timescaledb.max_background_workers` and compressing old chunks were **skipped** in part 1 (time). They stay open issues, to be done with a dump first if they are done at all.
 - **Reversibility / cost:** one `ALTER DATABASE … RESET` undoes it. The 15-min backstop is well above every scheduled job (the longest is the issuance at about 77 s).
 
+### D-03.11 — The static app is deployed into a stable directory, not bind-mounted from the git working tree
+
+- **Context (an outage).** At 20:26Z the public app answered **404 for `/` and every static file**. The API was fine. Inside the Caddy container, `/srv/web` was empty.
+  - Caddy bind-mounted `./web` from the repository, and the host `web/` directory had been replaced: its files have mtime 19:41Z, when I ran `git checkout main && git pull` to start this stage. Caddy kept serving the deleted, empty directory.
+  - **Probable outage: ~19:41Z to 20:26:43Z (~45 min), caused by the worker.** Caddy's logs went with the recreated container, so the start time rests on the file mtimes, not on logs.
+  - The same mount also meant that **any edit to `web/` went live before it was committed**. That happened with the frontend agent's edits (work log `13:23`).
+- **Choice:**
+  - Caddy serves `${WEB_DIR:-/srv/floodlead/web}`.
+  - `scripts/deploy_web.sh` deploys `web/` there with `rsync -a --delete`, which updates files in place and keeps the directory, and writes `.deployed-commit`. The file is public and shows which commit the site runs.
+  - Web changes now go live only by an explicit deploy from a branch with an open PR, like the code.
+- **Why:** it fixes the root cause (a directory bind mount on a path that git may replace), and it brings the static app under the deploy-only-from-an-open-PR rule.
+- **Reversibility / cost:** one extra command per web deploy. Reverting is one line in `compose.yaml`.
+- **Follow-ups:** the check that would have caught this is a public `GET /` in health monitoring. Proposed for Stage 5 (open issues).
+
 ## Work log
 
 - `12:42` — `git checkout main && git pull` → `bd3d092`. Branch `stage-03-public`. Read the prompt and the inputs above.
@@ -408,7 +422,32 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
     - user text is never rendered;
     - the help text's colour claims match the chart (`COLORS.noaa #1f5fbf` blue, `COLORS.fl #5d7f78` grey-green).
   - `tests/test_web.py` gains the two new snapshot slugs → 18 passed.
-  - **Deviation:** Caddy serves `./web` from this working tree, so the agent's edits were live on the public site about 5 minutes before this commit put them in PR #5. All the backend code they call was already in PR #5 and deployed.
+  - **Deviation:** Caddy serves `./web` from this working tree, so the agent's edits were live on the public site while it worked (about 20 minutes) and before this commit put them in PR #5 (fixed by D-03.11). All the backend code they call was already in PR #5 and deployed.
+
+- `13:24–13:27` — **Public app outage found and fixed (D-03.11).**
+  - A headless check of `#/` and `#/track-record` showed an empty `#app` and 404s. `curl` gave `/ 404`, `app.js 404`, `style.css 404`. `docker compose exec caddy ls -la /srv/web` showed `total 0`, a deleted directory.
+  - Fix:
+    - `sudo mkdir /srv/floodlead/web`;
+    - `scripts/deploy_web.sh` (`rsync -a --delete`);
+    - `compose.yaml` caddy volume `${WEB_DIR:-/srv/floodlead/web}:/srv/web:ro`;
+    - `docker compose up -d caddy`.
+  - Back at **20:26:43Z**: `/ 200`, `/app.js 200`, `/style.css 200`, `/.deployed-commit 200` (fb18035).
+- `13:27` — **AC-2, feedback from the app on the public URL:** `scripts/feedback_e2e.cjs` (headless Chromium, 375 px, `#/track-record`) clicked Yes, typed a synthetic sentence and submitted.
+  - Result: `{"http_status":202,"status_text":"Thank you. Your feedback was received.","page_errors":[]}`.
+  - Screenshots `img/stage-03/feedback-before-submit-375.png` and `feedback-after-submit-375.png`.
+  - Read back on the VM:
+    ```
+    $ floodlead feedback list
+    #1 2026-10-09 20:05Z useful=yes route=#/ station=- v=stage-03
+        Worker smoke test after deploy (synthetic, no personal data).
+    #2 2026-10-09 20:27Z useful=yes route=#/track-record station=- v=stage-03
+        Synthetic end-to-end test by the build worker (no personal data).
+    2 item(s)
+    ```
+- `13:28` — **AC-5, screenshots** (`scripts/screenshots.cjs`, zenika/alpine-chrome@sha256:ee10e242…, public URL, 64 s).
+  - `layout-check.txt`: **scrollWidth = viewport on every page** (`#/`, `#/` with the help panel open, `#/stations`, two station pages, `#/track-record`) at 1280 and 375 px.
+  - `page errors (all pages): 0; with navigator.language=en-US@posix: 0`.
+  - The files are in `img/stage-03/`: track record, Fraser Valley list, help panel, feedback and the overflow watch.
 
 ## Measurements
 
