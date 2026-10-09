@@ -115,6 +115,7 @@ def load(pool) -> dict[str, Any]:  # type: ignore[no-untyped-def]
     s = get_settings()
     counts: dict[str, int] = {}
     with pool.connection() as conn:
+        conn.autocommit = True  # each payload commits on its own, so its ON COMMIT DROP temp table goes with it
         conn.execute("SET statement_timeout = '30min'")
         pages = conn.execute(
             "SELECT h.source, h.key, r.raw_object_id, r.archive_path FROM history_downloads h JOIN raw_objects r"

@@ -7,7 +7,8 @@ Tiers (pre-registered in docs/evaluation-protocol.md; the first fire of each tie
   from 7 days before the minor crossing to its end. (BC River Forecast Centre watches are not archived: their licence
   record is still yellow, so this half of the rule cannot be replayed.)
 - prepare: an NWS North Cedarville (NRKW1) flood warning product forecasting at least minor stage (H-VTEC severity
-  1-3 or a forecast crest >= 146.5 ft), or an NWS warning segment naming the Everson overflow.
+  1-3 or a forecast crest >= 146.5 ft), or an NWS warning segment naming the Everson overflow, issued from 72 h before
+  the minor crossing to its end.
 - move: the SR 544 overflow gauge's onset (first record before 2026-10-01, then >= 3.6 ft), or North Cedarville
   reaching minor stage (146.5 ft) while rising (the event's minor crossing).
 Each fire is flagged daylight or night at Abbotsford (floodlead.sun). Events with no overflow count as false alarms for
@@ -54,7 +55,8 @@ def tiers(conn: psycopg.Connection, ev: dict[str, Any]) -> dict[str, Any]:
     minor_first, minor_last = _t(ev["minor_first"]), _t(ev["minor_last"])
     assert minor_first is not None and minor_last is not None
     onset = _t((ev.get("overflow") or {}).get("first_record_at"))
-    lo, hi = minor_first - timedelta(days=7), minor_last
+    lo, hi = minor_first - timedelta(days=7), minor_last  # heads-up window: watches come days ahead
+    lo_prep = minor_first - timedelta(hours=72)  # prepare: warnings for this event only (as in the catalogue)
     watch = conn.execute(
         "SELECT issued_at, phenomena || '.' || significance || ' ' || action FROM nws_vtec WHERE significance = 'A'"
         " AND phenomena IN ('FA', 'FL') AND segment_head ILIKE '%%Whatcom%%' AND issued_at BETWEEN %s AND %s"
@@ -64,7 +66,7 @@ def tiers(conn: psycopg.Connection, ev: dict[str, Any]) -> dict[str, Any]:
         " || significance || ' ' || action FROM nws_vtec WHERE significance = 'W' AND action NOT IN ('CAN', 'EXP')"
         " AND issued_at BETWEEN %s AND %s AND ((nwsli = 'NRKW1' AND (severity IN ('1', '2', '3')"
         " OR forecast_crest_ft >= %s)) OR (segment_head ILIKE '%%Everson%%' AND segment_head ILIKE '%%overflow%%'))"
-        " ORDER BY issued_at LIMIT 1", (lo, hi, MINOR_FT)).fetchone()
+        " ORDER BY issued_at LIMIT 1", (lo_prep, hi, MINOR_FT)).fetchone()
     move_t, move_what = minor_first, "North Cedarville reached minor stage (146.5 ft), rising"
     if onset is not None and onset < move_t:
         move_t, move_what = onset, "SR 544 overflow onset"
