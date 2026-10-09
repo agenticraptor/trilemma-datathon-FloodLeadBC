@@ -1,0 +1,8 @@
+#!/bin/sh
+# Ad-hoc / maintenance psql on production with guard rails (Stage 3, F3; after the 2026-10-09 01:38Z OOM):
+# a 5-minute statement timeout and a small work_mem. Queries on `observations` (a hypertable with >1,000 chunks)
+# must still use constant time bounds or one scan into a temp table.
+# Usage: scripts/dbshell [psql args]   e.g. scripts/dbshell -c "SELECT count(*) FROM feedback"
+cd "$(dirname "$0")/.." || exit 1
+exec docker compose exec -T -e PGOPTIONS="-c statement_timeout=300000 -c work_mem=8MB" db \
+    psql -U floodlead -d floodlead "$@"

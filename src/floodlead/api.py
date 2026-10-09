@@ -20,8 +20,10 @@ from fastapi.responses import JSONResponse
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
-from floodlead import db, feedback, replay
+from floodlead import db, feedback, log, replay, typical_peaks
 from floodlead.config import ATTRIBUTION, REPO_URL, get_settings
+
+L = log.get(__name__)
 
 MAX_WINDOW = timedelta(days=7)
 NOT_A_WARNING = (
@@ -74,13 +76,17 @@ _state: dict[str, Any] = {}
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _state["pool"] = db.pool(min_size=1, max_size=4)
 
-    def warm() -> None:  # the replay takes ~9 s cold; compute it once at start so visitors never wait
-        try:
-            _replay()
-        except Exception:  # noqa: BLE001 - warming is best effort
-            pass
+    def warm() -> None:
+        """The replay takes ~9 s cold. Compute it at start, then refresh it in the background every
+        _REPLAY_REFRESH_S, before the cached copy expires, so no visitor ever pays the cold cost (F4, D-03.9)."""
+        while True:
+            try:
+                _replay(refresh=True)
+            except Exception:  # noqa: BLE001 - best effort; the next visitor would compute it
+                L.warning("replay refresh failed")
+            time.sleep(_REPLAY_REFRESH_S)
 
-    threading.Thread(target=warm, name="warm-replay", daemon=True).start()
+    threading.Thread(target=warm, name="refresh-replay", daemon=True).start()
     try:
         yield
     finally:
@@ -481,9 +487,10 @@ def official_forecasts(
 
 
 _REPLAY_TTL_S = 3600
+_REPLAY_REFRESH_S = 3000  # refresh 10 min before the cached copy would expire
 
 
-def _replay() -> dict[str, Any]:
+def _replay(refresh: bool = False) -> dict[str, Any]:
     def build() -> dict[str, Any]:
         with _pool().connection() as conn:
             r = replay.compute(conn)
@@ -500,6 +507,10 @@ def _replay() -> dict[str, Any]:
         r["method"] = (replay.__doc__ or "").strip()
         return r
 
+    if refresh:
+        val = build()
+        _cache["replay"] = (time.monotonic(), val)
+        return val
     return _cached("replay", _REPLAY_TTL_S, build)
 
 
@@ -676,3 +687,121 @@ async def post_feedback(request: Request) -> JSONResponse:
         feedback.store(conn, key, item)
     _cache.pop("health", None)
     return JSONResponse({"status": "received", "attribution": ATTRIBUTION}, status_code=202)
+
+
+# Part 1 item 3: the Fraser Valley gauges on the home page (at least these; D-03.7).
+FRASER_VALLEY = (
+    ("eccc:08MH029", "Sumas R. near Huntingdon", None),
+    ("eccc:08MH001", "Chilliwack R. at Vedder Crossing", None),
+    ("eccc:08MH103", "Chilliwack R. above Slesse Ck", None),
+    ("eccc:08MF005", "Fraser R. at Hope", None),
+    ("eccc:08MH024", "Fraser R. at Mission", "Tidal: the Fraser at Mission rises and falls with the ocean tide, so "
+     "part of each day's change is tide, not river flow."),
+    ("eccc:08MH155", "Nicomekl R. at 203 St, Langley", None),
+    ("eccc:08MF062", "Coquihalla R. below Needle Ck", None),
+)
+
+
+def _fraser_valley() -> dict[str, Any]:
+    now = datetime.now(UTC)
+    ids = [g[0] for g in FRASER_VALLEY]
+    names = {r["station_id"]: r["name"] for r in _q("SELECT station_id, name FROM stations WHERE station_id ="
+                                                     " ANY(%(ids)s)", {"ids": ids})}
+    latest = _latest(ids)
+    tp = {r["station_id"]: r for r in _q(
+        "SELECT station_id, status, value_m, n_years, first_year, last_year, reason FROM typical_peaks"
+        " WHERE method = %(m)s AND station_id = ANY(%(ids)s)", {"m": typical_peaks.METHOD, "ids": ids})}
+    out = []
+    for sid, short, note in FRASER_VALLEY:
+        lv = latest.get(sid, {}).get("level")
+        cur = None if lv is None else {"ts": lv["ts"], "level_m": round(lv["value"], 3),
+                                       "age_min": _age_min(lv["ts"], now)}
+        t = tp.get(sid)
+        peak, pnote = None, None
+        if t is None:
+            pnote = "not computed"
+        elif t["status"] in ("ok", "flagged"):
+            peak = {"value_m": t["value_m"], "n_years": t["n_years"], "first_year": t["first_year"],
+                    "last_year": t["last_year"], "status": t["status"],
+                    "flag": t["reason"] if t["status"] == "flagged" else None,
+                    "below_m": None if cur is None else round(t["value_m"] - cur["level_m"], 3)}
+        else:
+            pnote = f"{t['status']}: {t['reason']}"
+        out.append({"station_id": sid, "name": names.get(sid), "short_name": short, "latest": cur,
+                    "typical_peak": peak, "typical_peak_note": pnote, "tidal": note is not None, "note": note})
+    return _wrap({"generated_at": now, "label": typical_peaks.LABEL, "method": typical_peaks.METHOD,
+                  "gauges": out})
+
+
+@app.api_route("/v1/gauges/fraser-valley", methods=["GET", "HEAD"])
+def gauges_fraser_valley() -> dict[str, Any]:
+    """Fraser Valley gauges: latest level, data age, and position against the typical yearly peak (FloodLead-derived
+    from ECCC annual peaks; not an official flood level)."""
+    return _cached("fraser-valley", 60, _fraser_valley)
+
+
+MIN_PAIRS_FOR_STATEMENT = 100
+
+
+def _track_record() -> dict[str, Any]:
+    b = _summary()
+    led = _q("SELECT count(*) FILTER (WHERE entry_type = 'forecast') AS issued,"
+             " count(*) FILTER (WHERE entry_type = 'issuance') AS issuances,"
+             " count(*) FILTER (WHERE entry_type = 'gap') AS gaps,"
+             " min(base_time) FILTER (WHERE entry_type = 'forecast') AS first_base_time,"
+             " max(base_time) FILTER (WHERE entry_type = 'forecast') AS last_base_time FROM ledger_entries")[0]
+    head = _q("SELECT seq, entry_hash FROM ledger_entries ORDER BY seq DESC LIMIT 1")
+    rows = []
+    for g in b["groups"]:
+        ref = (g.get("skill_vs") or {}).get("persistence-naive")
+        if g["model"] == "persistence-naive" or not ref:
+            continue
+        pc, pm = ref.get("paired_crps") or {}, ref.get("paired_mae") or {}
+        rows.append({"source": g["source"], "model": g["model"], "h": g["h"], "n_pairs": ref["n_pairs"],
+                     "stations": g["stations"], "days": g["days"],
+                     "crps_model_m": pc.get(g["model"]), "crps_naive_m": pc.get("persistence-naive"),
+                     "crpss": ref.get("crpss"), "mae_model_m": pm.get(g["model"]),
+                     "mae_naive_m": pm.get("persistence-naive"), "mae_skill": ref.get("mae_skill")})
+    rows.sort(key=lambda r: (r["source"], r["model"], r["h"]))
+    ev = _q("SELECT count(*) FILTER (WHERE e.k LIKE 'official:%%' AND (e.v->>'outcome')::int = 1) AS official,"
+            " count(*) FILTER (WHERE e.k = 'typical:peak' AND (e.v->>'outcome')::int = 1) AS typical"
+            " FROM forecast_scores, jsonb_each(events) AS e(k, v) WHERE status = 'scored'")[0]
+    pairs = sum(r["n"] for r in b.get("official", []) if r["model"] == "persistence-naive")
+    big = [r for r in rows if r["n_pairs"] >= MIN_PAIRS_FOR_STATEMENT and r["mae_skill"] is not None]
+    better_mae = [r for r in big if r["mae_skill"] > 0]
+    statements = []
+    if big and not better_mae:
+        statements.append("Neither baseline has a lower median error (MAE) than pure persistence (the level now, held "
+                          "flat) at any horizon.")
+    elif better_mae:
+        statements.append("Lower median error (MAE) than pure persistence only at: " + "; ".join(
+            f"{r['model']} {r['source'].upper()} {r['h']} h ({100 * r['mae_skill']:+.1f} %, n {r['n_pairs']})"
+            for r in better_mae) + ". Everywhere else pure persistence is as good or better.")
+    pos = [r for r in big if (r["crpss"] or 0) > 0 and (r["mae_skill"] or 0) <= 0]
+    if pos:
+        statements.append("Where a baseline scores better than pure persistence on fair CRPS but not on median error, "
+                          "the credit comes from its spread (it says how uncertain it is), not from a better central "
+                          "estimate.")
+    statements.append("Pure persistence is the bar: the Stage 4 model has to beat it on held-out floods, and the "
+                      "result will be published whatever it shows.")
+    first, last = (b.get("window") or {}).get("first_base_time"), (b.get("window") or {}).get("last_valid_at")
+    if not ev["official"]:
+        statements.append(f"No gauge reached an official (NWS) flood stage between {first} and {last}, so these "
+                          "numbers describe quiet rivers, not floods.")
+    return _wrap({"scorer_run_id": b["scorer_run_id"], "generated_at": b["generated_at"],
+                  "forecasts": led,
+                  "ledger": {"head_seq": head[0]["seq"] if head else None,
+                             "head_hash": head[0]["entry_hash"] if head else None, "anchor": _anchor()},
+                  "verify": {"api": "python3 scripts/verify_ledger.py --api https://<host>",
+                             "github": "python3 scripts/verify_ledger.py --source github", "spec_url": SPEC_URL},
+                  "skill_vs_persistence": rows, "noaa_matched_pairs": pairs,
+                  "window": {"first_base_time": first, "last_valid_at": last,
+                             "official_crossings": ev["official"], "typical_peak_crossings": ev["typical"]},
+                  "statements": statements, "rules": b.get("rules")})
+
+
+@app.api_route("/v1/track-record", methods=["GET", "HEAD"])
+def track_record() -> dict[str, Any]:
+    """FloodLead's live track record from the latest scorer run: forecasts issued, chain head and anchor, skill against
+    pure persistence (fair CRPS and median MAE) with n, and plain statements of what the numbers do and do not show."""
+    return _cached("track-record", 60, _track_record)

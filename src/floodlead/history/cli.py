@@ -27,6 +27,18 @@ SOURCES: dict[str, tuple[Callable[[ConnectionPool], list[download.Task]], float,
 
 
 def main(pool: ConnectionPool, args: argparse.Namespace) -> int:
+    if args.hcmd == "load":
+        from floodlead.history import parse
+
+        fn = {"peaks": parse.load_peaks, "daily": parse.load_daily}[args.what]
+        print(fn(pool))
+        return 0
+    if args.hcmd == "typical-peaks":
+        from floodlead import typical_peaks
+
+        with pool.connection() as conn:
+            print(typical_peaks.compute(conn))
+        return 0
     if args.hcmd == "status":
         with pool.connection() as conn:
             rows = conn.execute(

@@ -70,7 +70,9 @@ def fresh(test_dsn: str) -> Iterator[psycopg.Connection]:
         c.execute("SET session_replication_role = replica")
         c.execute("TRUNCATE forecast_scores, forecast_scores_naive, score_summaries, scorer_runs, ledger_anchors,"
                   " ledger_entries,"
-                  " observations, observation_revisions, official_forecasts, history_downloads, raw_objects,"
+                  " observations, observation_revisions, official_forecasts, history_downloads,"
+                  " eccc_annual_peaks, eccc_daily, typical_peaks,"
+                  " raw_objects,"
                   " stations")
         c.execute("SET session_replication_role = DEFAULT")
         yield c
@@ -169,3 +171,50 @@ def test_noaa_point_respects_fetched_at(fresh: psycopg.Connection) -> None:
     p = scorer._noaa_point(fresh, "NRKW1", created, created - timedelta(hours=1), valid)
     assert p["stage_ft"] == 138.1 and p["issued_at"] == "2026-10-08T15:12:00Z" and p["lead_h"] == pytest.approx(8.8)
     assert scorer._noaa_point(fresh, "NRKW1", issued, issued, valid) is None  # nothing fetched yet
+
+
+def test_typical_peaks_enter_the_ledger_in_new_cards_before_first_use(fresh: psycopg.Connection,
+                                                                     test_dsn: str) -> None:
+    """D-03.8: the thresholds and their provenance go into new model cards (old cards untouched), in the same
+    issuance and at lower seq than the first forecast that uses them."""
+    import json
+
+    sid = "usgs:9999998"
+    store.upsert_station_meta(fresh, {"station_id": sid, "source": "usgs", "native_id": "9999998", "name": "T",
+                                      "params": ["level"]})
+    created = datetime(2026, 10, 8, 20, 15, tzinfo=UTC)
+    rows = [(created - timedelta(days=35) + i * timedelta(minutes=15), 2.0 + 0.001 * (i % 7))
+            for i in range(35 * 96 + 8)]
+    obs = [store.Obs(sid, ts, "level", v, v / 0.3048, "ft", {}, False, None) for ts, v in rows
+           if ts <= created + timedelta(hours=2)]
+    with fresh.transaction():
+        store.upsert_observations(fresh, obs, None, now=created - timedelta(minutes=10))
+    pool = db.pool(test_dsn, max_size=2)
+    try:
+        assert issuer.run(pool, now=created)["status"] == "issued"
+        cards1 = fresh.execute("SELECT seq, canonical FROM ledger_entries WHERE entry_type = 'model_card'"
+                               " ORDER BY seq").fetchall()
+        assert all("typical_peak" not in json.loads(c)["data"]["params"] for _, c in cards1)
+        fresh.execute("INSERT INTO typical_peaks (method, station_id, status, value_m, n_years, first_year, last_year,"
+                      " computed_at) VALUES ('typical-peak-v1', %s, 'ok', 2.5, 20, 2005, 2024, now())", (sid,))
+        assert issuer.run(pool, now=created + timedelta(hours=1))["status"] == "issued"
+        cards2 = fresh.execute("SELECT seq, canonical FROM ledger_entries WHERE entry_type = 'model_card'"
+                               " ORDER BY seq").fetchall()
+        new = [(s, json.loads(c)["data"]) for s, c in cards2[len(cards1):]]
+        assert len(new) == 2 and cards2[:len(cards1)] == cards1  # appended; the old cards are unchanged
+        for _, card in new:
+            assert card["params"]["typical_peak"]["values"][sid] == {"level_m": 2.5, "n_years": 20,
+                                                                     "years": [2005, 2024]}
+            assert card["change"].startswith("typical yearly peak thresholds added") and card["supersedes_seq"]
+        fc = fresh.execute("SELECT seq, canonical FROM ledger_entries WHERE entry_type = 'forecast'"
+                           " AND base_time = %s ORDER BY seq", (created.replace(minute=0) + timedelta(hours=1),)
+                           ).fetchall()
+        assert fc and min(s for s, _ in fc) > max(s for s, _ in new)  # cards before first use
+        d = json.loads(fc[0][1])["data"]
+        assert {"key": "typical:peak", "kind": "typical", "level_m": 2.5} == {
+            k: v for k, v in next(t for t in d["thresholds"] if t["key"] == "typical:peak").items()
+            if k in ("key", "kind", "level_m")}
+        assert all("typical:peak" in hz["p_exceed"] for hz in d["horizons"])
+        assert ledger.verify_db(fresh).ok
+    finally:
+        pool.close()

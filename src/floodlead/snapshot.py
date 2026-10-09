@@ -26,7 +26,7 @@ def slug(path: str) -> str:
 
 def canonical_paths(replay_events: list[str]) -> list[str]:
     paths = ["/v1/health", "/v1/stations?limit=2000", "/v1/official-forecasts/NRKW1", "/v1/replay/overflow",
-             "/v1/ledger/head"]
+             "/v1/ledger/head", "/v1/gauges/fraser-valley", "/v1/track-record"]
     for sid in DEMO_STATIONS:
         paths += [f"/v1/stations/{sid}", f"/v1/stations/{sid}/observations?param=level&days=7",
                   f"/v1/stations/{sid}/forecast"]
