@@ -453,6 +453,16 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
   peaks_without_overflow_ft {146.73,146.86,146.93,147.04,147.18,147.3}
   ```
   - `/v1/replay/overflow` `.summary` gives **the same values for every field**.
+- `19:17` — **Base 02:00Z** issued (seq 5998): `created_at` 02:15:01.453Z, `committed_at` 02:16:25.097Z (83.6 s); 852 forecasts (426 each). Seven consecutive base times, 0 gaps.
+- `19:17` — **AC-5 met.**
+  - The run first appended **seq 5145**, `official_forecast` NRKW1, `issued_at` 2026-10-08T15:12Z, `part "added points"`, `fetched_at` 01:21:19Z, 10 points, `raw_sha256 0d4b9790…0949` (the `stageflow/forecast` payload).
+  - All 152 held points are in the ledger, with 0 missing and 0 duplicated.
+  - Point-for-point comparison with `api.water.noaa.gov/nwps/v1/gauges/<lid>/stageflow/forecast` at 02:17Z:
+    ```
+    NRKW1 issuedTime 2026-10-08T15:12:00Z | NOAA points 40 | ledger points 40 | mismatches 0
+    NKSW1 issuedTime 2026-10-08T15:12:00Z | NOAA points 40 | ledger points 40 | mismatches 0
+    ```
+    Stage ft and flow kcfs are compared as JSON numbers, with no rounding.
 
 ## Measurements
 
