@@ -71,7 +71,8 @@ def fresh(test_dsn: str) -> Iterator[psycopg.Connection]:
         c.execute("TRUNCATE forecast_scores, forecast_scores_naive, score_summaries, scorer_runs, ledger_anchors,"
                   " ledger_entries,"
                   " observations, observation_revisions, official_forecasts, history_downloads,"
-                  " eccc_annual_peaks, eccc_daily, typical_peaks,"
+                  " eccc_annual_peaks, eccc_daily, typical_peaks, nws_vtec, nws_products, rain_hourly,"
+                  " openmeteo_hourly,"
                   " raw_objects,"
                   " stations")
         c.execute("SET session_replication_role = DEFAULT")

@@ -86,6 +86,16 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
 - the event catalogue;
 - the frozen `docs/evaluation-protocol.md` (after the supervisor's addendum).
 
+### Part 2 progress log (branch `stage-03-history`; merged with part 1's doc when PR 1 is in `main`)
+
+- `13:33–13:45` — In a separate worktree (`../trilemma-part2`), so part-1 deploys never build part-2 code:
+  - **NWS VTEC parser** (`src/floodlead/history/nws.py`, migration 011): products split on `\x01`, segments on `$$`, P-VTEC paired with the following H-VTEC, issuance from the local time line cross-checked against the WMO DDHHMM.
+    - Tests on real Nov 2021 products (`tests/fixtures/iem_FLWSEW_2021_excerpt.txt`).
+    - **The first North Cedarville flood warning of Nov 2021 (ETN 78, NEW) was issued at "1150 AM PST Sun Nov 14 2021" = 19:50Z**, WMO `141950`. Its H-VTEC: severity 2 (moderate), forecast flood begin 22:18Z, crest Nov 15 18:00Z. The supervisor's approximate ≈ 21:28Z is corrected here; the full timeline comes in part 2. The "major" upgrade (EXT, severity 3, record `NR`) was at 10:07Z Nov 15, as the supervisor said.
+  - **Rainfall parsers** (`src/floodlead/history/rain.py`, migration 012): ECCC climate, NCEI FM-15 AA1, SNOTEL accumulation → hourly (PST → UTC), and Open-Meteo, all with UTC hour-ending timestamps.
+    - Tests: `tests/test_rain.py`.
+  - Not deployed; production loads wait for PR 2.
+
 ## Decisions
 
 ### D-03.1 — History downloads: archive raw first, parse later; one paced, resumable task list per source

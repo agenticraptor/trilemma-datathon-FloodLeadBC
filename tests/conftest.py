@@ -57,7 +57,8 @@ def conn(test_dsn: str) -> Iterator[psycopg.Connection]:
         # Clean mutable tables between tests (append-only guards apply to the production tables'
         # semantics; in the disposable DB we truncate, which is not blocked by row triggers).
         c.execute("TRUNCATE observations, observation_revisions, official_forecasts, history_downloads,"
-                  " eccc_annual_peaks, eccc_daily, typical_peaks,"
+                  " eccc_annual_peaks, eccc_daily, typical_peaks, nws_vtec, nws_products, rain_hourly,"
+                  " openmeteo_hourly,"
                   " raw_objects,"
                   " stations,"
                   " ingest_runs, fetch_state, backfill_chunks, payload_coverage")
