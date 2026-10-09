@@ -20,6 +20,7 @@ point (stations.official_thresholds); NWS stages can change over the years, whic
 
 from __future__ import annotations
 
+import json
 import statistics
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -35,6 +36,12 @@ CATS = ("action", "minor", "moderate", "major")
 OVERFLOW = "usgs:12211195"
 OVERFLOW_ACTION_FT = 3.6
 OVERFLOW_CONTINUOUS_FROM = datetime(2026, 10, 1, tzinfo=UTC)
+
+
+def _iso(o: Any) -> str:
+    if isinstance(o, datetime):
+        return o.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    raise TypeError(f"not JSON serialisable: {type(o).__name__}")
 
 
 def category(stage_ft: float | None, stages: dict[str, float]) -> str:
@@ -191,5 +198,6 @@ def build(conn: psycopg.Connection, now: datetime | None = None) -> dict[str, An
                        max((e["first_issued_at"] for e in events), default=None)],
             "summary": {nw: summarise([e for e in scored if e["point"] == nw]) for nw in POINTS},
             "events": events}
-    conn.execute("INSERT INTO official_scorecards (generated_at, body) VALUES (%s, %s)", (now, Jsonb(body)))
+    conn.execute("INSERT INTO official_scorecards (generated_at, body) VALUES (%s, %s)",
+                 (now, Jsonb(body, dumps=lambda o: json.dumps(o, default=_iso))))
     return body

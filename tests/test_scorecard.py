@@ -45,3 +45,9 @@ def test_observe_and_score() -> None:
 def test_category() -> None:
     assert sc.category(146.4, STAGES) == "action" and sc.category(150.0, STAGES) == "major"
     assert sc.category(140.0, STAGES) == "below action" and sc.category(None, STAGES) == "unknown"
+
+
+def test_body_serialises_datetimes() -> None:
+    import json
+
+    assert json.dumps({"t": T0}, default=sc._iso) == '{"t": "2021-11-14T12:00:00Z"}'

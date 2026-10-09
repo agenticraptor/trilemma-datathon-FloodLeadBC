@@ -42,6 +42,16 @@
   const TYPICAL_PEAK_LABEL = 'Typical yearly peak (reached in about half of years): FloodLead-derived from ECCC records, not an official flood level';
   const SOURCE_NAMES = { eccc: 'ECCC BC gauges', usgs: 'USGS Nooksack/Sumas gauges' };
   const STATION_ID_RE = /^[A-Za-z0-9:._-]{1,64}$/;
+  // Official-forecast scorecard (#/official-scorecard)
+  const SC_INTRO = 'Every archived NWS flood warning for the Nooksack at North Cedarville since 2006, checked against what the river did. No agency publishes this. Computed by FloodLead from public archives (NWS text products via the Iowa Environmental Mesonet; USGS gauge records).';
+  const SC_CAPTION = 'Lead = hours before the observed crest. Bias below zero means the official forecast crest was too low.';
+  const SC_POINT_NAMES = { NRKW1: 'Nooksack River at North Cedarville', NREW1: 'Nooksack River at Everson', NOEW1: 'Nooksack River overflow at SR 544, Everson', NKSW1: 'Nooksack River at Ferndale' };
+  const SC_POINT_ORDER = ['NRKW1', 'NREW1', 'NOEW1', 'NKSW1'];
+  const SC_LEAD_ORDER = ['after the crest', '0-6 h', '6-12 h', '12-24 h', '24-48 h', '48 h +'];
+  const SC_HELD_OUT_WY = { 2022: 'Nov 2021 flood', 2026: 'Dec 2025 flood' }; // docs/evaluation-protocol.md: held out until one final run
+  const SC_MIN_N = 5; // fewer products (or events) than this: "too few … to judge"
+  const VTEC_ACTIONS = { NEW: 'new', CON: 'continued', EXT: 'time extended', EXA: 'area extended', EXB: 'time and area extended', UPG: 'upgraded', CAN: 'cancelled', EXP: 'expired', COR: 'correction', ROU: 'routine' };
+  const VTEC_SEVERITY = { 0: 'none given', N: 'none', 1: 'minor', 2: 'moderate', 3: 'major', U: 'unknown' };
 
   // ---------------------------------------------------------------------------------------------
   // Snapshot file naming. The backend's `floodlead export-demo` must use the same rule.
@@ -235,6 +245,7 @@
   const dtfPacific = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'short' });
   const dtfPacificYear = new Intl.DateTimeFormat('en-US', { timeZone: TZ, year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'short' });
   const dtfPacificShort = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  const dtfPacificMd = new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'short' });
   const dtfUtc = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   const dtfDate = new Intl.DateTimeFormat('en-US', { timeZone: TZ, year: 'numeric', month: 'short', day: 'numeric' });
   const dtfAxisDay = new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'short', day: 'numeric' });
@@ -243,6 +254,8 @@
   function fmtPacific(d) { d = toDate(d); return d ? dtfPacific.format(d) : '—'; }
   function fmtPacificYear(d) { d = toDate(d); return d ? dtfPacificYear.format(d) : '—'; }
   function fmtPacificShort(d) { d = toDate(d); return d ? dtfPacificShort.format(d) : '—'; }
+  /** "Nov 14, 09:22 PST" (no weekday, no year) */
+  function fmtPacificMd(d) { d = toDate(d); return d ? dtfPacificMd.format(d) : '—'; }
   function fmtUtc(d) { d = toDate(d); return d ? dtfUtc.format(d) + ' UTC' : '—'; }
   function fmtDate(d) { d = toDate(d); return d ? dtfDate.format(d) : '—'; }
   function fmtDuration(minutes) {
@@ -304,6 +317,25 @@
     const r = Math.round(v * 1000) / 10;
     if (r === 0) return '0.0 %';
     return `${r > 0 ? '+' : '−'}${Math.abs(r).toFixed(1)} %`;
+  }
+  /** Signed value (U+2212 minus): 1.234 -> "+1.23", -0.4 -> "−0.40"; no sign when it rounds to zero. */
+  function fmtSigned(v, d) {
+    if (!isNum(v)) return '—';
+    const s = Math.abs(v).toFixed(d);
+    return Number(s) === 0 ? s : `${v > 0 ? '+' : '−'}${s}`;
+  }
+  /** Like fmt(), with a U+2212 minus for negatives and no plus sign. */
+  function fmtMinus(v, d) {
+    if (!isNum(v)) return '—';
+    const s = Math.abs(v).toFixed(d);
+    return v < 0 && Number(s) !== 0 ? `−${s}` : s;
+  }
+  /** A share 0…1 as a whole percent ("0 %" and "100 %" included). */
+  function fmtShare(v) { return isNum(v) ? `${Math.round(v * 100)} %` : '—'; }
+  /** Stage in feet as given: one decimal when that is exact (NWS crests, 148.9), else two (USGS, 150.76). */
+  function fmtStageFt(v) {
+    if (!isNum(v)) return '—';
+    return Math.abs(v * 10 - Math.round(v * 10)) < 1e-6 ? v.toFixed(1) : v.toFixed(2);
   }
   function stationHref(id) { return `#/station/${encodeURIComponent(id).replace(/%3A/gi, ':')}`; }
   function shortHash(hx) { return typeof hx === 'string' && hx.length > 16 ? `${hx.slice(0, 10)}…${hx.slice(-6)}` : (hx || '—'); }
