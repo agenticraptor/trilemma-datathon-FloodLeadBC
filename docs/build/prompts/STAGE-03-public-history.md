@@ -18,7 +18,15 @@ Build Session 3 is "Working in Public: a deployed product that others can use, u
 - see an honest track record;
 - tell us what they think.
 
-Then, overnight, prepare the data the Stage 4 model needs. That model has to beat **pure persistence** on the public ledger, and in the 2021 and 2025 replays.
+Then, overnight, prepare the data the Stage 4 model needs.
+
+**The owner's standing instruction (Oct 9):** the product must be genuinely useful and the Demo Day numbers must be real; "we can't fool the judges". So the Stage 4 model will be judged on held-out floods it never saw, against four comparators:
+- pure persistence;
+- the 3 h trend;
+- the gauge-watch rule (overflow follows minor stage);
+- **the official NWS flood warnings that were actually issued for North Cedarville**.
+
+Whatever the result, it gets reported. This stage builds the data and the pre-registered protocol that make that comparison possible and honest.
 
 ## Read first
 
@@ -76,12 +84,16 @@ Priorities, in order. If time runs out, ship 1–5 and report the rest as PARTIA
      - the chain head and latest anchor, with "verify it yourself" instructions;
      - skill against **pure persistence** per horizon (fair CRPS and MAE), with n, stations and days;
      - the NOAA matched-pair count.
-   - **Honest framing:** if the baselines are not better than pure persistence, say so plainly; that is the bar the Stage 4 model must clear.
+   - **Honest framing:**
+     - If the baselines are not better than pure persistence, say so plainly; that is the bar the Stage 4 model must clear.
+     - State what the live window contains: for example, "no gauge reached a flood stage since Oct 8, so these numbers describe quiet rivers, not floods".
+     - No number without its n and its scorer run ID.
 6. **README "Build Session 3 — working in public".**
    - Who it is for and how to use it in 3 steps.
    - How to give feedback.
    - What is measured live (link the track record).
    - Known limits: baselines only, dry October, provisional data, not a warning service.
+   - How FloodLead will be judged: held-out floods, the four comparators including the official NWS warnings, and a protocol written before training.
    - What changed since Build Session 2.
 7. **F4 replay refresh-ahead; F2 reboot evidence.**
 
@@ -90,23 +102,53 @@ Priorities, in order. If time runs out, ship 1–5 and report the rest as PARTIA
 The goal is leakage-safe datasets that let Stage 4 train and walk-forward test a model on the Nooksack system and on the Fraser Valley gauges.
 
 1. **ECCC daily history.** Daily mean level and flow, plus annual peaks, for all BC stations with real-time data (record 2), into new tables. Record row counts, years per station and size on disk.
-2. **Rainfall.** New sources need a licence record and the human's approval (CLAUDE.md). The supervisor has asked the human to approve these:
-   - (a) ECCC hourly climate observations (OGL-Canada) for stations in and near the Fraser Valley and Nooksack basins;
-   - (b) NOAA NCEI hourly station observations (US public domain) for the Nooksack basin, and/or NRCS SNOTEL hourly precipitation (US public domain);
-   - (c) optional: Open-Meteo historical weather and historical forecast APIs (CC BY 4.0, free for non-commercial use) for gridded basin rainfall and archived *as-issued* forecasts.
-
-   Use only what the human approved. Write each source's usage-rights record **before** code depends on it. If nothing is approved when you reach this item, skip it and record that.
-3. **Upstream links.** For North Cedarville and each Fraser Valley target gauge, list the upstream gauges with typical travel times measured from the history (lagged cross-correlation of rises) and the source of each link.
-4. **Leakage-safe training sets.**
+2. **Rainfall: approved by the human on Oct 9 ("approve all").** Write each source's usage-rights record in `data-contract.md` **before** code depends on it, after checking its current terms yourself; record the terms URL and the date you checked.
+   - (a) ECCC hourly climate observations (OGL-Canada), for stations in and near the Fraser Valley and Nooksack basins.
+   - (b) NOAA NCEI hourly station observations and NRCS SNOTEL hourly precipitation (US public domain), for the Nooksack basin.
+   - (c) Open-Meteo historical weather (reanalysis) and historical forecast (archived *as-issued* model runs) APIs, for basin-average rainfall. The terms are CC BY 4.0 and free for non-commercial use; record that a commercial FloodLead would need a paid plan or a swap.
+   - Find out and record **from which date as-issued forecasts exist** for our basins. That date decides which floods can be replayed with forecast rainfall (fair) and which only with observed rainfall (an "oracle" upper bound that `evaluation.md` requires to be labelled).
+   - Measure each source's publication latency (when an hour's value becomes available).
+   - Basin averages: define each basin's polygon or point set, and save it with its source.
+3. **The official NWS flood warnings that were actually issued.** NWS text products are US public domain. The Iowa Environmental Mesonet (Iowa State University) keeps a free public archive of them. **This source needs the human's approval:** use it only if the relay message that delivered this prompt says "IEM approved"; otherwise skip it and record that. If approved, add its usage-rights record first.
+   - **Access:** `https://mesonet.agron.iastate.edu/cgi-bin/afos/retrieve.py?pil=FLWSEW&sdate=…&edate=…&fmt=text` (also `FLSSEW`).
+   - **Parse:** each product's issuance time, its P-VTEC (action, event number) and the H-VTEC for `NRKW1` (also `NKSW1`, `NREW1`, `NOEW1`): severity, and forecast flood begin, crest and end times.
+   - **Build:** an "official warning timeline" for every event in the history.
+   - **Supervisor's spot check (approximate; verify it):**
+     - **Dec 2025:** the first North Cedarville flood warning came about 05:40–06:10 PST on Dec 10 (≈ 13:40–14:10Z) and forecast flooding from ≈ 20:28Z. The river actually crossed minor stage at 20:15Z, so official lead ≈ 6 h.
+     - **Nov 2021:** the first warning came about 13:28 PST on Nov 14 (≈ 21:28Z) and forecast flooding from 22:18Z. The river crossed minor stage at 21:30Z, so official lead ≈ 0 h. The "major" upgrade came about 02:07 PST on Nov 15 (≈ 10:07Z), against a major crossing at 23:45Z.
+   - These official times are the comparator FloodLead has to beat or complement. Report them as found.
+4. **Upstream links.** For North Cedarville and each Fraser Valley target gauge, list the upstream gauges with typical travel times measured from the history (lagged cross-correlation of rises) and the source of each link.
+5. **Leakage-safe training sets.**
    - **Nooksack**, 15-min data, 2004 → now.
      - Targets: North Cedarville level at 1–48 h, and crossing of the official stages within 6/12/24/48 h.
-     - Features: North Cedarville and upstream gauges, observed rainfall if approved, season, antecedent conditions.
-     - Every feature is lagged by its source's **measured publication latency** (USGS ~15–60 min, ECCC 40–90 min), so a training row sees only what a live forecast would have seen.
+     - Features: North Cedarville and upstream gauges; observed rainfall up to issue time; as-issued forecast rainfall only where it exists; season; antecedent conditions.
+     - Every feature is lagged by its source's **measured publication latency** (USGS ~15–60 min, ECCC 40–90 min, rainfall as measured in item 2), so a training row sees only what a live forecast would have seen.
+     - Two variants, never mixed:
+       - `honest`: past observations, plus as-issued forecasts where they exist;
+       - `oracle`: future *observed* rainfall standing in for a forecast. It is an upper bound only, and is always labelled.
    - **Fraser Valley BC gauges:** a daily dataset from the history, plus the 5-min data since Sep 2026.
-   - **Splits:** by water year, with Nov 2021 and Dec 2025 held out untouched (`evaluation.md`).
+   - **Splits:** by water year. The Nov 2021 and Dec 2025 floods are held out untouched until the single final run in Stage 4 (`evaluation.md`).
    - **Features table:** for each feature, its source, its latency, and why it is available at issue time.
    - **Revisions:** say how revisions are handled. Approved history is not what was visible in real time; label it so.
-5. **Event catalogue.** Every crossing of official stages (Nooksack) and of the typical yearly peak (BC) in the history, with times: the labels Stage 4 is judged on.
+6. **Event catalogue.** Every crossing of the official stages (Nooksack) and of the typical yearly peak (BC) in the history, with times. For the Nooksack events, also give:
+   - the overflow onset at SR 544, where the gauge existed;
+   - the first official NWS warning for that gauge, and its forecast begin and crest times (item 3).
+
+   These are the labels and comparators Stage 4 is judged on.
+7. **Pre-registered evaluation protocol: write it before any model is trained.** `docs/evaluation-protocol.md` fixes, in advance:
+   - **Data:** the training, validation and held-out periods; the two held-out floods; which variant (`honest` or `oracle`) each result uses.
+   - **Metrics:**
+     - level skill against pure persistence (fair CRPS and MAE at 6/12/24 h, overall and on rising limbs);
+     - crossing probabilities (Brier, reliability);
+     - **hours of warning** at minor/moderate/major stage and at overflow onset;
+     - false alarms per season over all test years.
+   - **Alert rule:** how it is chosen (probability threshold and persistence of the alert), on validation years only.
+   - **Comparators:** persistence, 3 h trend, the gauge-watch rule and the official NWS warnings.
+   - **Uncertainty:** bootstrap by event or by water year.
+   - **The kill criteria** from `evaluation.md`.
+   - **Reporting:** the exact table that will be published, whatever it shows, including events where FloodLead does worse.
+
+   Commit it, record its git commit and sha256 in the stage doc, and mark it **frozen**. The supervisor reviews it before Stage 4 starts. Stage 4 may not change it without a dated, logged amendment.
 
 ## Tests
 
@@ -128,8 +170,8 @@ The goal is leakage-safe datasets that let Stage 4 train and walk-forward test a
 | AC-6 | README Build Session 3 section; PR 1 merged before 01:00 UTC (supervisor) | link |
 | AC-7 | Reboot evidence (F2), replay refresh-ahead (F4), `statement_timeout` (F3) | outputs |
 | AC-8 | ECCC daily history and annual peaks loaded into new tables (counts, size) | SQL |
-| AC-9 | Rainfall: approved sources ingested with licence records, or "not approved" recorded | data-contract diff |
-| AC-10 | Training sets and features table; leakage and split tests pass; event catalogue | files + test output |
+| AC-9 | Rainfall: the approved sources ingested with licence records, latencies and as-issued forecast start dates; the NWS warning archive parsed (if "IEM approved") with the official warning timeline per event | data-contract diff + SQL + table |
+| AC-10 | Training sets (`honest` and `oracle`, labelled) and features table; leakage and split tests pass; event catalogue with official warning times; frozen `docs/evaluation-protocol.md` (commit and sha256) | files + test output |
 | AC-11 | `ruff` and `pytest` pass, with the DB tests run | output |
 | AC-12 | ≥ 10 decisions; stage doc in most commits, spread across the stage; contract files updated | `git log --stat` |
 

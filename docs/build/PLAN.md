@@ -45,6 +45,14 @@ next prompt ◄── PASS (merge) ◄── supervisor QA ──► FIX prompt 
 | The overflow toward Sumas Prairie (USGS 12211195, Overflow at SR 544) first appeared when North Cedarville stood at ~147.5 ft: 4 h 55 min after it crossed minor stage in Nov 2021 (21:30Z → 02:25Z) and 4 h 30 min after in Dec 2025 (20:15Z → 00:45Z) | Public API queries of the backfilled USGS data | The first piece of demonstrable value: the Build Session 2 demo path. Two events only; Stage 2 recomputes it for every event in the record |
 | ~~NOAA can add points to an existing issuance~~ **Corrected in Stage 2 (D-02.18):** NOAA does not append points. The combined `stageflow` endpoint cut NRKW1 at request time + 7 days, so each fetch revealed more of an issuance that was complete from the start | `/v1/official-forecasts/NRKW1` vs `stageflow/forecast` | Forecasts now come from `stageflow/forecast`; the ledger holds every point as published |
 
+## Facts the supervisor verified on Oct 9, 2026
+
+| Finding | Evidence | Consequence |
+|---|---|---|
+| Archived official NWS flood warnings for North Cedarville (H-VTEC `NRKW1`) exist for Nov 2021 and Dec 2025 in the Iowa Environmental Mesonet text archive (`FLWSEW`, `FLSSEW`) | `retrieve.py?pil=FLWSEW&sdate=…` | The honest comparator for "hours of warning" |
+| Approximate official lead before the minor-stage crossing: Dec 2025 ≈ 6 h (first warning ≈ 13:40–14:10Z, crossing 20:15Z); Nov 2021 ≈ 0 h (first warning ≈ 21:28Z, crossing 21:30Z; the "major" upgrade ≈ 10:07Z Nov 15, against the major crossing at 23:45Z) | Supervisor's parse of H-VTEC lines (pairing of issuance times approximate) | FloodLead must beat or complement these; Stage 3 verifies them exactly |
+| Live baselines (Oct 8–9) do not beat pure persistence on median accuracy; their CRPSS against naive is inflated by the quantile-score approximation | `/v1/scores/summary` run 29; supervisor recomputation | Fair CRPS first (Stage 3 F1); no skill claim until then |
+
 ## Value realism (what the supervisor will keep honest)
 
 - **Effective lead time = forecast horizon − data latency.** With ~1 h latency, a "6 h" forecast gives ~5 h of real warning. Every forecast stores `data_as_of`; the UI shows it.
@@ -98,7 +106,8 @@ next prompt ◄── PASS (merge) ◄── supervisor QA ──► FIX prompt 
 | USGS API key → `USGS_API_KEY` in `.env` | Keyless USGS quota (1,000 requests/h) | done (Oct 8); ingest must be recreated to pick it up |
 | Daily snapshot schedule on the boot disk | Off-machine copy of the archive and database | **Declined by the owner (Oct 8). Accepted risk:** a disk loss would lose the raw archive and database. Mitigation: the ledger entries themselves are published hourly to the `ledger` branch (Stage 2 addendum), so the live track record survives |
 | VM reboot test (Stage 1 AC-9) | Unattended recovery | Run by the worker at ~03:50Z Oct 9; services recovered with no gap (04:00Z issued on time). Boot-time evidence requested in Stage 3 |
-| Approve rainfall sources for Stage 3 part 2: (a) ECCC hourly climate observations (OGL-Canada), (b) NOAA NCEI / NRCS SNOTEL hourly observations (US public domain), (c) optional Open-Meteo (CC BY 4.0, free for non-commercial use, includes archived as-issued forecasts) | New data sources need the human's approval (CLAUDE.md) | asked Oct 9 |
+| Approve rainfall sources for Stage 3 part 2: (a) ECCC hourly climate observations (OGL-Canada), (b) NOAA NCEI / NRCS SNOTEL hourly observations (US public domain), (c) Open-Meteo (CC BY 4.0, free for non-commercial use, archived as-issued forecasts) | New data sources need the human's approval (CLAUDE.md) | **Approved Oct 9 ("approve all")** |
+| Approve the archive of official NWS flood warnings (US public domain) via the Iowa Environmental Mesonet (Iowa State University) | The comparator for "hours of warning": what NWS actually issued in 2021 and 2025 | asked Oct 9 (relay "IEM approved" with the Stage 3 prompt) |
 | Branch protection on the `ledger` branch (no force-push, no deletion) | Protects the public track record | recommended by the worker; offered Oct 9 |
 | Share the app with 3–5 people (farmers contacted, friends) at Build Session 3 and ask for feedback through the in-app box | Build Session 3 is about other people using it | Oct 9 |
 | Farmer outreach | Interviews for Demo Day | in progress |
