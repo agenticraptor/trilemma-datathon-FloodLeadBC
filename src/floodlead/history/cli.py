@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 from collections.abc import Callable
 from dataclasses import asdict
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from psycopg_pool import ConnectionPool
@@ -28,11 +31,13 @@ SOURCES: dict[str, tuple[Callable[[ConnectionPool], list[download.Task]], float,
 
 def main(pool: ConnectionPool, args: argparse.Namespace) -> int:
     if args.hcmd == "load":
-        from floodlead.history import parse
+        from floodlead.history import nws, parse, rain
 
-        fn = {"peaks": parse.load_peaks, "daily": parse.load_daily}[args.what]
+        fn = {"peaks": parse.load_peaks, "daily": parse.load_daily, "nws": nws.load, "rain": rain.load}[args.what]
         print(fn(pool))
         return 0
+    if args.hcmd == "build":
+        return build(pool, args.what, Path(args.out))
     if args.hcmd == "typical-peaks":
         from floodlead import typical_peaks
 
@@ -64,3 +69,29 @@ def main(pool: ConnectionPool, args: argparse.Namespace) -> int:
         print({k: (str(v) if v is not None and not isinstance(v, int | str) else v) for k, v in asdict(rep).items()})
         ok = ok and rep.errors == 0
     return 0 if ok else 1
+
+
+def build(pool: ConnectionPool, what: str, out: Path) -> int:
+    from floodlead import catalogue, datasets, relay, scorecard
+
+    out.mkdir(parents=True, exist_ok=True)
+    with pool.connection() as conn:
+        conn.autocommit = True
+        if what == "scorecard":
+            body = scorecard.build(conn)
+            print(json.dumps(body["summary"], indent=1, default=str))
+            return 0
+        if what == "relay":
+            res = relay.replay_all(conn)
+        elif what == "catalogue":
+            res = {"nooksack": catalogue.nooksack(conn), "bc": catalogue.bc(conn)}
+        else:
+            t1 = (datetime.now(UTC) - timedelta(hours=48)).replace(minute=0, second=0, microsecond=0)
+            t0 = datetime(2004, 10, 1, tzinfo=UTC)
+            inp = datasets.load_inputs(conn, t0, t1)
+            res = {"built_at": datetime.now(UTC), "period": [t0, t1], "latency_min": datasets.LATENCY,
+                   "holdout_water_years": list(datasets.HOLDOUT_WY), "files": datasets.write(inp, out, t0, t1)}
+    path = out / f"{what}.json"
+    path.write_text(json.dumps(res, indent=1, default=str))
+    print(json.dumps(res.get("summary") or res.get("files") or {"written": str(path)}, indent=1, default=str))
+    return 0
