@@ -65,6 +65,10 @@ def main(argv: list[str] | None = None) -> int:
     hd.add_argument("--pace", type=float, default=None, help="seconds between requests (default per source)")
     hd.add_argument("--limit", type=int, default=None, help="stop after this many requests per source")
     hsub.add_parser("status", help="tasks done, empty and failed per source")
+    fb = sub.add_parser("feedback", help="read the in-app feedback (decrypted only here, on the VM)")
+    fbs = fb.add_subparsers(dest="fcmd", required=True)
+    fbl = fbs.add_parser("list", help="print every feedback item, oldest first")
+    fbl.add_argument("--since", default=None, help="ISO date/time (UTC), e.g. 2026-10-09T20:00")
     sc = sub.add_parser("score", help="score settled forecast horizons now and refresh the summary")
     sc.add_argument("--recompute-crps", action="store_true",
                     help="recompute crps (fair) and crps_qs for every stored score, then refresh the summary")
@@ -159,6 +163,19 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         jobs = {j.name: j for j in _jobs(pool)}
         jobs[args.job].fn()
+        return 0
+    if args.cmd == "feedback":
+        from floodlead import feedback
+
+        since = datetime.fromisoformat(args.since).replace(tzinfo=UTC) if args.since else None
+        with pool.connection() as conn:
+            items = feedback.read_all(conn, get_settings().feedback_key, since)
+        for it in items:
+            useful = {True: "yes", False: "no", None: "-"}[it["useful"]]
+            text = it["text"].encode("unicode_escape").decode("ascii")  # no terminal control sequences
+            print(f"#{it['id']} {it['received_at']:%Y-%m-%d %H:%MZ} useful={useful} route={it['route']}"
+                  f" station={it['station_id'] or '-'} v={it['app_version'] or '-'}\n    {text}")
+        print(f"{len(items)} item(s)")
         return 0
     if args.cmd == "history":
         from floodlead.history import cli as hcli

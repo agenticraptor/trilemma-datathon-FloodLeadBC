@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     nwps_base: str = "https://api.water.noaa.gov/nwps/v1"
     # Optional api.data.gov key for the USGS Water Data API (keyless limit: 1,000 requests/hour per IP).
     usgs_api_key: str = ""
+    # Fernet key for the feedback free text (Stage 3). Never logged or printed.
+    feedback_key: str = ""
     # Minimum seconds between USGS backfill request starts (7.2 s = 500/h, leaving room for live ingest).
     usgs_backfill_min_interval_s: float = 7.2
 

@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
-from floodlead import db, replay
+from floodlead import db, feedback, replay
 from floodlead.config import ATTRIBUTION, REPO_URL, get_settings
 
 MAX_WINDOW = timedelta(days=7)
@@ -109,11 +109,23 @@ async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
 async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
     return JSONResponse({"detail": jsonable_encoder(exc.errors()), "attribution": ATTRIBUTION}, status_code=422)
 _limiter = RateLimiter(RATE_LIMIT_PER_MIN)
+_PRIVATE = ("10.", "172.", "192.168.", "127.")
+
+
+def client_ip(request: Request) -> str:
+    """The visitor's IP. Behind Caddy the TCP peer is Caddy (a private address), and Caddy sets X-Forwarded-For to
+    the client address (it ignores incoming X-Forwarded-For from untrusted clients). Until Stage 3 every visitor
+    shared Caddy's bucket (D-03.6). Used only for in-memory rate limits; never stored or logged."""
+    peer = request.client.host if request.client else "unknown"
+    xff = request.headers.get("x-forwarded-for")
+    if xff and peer.startswith(_PRIVATE):
+        return xff.split(",")[-1].strip() or peer
+    return peer
 
 
 @app.middleware("http")
 async def rate_limit(request: Request, call_next):  # type: ignore[no-untyped-def]
-    ip = request.client.host if request.client else "unknown"
+    ip = client_ip(request)
     if request.url.path.startswith("/v1/") and not _limiter.allow(ip):
         return JSONResponse(
             {"detail": f"rate limit: {RATE_LIMIT_PER_MIN} requests per minute per client",
@@ -260,8 +272,10 @@ def _health() -> dict[str, Any]:
               " FROM raw_objects")[0]
     jobs = _ledger_health(now)
     overall = _worst(*(v["status"] for v in sources.values()), disk["status"], *(v["status"] for v in jobs.values()))
+    fb = _q("SELECT count(*) AS total, count(*) FILTER (WHERE received_at > now() - interval '24 hours') AS last_24h,"
+            " count(*) FILTER (WHERE useful) AS yes, count(*) FILTER (WHERE useful = false) AS no FROM feedback")[0]
     return _wrap({"status": overall, "generated_at": now, "sources": sources, "disk": disk,
-                  "archive": arch, **jobs, "notice": NOT_A_WARNING})
+                  "archive": arch, **jobs, "feedback": {"counts_only": True, **fb}, "notice": NOT_A_WARNING})
 
 
 def _age_status(age_min: float | None, t: dict[str, int]) -> str:
@@ -632,3 +646,33 @@ def scores_official(lid: str | None = None) -> dict[str, Any]:
         "its 6 h horizon settles 9 h later (6 h + 3 h).")
     return _wrap({"scorer_run_id": b["scorer_run_id"], "generated_at": b["generated_at"], "lid": lid,
                   "pairs": rows, "note": note})
+
+
+_feedback_limiter = feedback.Limiter()
+
+
+@app.post("/v1/feedback", status_code=202)
+async def post_feedback(request: Request) -> JSONResponse:
+    """Anonymous feedback from the app: page, station shown, yes/no, optional text (at most 1,000 characters). The
+    text is encrypted at rest and never shown publicly. Do not send personal information."""
+    raw = await request.body()
+    if len(raw) > feedback.MAX_BODY_BYTES:
+        raise HTTPException(413, f"request body larger than {feedback.MAX_BODY_BYTES} bytes")
+    try:
+        body = json.loads(raw)
+    except ValueError:
+        raise HTTPException(400, "expected a JSON object") from None
+    try:
+        item = feedback.validate(body)
+    except feedback.FeedbackError as e:
+        raise HTTPException(400, str(e)) from None
+    if not _feedback_limiter.allow(client_ip(request)):
+        raise HTTPException(429, "too many submissions from this connection; try again later",
+                            headers={"Retry-After": "600"})
+    key = get_settings().feedback_key
+    if not key:
+        raise HTTPException(503, "feedback is not configured")
+    with _pool().connection() as conn:
+        feedback.store(conn, key, item)
+    _cache.pop("health", None)
+    return JSONResponse({"status": "received", "attribution": ATTRIBUTION}, status_code=202)

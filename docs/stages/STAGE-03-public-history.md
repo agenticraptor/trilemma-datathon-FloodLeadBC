@@ -205,6 +205,33 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - Adding a nullable column is instant.
   - The values are recomputed from the ledger, so the dump is the belt-and-braces copy.
 
+### D-03.6 — Feedback: anonymous, text encrypted at rest, append-only; rate limits keyed on the real client IP
+
+- **Context:** part 1 item 2. Build Session 3 visitors must be able to tell us what they think. AGENTS.md says personal data is encrypted, kept in Canada, and never in the ledger, logs or fixtures.
+- **Choice:**
+  - `POST /v1/feedback` takes `{route, station_id, useful, text ≤ 1,000 chars, app_version}`. Any other field is rejected, including names and emails.
+    - Body ≤ 4,096 B, else 413. Control characters are stripped.
+    - Response `202 {"status":"received"}`: the text is never echoed or rendered.
+  - Table `feedback` (migration 008):
+    - the text is a **Fernet token** (AES-128-CBC + HMAC-SHA256), with the key `FEEDBACK_KEY` in `.env`, generated on the VM and never printed;
+    - `key_id` = the first 8 hex of sha256(key), for rotation;
+    - **no IP address, name, email or phone is stored**;
+    - UPDATE, DELETE and TRUNCATE are rejected by triggers.
+  - Rate limits, in memory only:
+    - per client IP: 5 per 10 min and 20 per day;
+    - 300 per hour from everyone together.
+  - Health shows counts only (`feedback.total`, `last_24h`, `yes`, `no`).
+  - `floodlead feedback list` on the VM is the only reader. It escapes control characters, so no terminal sequences reach the output.
+  - A GitHub issue form (`.github/ISSUE_TEMPLATE/feedback.yml`) for people who want a reply. It warns that issues are public.
+- **Found and fixed on the way:** the general API rate limiter (Stage 1, 120/min) keyed on `request.client.host`. Behind Caddy that is Caddy's address, so **every visitor shared one bucket**. A dozen people at Build Session 3 could have exhausted it.
+  - Both limiters now use `client_ip()`: X-Forwarded-For from a private-network peer. Caddy sets that header to the client address and ignores one sent by untrusted clients.
+  - The test client stands in for Caddy in `tests/test_feedback.py`.
+- **Why:** the minimum data that makes feedback useful, with no personal data by design. Encryption covers a visitor who types personal details anyway.
+- **Reversibility / cost:**
+  - `cryptography` is a new dependency (50.0.2).
+  - Losing `FEEDBACK_KEY` makes the stored text unreadable (stated in the open issues). It lives only in `.env`, as the other secrets do.
+- **Follow-ups:** retention period for feedback text (Stage 7, with the privacy policy).
+
 ## Work log
 
 - `12:42` — `git checkout main && git pull` → `bd3d092`. Branch `stage-03-public`. Read the prompt and the inputs above.
@@ -258,6 +285,13 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - **First recompute failed and rolled back:** `psycopg.ProgrammingError: can't change 'autocommit' now: connection in transaction status INTRANS`, after 37.2 s. The chunk updates had run inside the first statement's implicit transaction, so the error rolled all of them back. Nothing changed on production.
   - The test had passed only because the pooled connection was reused from an earlier `scorer.run`, which leaves autocommit on.
   - Fix: autocommit is set before the first statement. The test now uses a fresh pool, as production does: **it fails without the fix and passes with it**.
+
+- `13:05–13:25` — **Feedback** (D-03.6):
+  - migration 008;
+  - `src/floodlead/feedback.py`, `POST /v1/feedback`, health counts, `floodlead feedback list`, the issue form;
+  - `tests/test_feedback.py`: validation, encryption round trip and wrong key, per-IP and global limits, end to end (202, not echoed, encrypted at rest, decrypted only by the reader, absent from captured logs and output, health counts, append-only), 413/400/429.
+  - **The test caught a bug in my first version:** health folds every job block into the overall status, and the feedback block had none, so health would have returned 500. Feedback counts now sit outside the status roll-up.
+  - `pytest -q` → **107 passed**.
 
 ## Measurements
 
