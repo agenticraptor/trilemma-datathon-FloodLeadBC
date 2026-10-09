@@ -162,6 +162,21 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
 
   No archived RVF/HYD product with NRKW1 values was found under these PILs. The scorecard's forecast values are therefore the crest and timing stated in the FLW/FLS products: text crests, plus H-VTEC begin, crest and end times. NOAA's 6-hourly forecast series is archived by FloodLead only since Oct 7, 2026 (Stage 1).
 
+- `14:00` — **ECCC hourly precipitation completeness** (archived climate-hourly pages, 2004–2026; temperature is 99–100 % complete everywhere):
+
+  | Climate ID | Station | Hours | Precip non-null |
+  |---|---|---|---|
+  | 1100030 | Abbotsford A (to 2012) | 74,260 | **0.0 %** |
+  | 1100031 | Abbotsford A (2011–) | 125,309 | **0.0 %** |
+  | 1100032 | Abbotsford A (2016–) | 93,842 | 12.4 % |
+  | 1106178 | Pitt Meadows CS | 199,241 | 73.2 % |
+  | 1108910 | White Rock CS | 198,884 | 50.7 % |
+  | 1113541 | Hope (AUT), to 2012 | 61,897 | 0.0 % |
+  | 1113542 | Hope A | 130,595 | 81.2 % |
+  | 1113543 | Hope Airport | 123,859 | 95.4 % |
+
+  **Abbotsford has essentially no hourly precipitation in ECCC's climate archive.** The live probe also found its newest hour about 14 h old with no precipitation. So the Fraser Valley rain features cannot rest on the airport next to Sumas Prairie: Hope and Pitt Meadows bracket the valley, with KBLI and SNOTEL on the US side. Open-Meteo reanalysis serves as the oracle and the basin average.
+
   The Sumas USGS–ECCC overlap is only 427 days. The USGS hourly level at Sumas, WA needs at least 18 hours a day to make a daily mean, and its level record is short. As found.
 
 ## Decisions
