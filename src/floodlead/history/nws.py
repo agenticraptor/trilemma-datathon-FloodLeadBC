@@ -20,13 +20,15 @@ from datetime import UTC, datetime, timedelta
 _T = r"(\d{6}T\d{4}Z)"
 PVTEC = re.compile(r"/([OTEX])\.([A-Z]{3})\.([A-Z]{4})\.([A-Z]{2})\.([WAYSFON])\.(\d{4})\." + _T + "-" + _T + "/")
 HVTEC = re.compile(r"/([A-Z0-9]{5})\.([0-3NU])\.([A-Z]{2})\." + _T + r"\." + _T + r"\." + _T + r"\.([A-Z]{2})/")
-WMO = re.compile(r"^([A-Z]{4}\d{2}) ([A-Z]{4}) (\d{2})(\d{2})(\d{2})", re.M)
+# WMO abbreviated heading, with an optional BBB indicator (CCA = correction, AAA = amendment, RRA = delayed)
+WMO = re.compile(r"^([A-Z]{4}\d{2}) ([A-Z]{4}) (\d{2})(\d{2})(\d{2})(?: ([A-Z]{3}))?[ \t]*$", re.M)
 LOCAL = re.compile(r"^(\d{1,2})(\d{2}) (AM|PM) (PST|PDT|MST|MDT) \w{3} (\w{3}) (\d{1,2}) (\d{4})\s*$", re.M)
 ZONES = {"PST": -8, "PDT": -7, "MST": -7, "MDT": -6}
 MONTHS = {m: i for i, m in enumerate(["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov",
                                       "Dec"], start=1)}
 SEVERITY = {"N": "none", "0": "areal or no forecast point", "1": "minor", "2": "moderate", "3": "major",
             "U": "unknown"}
+SEVERITY_RANK = {"N": 0, "0": 0, "U": 0, "1": 1, "2": 2, "3": 3}
 
 
 def vtec_time(s: str) -> datetime | None:
@@ -73,7 +75,7 @@ def issued_at(text: str) -> datetime | None:
         return None
     hh, mm, ampm, zone, mon, day, year = m.groups()
     h = int(hh) % 12 + (12 if ampm == "PM" else 0)
-    local = datetime(int(year), MONTHS[mon], int(day), h, int(mm))
+    local = datetime(int(year), MONTHS[mon.title()], int(day), h, int(mm))  # older products: "DEC"
     t = (local - timedelta(hours=ZONES[zone])).replace(tzinfo=UTC)
     if w:
         wd, wh, wmin = int(w.group(3)), int(w.group(4)), int(w.group(5))
@@ -94,7 +96,9 @@ def parse_product(raw: str) -> Product | None:
     t = issued_at(raw)
     if t is None:
         return None
-    p = Product(pil=pil, wfo=w.group(2), wmo=f"{w.group(1)} {w.group(2)} {w.group(3)}{w.group(4)}{w.group(5)}",
+    bbb = f" {w.group(6)}" if w.group(6) else ""
+    p = Product(pil=pil, wfo=w.group(2),
+                wmo=f"{w.group(1)} {w.group(2)} {w.group(3)}{w.group(4)}{w.group(5)}{bbb}",
                 issued_at=t, text=raw.strip("\x01\x03\n"))
     for si, seg in enumerate(raw.split("$$")):
         last: Vtec | None = None

@@ -65,3 +65,16 @@ def test_load_from_the_archive_is_idempotent(conn, test_dsn: str, tmp_path, monk
                        " ORDER BY issued_at LIMIT 1").fetchone()
     assert row == (datetime(2021, 11, 14, 19, 50, tzinfo=UTC), "NEW", "2", datetime(2021, 11, 14, 22, 18, tzinfo=UTC))
     conn.execute("TRUNCATE nws_vtec, nws_products")
+
+
+def test_upper_case_dates_in_older_products() -> None:
+    raw = "\x01\n123 \nWGUS46 KSEW 140350\nFLWSEW\n\nFLOOD WARNING\n750 PM PST MON DEC 13 2010\n\n$$\n"
+    assert nws.issued_at(raw) == datetime(2010, 12, 14, 3, 50, tzinfo=UTC)
+
+
+def test_correction_heading_keeps_the_product_id() -> None:
+    raw = ("\x01\n601 \nWGUS46 KSEW 100623 CCA\nFLWSEW\n\nFlood Warning\n1023 PM PST Tue Dec 9 2025\n\n"
+           "/O.COR.KSEW.FL.W.0047.000000T0000Z-251211T1400Z/\n/NRKW1.2.ER.251210T2028Z.251211T0600Z.251212T0200Z.NO/\n$$\n")
+    p = nws.parse_product(raw)
+    assert p is not None and p.pil == "FLWSEW" and p.wmo == "WGUS46 KSEW 100623 CCA"
+    assert p.issued_at == datetime(2025, 12, 10, 6, 23, tzinfo=UTC) and p.vtec[0].action == "COR"

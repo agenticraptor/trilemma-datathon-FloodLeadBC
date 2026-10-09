@@ -131,6 +131,22 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   | Fraser at Hope → Fraser at Mission (tidal) | 10,885 | 0 d, 0.706 | 1 d (0–2), 102 |
   | Coquihalla above Alexander Ck → below Needle Ck | 4,990 | 0 d, 0.857 | 0 d (0–0), 57 |
 
+- `13:52–13:58` — **Official NWS warnings for North Cedarville (part 2 item 3), first read of the whole archive** (read-only, in memory).
+  - 5,181 products parsed; 1 unparsed (to inspect); 156 VTEC records with H-VTEC `NRKW1`, in 36 FL.W events from 2006 to 2026.
+  - **The supervisor's spot checks, verified against the raw products:**
+
+    | Flood | First NRKW1 flood warning (VTEC NEW) | Its forecast flood begin | Supervisor's estimate | What the estimate was |
+    |---|---|---|---|---|
+    | Dec 2025 (ETN 47) | **06:17Z Dec 10** ("1017 PM PST Tue Dec 9 2025", FLWSEW `WGUS46 KSEW 100617`), moderate | 20:28Z Dec 10 | ≈ 13:40–14:10Z | an EXT statement (FLSSEW `101340`, "540 AM PST Wed Dec 10") |
+    | Nov 2021 (ETN 78) | **19:50Z Nov 14** ("1150 AM PST Sun Nov 14 2021"), moderate | 22:18Z Nov 14 | ≈ 21:28Z | to be matched in the full timeline |
+
+  - If the observed minor-stage crossings are 20:15Z Dec 10 and 21:30Z Nov 14 (to be verified from our own 15-min data in the event catalogue), **the official lead is ≈ 14.0 h in Dec 2025 and ≈ 1.7 h in Nov 2021**, against the supervisor's ≈ 6 h and ≈ 0 h. The bar FloodLead has to beat in Dec 2025 is much higher than assumed.
+  - The "major" upgrade in 2021 (EXT, severity 3) at 10:07Z Nov 15 matches the supervisor.
+  - Parser fixes found on the way, each with a test:
+    - older products write months in capitals ("DEC");
+    - correction products carry a BBB indicator (`CCA`) on the WMO line, which had been read as the product id;
+    - severity is now ranked 3 > 2 > 1 > N/0/U, not compared as text.
+
   The Sumas USGS–ECCC overlap is only 427 days. The USGS hourly level at Sumas, WA needs at least 18 hours a day to make a daily mean, and its level record is short. As found.
 
 ## Decisions
