@@ -30,6 +30,7 @@ Layers 1 and 2 are model-free (`src/floodlead/relay.py`). Layer 3 is the Stage 4
 - **Variants, never mixed:**
   - `honest`: past observations, plus as-issued forecast rain where it exists, from 2024-01-19 (Open-Meteo previous runs, measured);
   - `oracle`: adds future *observed* reanalysis rain. **It is an upper bound only and is labelled as such everywhere it appears.**
+- **Rain inputs measured unusable or unavailable live:** Abbotsford A hourly precipitation (0 % in ECCC's archive); NCEI's KBLI copy (no records from the last 7 days); the reanalysis (oracle only). KBLI enters `honest` as a stand-in for the live NWS METAR feed of the same observations.
 - **Revisions:** the gauge history is USGS-approved data, revised after the fact. It is not exactly what was visible live, and every row is labelled `data_status`.
   - This departs from evaluation.md's "no revised values as features", because no as-seen archive exists before Oct 2026.
   - The live ledger (from 2026-10-08) is the only fully as-seen test, and it is reported separately.
@@ -54,7 +55,12 @@ Layers 1 and 2 are model-free (`src/floodlead/relay.py`). Layer 3 is the Stage 4
 2. **3-hour trend:** the last 3 h slope, applied for at most 6 h, then held (`trend3h-v1`).
 3. **Gauge-watch rule:** overflow follows the minor stage at North Cedarville (the replay's onset statistics, D-02.4).
 4. **Official NWS warnings as issued:** NWS-derived probabilities, 1 when the forecast crest of the product in force at the issue time is at or above the threshold, else 0. Its forecast flood-begin and crest times serve as timing forecasts.
-5. **Relay rules** (heads-up, prepare, move; `relay.py`), alone.
+5. **Relay rules** (`relay.py`), alone, pre-registered here as built on Oct 9:
+   - **heads-up:** an NWS flood watch naming Whatcom, issued from 7 days before the minor crossing to its end;
+   - **prepare:** an NRKW1 warning forecasting ≥ minor (severity 1–3 or crest ≥ 146.5 ft), or an NWS warning segment naming the Everson overflow, issued from 72 h before the minor crossing to its end;
+   - **move:** the SR 544 overflow onset, or North Cedarville ≥ 146.5 ft and rising.
+   - A minor event without overflow counts as a false alarm for every tier that fired.
+   - BC River Forecast Centre watches cannot be replayed (not archived; licence yellow) and are named as a later comparator.
 
 ## 4. Metrics
 
