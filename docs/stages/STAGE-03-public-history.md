@@ -262,6 +262,15 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - The prepare tier fired at night in 2025. Held to the next sunrise (15:51Z Dec 10), it would still have come about 8–9 h before the City's alert.
   - All of this is relay value, with no model, as addendum 1 requires. It is replayed from archived products, with today's rules applied to the past.
 
+- `15:05–15:35` — **A data defect found and fixed before the datasets were trusted.**
+  - The rain reload at 22:05Z exited 1 after 234 s (`json.decoder.JSONDecodeError`). My `tail` hid the error, so the first dataset build (22:09–22:26Z) ran on partly reloaded rain tables. That build is discarded.
+  - Cause: **4 of 184 Open-Meteo reanalysis requests returned HTTP 200 with the body `Unexpected error while streaming data: timeoutReached` (53 B)**. They were recorded as `ok`: nooksack-lower 2020 and 2021, coquihalla-hope 2022 and 2023.
+  - Fixes:
+    - the downloader now validates JSON bodies for JSON sources, and an invalid body is recorded as `error` and retried on the next run (`tests/test_history_download.py`);
+    - the rain loader skips invalid payloads and reports them instead of failing;
+    - the 4 manifest rows were set to `error`; the refetch gave 4 × ~435 kB, 0 errors (22:32–22:34Z).
+  - Rain reload and dataset rebuild rerun (results below).
+
   The Sumas USGS–ECCC overlap is only 427 days. The USGS hourly level at Sumas, WA needs at least 18 hours a day to make a daily mean, and its level record is short. As found.
 
 ## Decisions
