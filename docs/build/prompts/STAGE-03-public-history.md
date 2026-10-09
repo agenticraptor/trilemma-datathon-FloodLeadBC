@@ -124,9 +124,9 @@ The goal is leakage-safe datasets that let Stage 4 train and walk-forward test a
    - **Access:** `https://mesonet.agron.iastate.edu/cgi-bin/afos/retrieve.py?pil=FLWSEW&sdate=…&edate=…&fmt=text` (also `FLSSEW`).
    - **Parse:** each product's issuance time, its P-VTEC (action, event number) and the H-VTEC for `NRKW1` (also `NKSW1`, `NREW1`, `NOEW1`): severity, and forecast flood begin, crest and end times.
    - **Build:** an "official warning timeline" for every event in the history.
-   - **Supervisor's spot check (approximate; verify it):**
-     - **Dec 2025:** the first North Cedarville flood warning came about 05:40–06:10 PST on Dec 10 (≈ 13:40–14:10Z) and forecast flooding from ≈ 20:28Z. The river actually crossed minor stage at 20:15Z, so official lead ≈ 6 h.
-     - **Nov 2021:** the first warning came about 13:28 PST on Nov 14 (≈ 21:28Z) and forecast flooding from 22:18Z. The river crossed minor stage at 21:30Z, so official lead ≈ 0 h. The "major" upgrade came about 02:07 PST on Nov 15 (≈ 10:07Z), against a major crossing at 23:45Z.
+   - **Supervisor's check (corrected Oct 9 ~20:35Z; an earlier version of this item was wrong), from the archived warning texts:**
+     - **Nov 2021:** the first North Cedarville warning (NEW, "moderate") came at 11:50 AM PST Nov 14 (19:50Z) with a forecast crest of 148.9 ft. The river crossed minor stage at 21:30Z (≈ 1 h 40 min later) and crested at 150.76 ft. The Everson overflow warning came at 3:40 PM PST. The upgrade to "major" came at 2:07 AM PST Nov 15, after the overflow had begun.
+     - **Dec 2025:** the first warning (NEW, "moderate") came at 10:17 PM PST Dec 9 (06:17Z Dec 10) with a forecast crest of 148.4 ft. The minor crossing was at 20:15Z Dec 10 (≈ 14 h later), and the crest about 150.5 ft. The upgrade to "major" came at 5:32 PM PST Dec 10, after the overflow had begun.
    - These official times are the comparator FloodLead has to beat or complement. Report them as found.
 4. **Upstream links.** For North Cedarville and each Fraser Valley target gauge, list the upstream gauges with typical travel times measured from the history (lagged cross-correlation of rises) and the source of each link.
 5. **Leakage-safe training sets.**

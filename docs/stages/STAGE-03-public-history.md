@@ -374,6 +374,32 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
 - **Reversibility / cost:** one extra command per web deploy. Reverting is one line in `compose.yaml`.
 - **Follow-ups:** the check that would have caught this is a public `GET /` in health monitoring. Proposed for Stage 5 (open issues).
 
+### D-03.12 — Addendum 1 (supervisor, Oct 9 ~20:35Z) applied: corrected claims now; scorecard, relay replay and the review's bar in part 2
+
+- **Context:** the supervisor's status-quo review (`docs/research/fraser-valley-flood-warning-status-quo.md`) finds that the weak link is the last mile from the Everson overflow to the barn, not the upstream forecast. The addendum overrides the prompt where they conflict.
+- **Part 1, done before Build Session 3:**
+  - **README, The Cascade claim:** checked against the article itself (fetched on Oct 9).
+    - The owner is of Seasons Farm Market. The article does not say Sumas Way.
+    - "This time we heard the sirens, but we still had lots of time" is the owner's direct quote.
+    - "barely had any time to prepare" (2021) and "uncertainty of when and from where…" are the reporter's paraphrase and summary, and are now attributed that way.
+    - "over 20 hours of preparation time" is the reporter's description of a siren system; it is no longer stated as a fact.
+    - The README now says the only documented siren is the City of Sumas, Washington one.
+  - **README, BC forecasts:** wherever it described official BC tools, it now also names the RFC's deterministic station forecasts (COFFEE 5-day and CLEVER 10-day, daily steps; COFFEE only in rain events) for Sumas at Huntingdon and Chilliwack at Vedder, and NWS's 6-hourly North Cedarville forecasts.
+  - "Evacuation orders after the fact" is now "in 2021 after the water; in 2025 about 12–18 h before it".
+  - **The review is linked** from the README header, the "pain" paragraph, the Build Session 3 section and the help panel. The help panel says BC gauges have official RFC station forecasts that FloodLead does not show yet.
+  - `brief.md` is untouched.
+- **Part 2, before the training sets:**
+  1. the official-forecast scorecard (`GET /v1/official-scorecard`, an app page, a README table);
+  2. the relay and trigger replay with daylight flags;
+  3. arrival-at-the-border estimates only as labelled analogue ranges;
+  4. the protocol adopts the review's bar as fixed targets, with ablations and exact binomial CIs;
+  5. no BC RFC archiving (licence still yellow).
+- **Corrections confirmed by my parser before the addendum arrived** (part-2 log `13:45–13:46`):
+  - first NRKW1 warnings: 19:50Z Nov 14, 2021 and 06:17Z Dec 10, 2025;
+  - the 2021 "major" upgrade at 10:07Z Nov 15.
+  - The forecast crests (148.9 and 148.4 ft) and the observed crossings and crests are reproduced in the scorecard.
+- **Reversibility / cost:** documentation and text only in part 1.
+
 ## Work log
 
 - `12:42` — `git checkout main && git pull` → `bd3d092`. Branch `stage-03-public`. Read the prompt and the inputs above.
@@ -521,6 +547,8 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
     - the track record renders from the snapshot under the "Snapshot from Fri, Oct 9, 13:30 PDT" banner.
 - `13:31` — F3 check: a plain `psql` session now shows `statement_timeout = 15min` and `idle_in_transaction_session_timeout = 30min` (database defaults from migration 010). `scripts/dbshell` shows `5min` and `8MB`.
 
+- `13:47–13:55` — **Addendum 1 received and applied to part 1** (D-03.12): `main` merged into `stage-03-public` (`0b609eb`); README and help-panel corrections; `tests/test_web.py` → 18 passed.
+
 ## Measurements
 
 | What | Value | How measured | When |
@@ -528,8 +556,19 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
 
 ## Acceptance criteria
 
+Part 1 (PR #5). Part 2's criteria (AC-8 to AC-10) are reported with PR 2.
+
 | AC | Result | Evidence |
 |---|---|---|
+| AC-1 Fair CRPS live | **PASS** | Bias table (`pytest -s tests/test_crps.py`, 7 levels): fair +0.0 / +0.0 / −0.2 / +1.2 % against quantile-score −19.3 / −18.2 / −14.2 / −12.9 % (normal, log-normal, under-, over-dispersed); 19 levels ±0.1 %. All stored scores recomputed (scorer run 31: 55,258 rows + 27,641 naive, 38.4 s). `/v1/scores/summary` shows fair `mean_crps_m`, `mean_crps_qs_m`, and per pair `crpss`, `mae_skill`, `paired_crps`, `paired_mae`, `n_pairs`. Pure persistence is in `/v1/scores/official`. Work log `12:51–12:56` |
+| AC-2 Feedback end to end | **PASS** | Submitted from the app on the public URL (`scripts/feedback_e2e.cjs` → `{"http_status":202,"status_text":"Thank you. Your feedback was received.","page_errors":[]}`, screenshots before/after). Read back only with `floodlead feedback list` → item #2 decrypted. Synthetic text only. Issue form `.github/ISSUE_TEMPLATE/feedback.yml` is on the branch; it goes live on GitHub when PR #5 is merged to `main`. Work log `13:27` |
+| AC-3 Fraser Valley list and typical yearly peaks | **PASS** | `/v1/gauges/fraser-valley`: **7 of 7** Fraser Valley gauges with a level, an age and an `ok` typical yearly peak (table at `13:12–13:22`). BC counts: 433 computed, **302 ok, 8 flagged, 1 rejected, 122 insufficient**. Screenshots `fraser-valley-desktop.png`, `fraser-valley-375px.png` |
+| AC-4 Ledger records the thresholds before first use; chain verifies | (pending the 21:15Z issuance) | |
+| AC-5 Track record and help panel, desktop and 375 px | **PASS** | `layout-check.txt`: scrollWidth = viewport on every page, including `#/track-record` and `#/` with the help panel open, at 1280 and 375 px. 0 page errors, 0 with a POSIX locale. Screenshots `track-record-*.png`, `help-open-375px.png`. Work log `13:28` |
+| AC-6 README section; PR merged before 01:00 UTC | **PASS** (README) / supervisor (merge) | README "Build Session 3 — working in public" (`0ae99d6`) |
+| AC-7 F2, F4, F3 | **PASS** | F2: `uptime -s`, `last -x reboot`, `docker ps` (work log `12:44`). F4: background replay refresh every 50 min (D-03.9; timing evidence below). F3: database defaults `statement_timeout 15min`, `idle_in_transaction_session_timeout 30min`; `scripts/dbshell` 5 min / 8 MB (work log `13:31`) |
+| AC-11 ruff and pytest | **PASS** | `ruff check .` → All checks passed; `pytest -q` → 115 passed, 4 deselected, DB tests run |
+| AC-12 Decisions, stage doc, contracts | **PASS** (part 1) | 11 decisions (D-03.1–D-03.11). The stage doc is in 10 of the 11 part-1 commits so far, 19:43–20:32Z. Contract files table below |
 
 ## Contract files changed
 
@@ -544,4 +583,21 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
 
 ## Open issues and handoff to next stage
 
-- (filled at end of each part)
+Part 1 (at PR #5):
+
+1. **Outage caused by the worker, 19:41–20:26Z (probable).** Caddy served a deleted directory after a git checkout (D-03.11). Fixed, and the root cause is removed. **Nothing monitors the public page itself**: health checks the API, not `GET /`. Add a static-site check to health or to an external probe in Stage 5.
+2. **Skill claims.** The track record now shows fair CRPS and median MAE against pure persistence, with generated statements.
+   - The means still rest on a few tidal, regulated or step-changed stations (Stage 2 open issue 2, e.g. 08LF027).
+   - A step-change and tidal flag for truth is still to do, in Stage 3 part 2 or Stage 4.
+3. **Typical yearly peak limits.**
+   - The datum rule cannot see a datum change under about 0.5 m, and can flag a real but unusual season.
+   - 122 BC gauges have fewer than 10 years of annual peaks, so they get no value.
+   - Regulated rivers and lake outlets get a value like any other gauge.
+4. **Feedback.**
+   - Retention period not yet set (Stage 7 privacy policy).
+   - Losing `FEEDBACK_KEY` makes the stored text unreadable; there is no key escrow.
+   - Two synthetic test items (#1, #2) are in the append-only table. They are labelled as synthetic in their text.
+5. **Skipped from F3:** raising `timescaledb.max_background_workers` and compressing old chunks (each needs a dump first and a decision).
+6. **The GitHub issue form** goes live when PR #5 is merged; GitHub reads templates from the default branch.
+7. **Open-Meteo is non-commercial** (D-03.2). Fine for the datathon and for training; a commercial FloodLead needs a paid plan or a swap.
+8. **Downloads still running at PR time:** Open-Meteo reanalysis, 184 point-years at 30 s each, expected to finish ≈ 22:05Z. Parsing is part 2.
