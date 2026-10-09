@@ -4,9 +4,9 @@
 
 FloodLead BC is a flood lead-time forecaster for BC farmers and riverside households. It turns the federal real-time hydrometric feed into a calibrated probability that a specific gauge will cross a level the user chose ("check pumps", "move cattle", "leave") within the next 6–48 hours. When the risk passes the user's own threshold, an agent calls them, waits for approval, and then texts the people on their action list. Every forecast is written to a public, hash-chained ledger and scored against what the river actually did.
 
-> **Live app:** **https://34-130-109-216.sslip.io/** — Sumas Prairie overflow watch, station picker, replay of the 2021 and 2025 overflows · [API docs](https://34-130-109-216.sslip.io/docs) · [health](https://34-130-109-216.sslip.io/v1/health)
+> **Live app:** **https://34-130-109-216.sslip.io/** — Sumas Prairie overflow watch, Fraser Valley gauges, station picker, replay of the 2021 and 2025 overflows, [track record](https://34-130-109-216.sslip.io/#/track-record) · [API docs](https://34-130-109-216.sslip.io/docs) · [health](https://34-130-109-216.sslip.io/v1/health)
 > **Brief:** [Brief (AI-drafted at the author's request)](brief.md)
-> **Status:** Build Session 2 — working app (see [below](#build-session-2--working-app)). Datathon Season 2026, Trilemma Foundation × Northeastern University Vancouver.
+> **Status:** Build Session 3 — working in public (see [below](#build-session-3--working-in-public)). Datathon Season 2026, Trilemma Foundation × Northeastern University Vancouver.
 > **Not an official warning service.** Always follow EmergencyInfoBC, the BC River Forecast Centre, NWS Seattle and your local authority's orders.
 
 ---
@@ -14,6 +14,58 @@ FloodLead BC is a flood lead-time forecaster for BC farmers and riverside househ
 ## One sentence
 
 BC's flood advisories describe whole basins in cubic metres per second and return periods; FloodLead tells one farmer, in hours, when their gauge will reach the level at which they must act, and starts that action for them.
+
+## Build Session 3 — working in public
+
+**Live:** https://34-130-109-216.sslip.io/ · **Track record:** https://34-130-109-216.sslip.io/#/track-record · **Tell us what you think:** the "Was this useful?" box at the bottom of every page, or [a GitHub issue](https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC/issues/new?template=feedback.yml).
+
+### Who it is for, and how to use it in 3 steps
+
+For farmers and riverside households in the Fraser Valley and on the Nooksack/Sumas floodplain, who need to know how close *their* river is to a level that matters, in hours.
+
+1. **Find your gauge.** The home page starts with the Sumas Prairie overflow watch (Nooksack at North Cedarville, against NOAA's official flood stages). Below it, **Fraser Valley gauges** lists Sumas, Chilliwack (Vedder Crossing and above Slesse Creek), Fraser at Hope and Mission, Nicomekl and Coquihalla, each with its latest level and the age of that reading. The search under "All stations" finds any other gauge we hold (about 450 in BC, plus the Nooksack/Sumas gauges in Washington).
+2. **See how close it is.** Each Fraser Valley gauge shows how far it is below its **typical yearly peak**: the median of its yearly highest levels, 2005–2024, reached in about half of years. It is FloodLead-derived from ECCC records, **not an official flood level**. Where a gauge failed the datum check, no value is shown, and the reason is given instead. Nooksack gauges show NOAA's official stages and forecast, unmodified.
+3. **Read it correctly.** "How to read this" (under the header) explains gauge datum, data age and provisional data, the "chance of reaching", FloodLead baseline vs NOAA official, and what the ledger proves.
+
+### What is measured live, and what it shows
+
+- **Every hour**, FloodLead issues baseline forecasts for every live gauge (`persistence-v1`, `trend3h-v1`) and fixes them in a public hash-chained ledger before the outcome exists. The chain is published hourly to the `ledger` branch, and anyone can verify it (`scripts/verify_ledger.py`).
+- The **[track record](https://34-130-109-216.sslip.io/#/track-record)** scores them against what the rivers did and against **pure persistence** (the level now, held flat), per horizon, with n, the number of stations and days, and the scorer run ID.
+  - It uses a **fair CRPS**: the CDF is rebuilt from the stored quantiles and integrated exactly.
+  - The approximation used until Oct 9 favoured spread forecasts over point forecasts by about 19 %. It inflated our skill against persistence, and it was replaced. See [evaluation.md](evaluation.md).
+- **What it shows today** (scorer run 33, Oct 9 20:22Z; the page always shows the latest run):
+  - On median error, the baselines are **not** better than pure persistence.
+  - The one exception: `persistence-v1` at the 10 USGS gauges at 1–6 h, by 1.0–3.5 % (n 160–210). No gauge reached an official flood stage since Oct 8, so these numbers describe quiet rivers, not floods. Pure persistence is the bar the real model has to clear.
+
+### Known limits
+
+- **Baselines only.** No trained model yet. The live forecasts are simple statistical baselines.
+- **A dry October.** No flood has happened since live scoring started on Oct 8.
+- **Provisional data.** Real-time levels arrive 15–90 min late and can be revised.
+- **Not a warning service.** Follow EmergencyInfoBC, the BC River Forecast Centre, NWS Seattle and your local authority.
+
+### How FloodLead will be judged (before any model is trained)
+
+- **Held-out floods.** The Stage 4 model is trained on history and tested on floods it never saw. **November 2021 and December 2025 are held out** until one final run.
+- **Four comparators:**
+  - pure persistence;
+  - the 3 h trend;
+  - the gauge-watch rule (the Sumas overflow follows the minor stage at North Cedarville);
+  - **the official NWS flood warnings that were actually issued for North Cedarville**, from the public NWS text archive.
+- **A protocol fixed in advance.** The metrics are level skill against persistence, crossing probabilities, hours of warning and false alarms per season. The alert rule, the uncertainty and the kill criteria are all written down and frozen in `docs/evaluation-protocol.md` before training.
+- **The result is published whatever it shows,** including the floods where FloodLead does worse.
+
+### What changed since Build Session 2
+
+- **Fair scoring:** a fair CRPS and MAE skill against pure persistence; all stored scores recomputed.
+- **Feedback** from every page: anonymous, with the text encrypted at rest. There is also a GitHub issue form.
+- **New pages and panels:** the Fraser Valley gauge list with typical yearly peaks (302 BC gauges have one), a help panel, and the track-record page.
+- **The ledger** now records the typical-peak thresholds in new model cards, before the first forecast that uses them.
+- **Data for the model is downloading:**
+  - ECCC daily history (7.8 million daily values, 448 stations);
+  - hourly rainfall: ECCC climate, NOAA NCEI, NRCS SNOTEL, Open-Meteo;
+  - the archive of NWS flood warnings since 2004.
+- Stage log: [docs/stages/STAGE-03-public-history.md](docs/stages/STAGE-03-public-history.md).
 
 ## Build Session 2 — working app
 

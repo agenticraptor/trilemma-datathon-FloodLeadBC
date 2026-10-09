@@ -449,6 +449,8 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - `page errors (all pages): 0; with navigator.language=en-US@posix: 0`.
   - The files are in `img/stage-03/`: track record, Fraser Valley list, help panel, feedback and the overflow watch.
 
+- `13:30–13:38` — README "Build Session 3 — working in public"; contract files updated (table below).
+
 ## Measurements
 
 | What | Value | How measured | When |
@@ -463,6 +465,12 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
 
 | File | What changed | Why |
 |---|---|---|
+| `data-contract.md` | Five usage-rights records (ECCC climate-hourly, NCEI Global Hourly US-only, NRCS SNOTEL, Open-Meteo non-commercial, IEM NWS archive) with the terms pages fetched on Oct 9; inputs 8–11; feedback privacy tier; typical-peak lineage | D-03.2, D-03.6, D-03.7 |
+| `evaluation.md` | The fair CRPS replaces the quantile score; the "ranks models" sentence withdrawn; MAE skill against pure persistence; future models store 19 quantiles; naive in the NOAA comparison | F1, D-03.4 |
+| `architecture.md` | Components (history, scorer, feedback, web deploy), Stage 3 tables, new endpoints, DB guard rails, web deploy | Facts changed |
+| `docs/ledger-spec.md` | The `typical` threshold kind and `params.typical_peak` in model cards | D-03.8 |
+| `README.md` | "Build Session 3 — working in public": who it is for and 3 steps, feedback, what is measured live (with the run ID), known limits, how FloodLead will be judged, what changed; links to the track record | Part 1 item 6 |
+| `compose.yaml` | Caddy serves `/srv/floodlead/web` (deployed by `scripts/deploy_web.sh`) | D-03.11 |
 
 ## Open issues and handoff to next stage
 

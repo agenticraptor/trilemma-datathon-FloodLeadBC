@@ -212,6 +212,10 @@ HRDPS GRIB2 ──► basin-mean precip (later stage) ────────�
 - Identical re-fetches write no observation rows (Stage 2, F2). `last_seen_at` is when the current value was last written. The per-station "last seen" for each payload kind is kept in `payload_coverage`.
 - Observations are stored as first received and as revised; scoring uses the value available at the time of the forecast for features, and the final value for ground truth.
 
+### Typical yearly peak (Stage 3)
+
+`typical_peaks` (method `typical-peak-v1`) is derived from ECCC annual instantaneous peaks (record "ECCC Historical Hydrometric Data", archived pages in `history_downloads` source `eccc-peaks`) and checked against ECCC daily means (`eccc_daily`) and live levels. It is labelled everywhere as FloodLead-derived, not an official flood level, and kept apart from NOAA's official thresholds. The values used in forecasts are fixed in the model cards' `params.typical_peak` before first use.
+
 ## Freshness SLOs
 
 Aligned with `/v1/health` (thresholds in `docs/stages/STAGE-01-live-archive.md`, D-01.14).
@@ -230,6 +234,7 @@ Aligned with `/v1/health` (thresholds in `docs/stages/STAGE-01-live-archive.md`,
 |---|---|---|
 | Public | Gauge data, forecasts, ledger, scores | Published openly |
 | Personal | User phone, gauge choice, thresholds | Encrypted at rest, Canadian region, deleted on request |
+| Feedback (Stage 3) | Anonymous in-app feedback: page, station shown, yes/no, free text | No name, email, phone or IP stored; free text encrypted at rest (Fernet, key in `.env`), on the VM in Canada; never logged, echoed, published, put in the ledger, snapshots or fixtures; read only on the VM (`floodlead feedback list`); retention to be set with the Stage 7 privacy policy |
 | Third-party personal | Contacts' phone numbers | Stored only after the contact opts in by SMS; never shared or sold |
 
 No personal data ever enters the public ledger.
