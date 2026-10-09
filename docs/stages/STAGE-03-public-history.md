@@ -525,7 +525,7 @@ Part 1 (PR #5). Part 2's criteria (AC-8 to AC-10) are reported with PR 2.
 | AC-6 README section; PR merged before 01:00 UTC | **PASS** (README) / supervisor (merge) | README "Build Session 3 — working in public" (`0ae99d6`) |
 | AC-7 F2, F4, F3 | **PASS** | F2: `uptime -s`, `last -x reboot`, `docker ps` (work log `12:44`). F4: background replay refresh every 50 min (D-03.9; timing evidence below). F3: database defaults `statement_timeout 15min`, `idle_in_transaction_session_timeout 30min`; `scripts/dbshell` 5 min / 8 MB (work log `13:31`) |
 | AC-11 ruff and pytest | **PASS** | `ruff check .` → All checks passed; `pytest -q` → 117 passed, 4 deselected, DB tests run (part-1 branch) |
-| AC-12 Decisions, stage doc, contracts | **PASS** (part 1) | 12 decisions (D-03.1–D-03.12). The stage doc is in 14 of the 15 part-1 commits on top of `main` (including this one and one merge of `main`), 19:43–21:31Z. Contract files table below |
+| AC-12 Decisions, stage doc, contracts | **PASS** (part 1) | 12 decisions (D-03.1–D-03.12). The stage doc is in 13 of the 15 part-1 commits on top of `main` (counting the commit that records this number; one of the 15 is a merge of `main`), 19:43–21:32Z. Contract files table below |
 
 ## Contract files changed
 
