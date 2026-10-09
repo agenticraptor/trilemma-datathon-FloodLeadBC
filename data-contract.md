@@ -13,6 +13,10 @@ Every material external input has known provenance and documented usage rights, 
 | 5 | Google Flood Hub | Scoring baseline only | Daily | Google terms (pending) | 🟡 |
 | 6 | USGS water data (Nooksack and Sumas gauges, Washington) | Core feature + ground truth (the river that floods Sumas Prairie) | 15-min; newest value 14–52 min old (measured Oct 7); instantaneous history since 2004–2007 at the main sites; keyless API limit 1,000 requests/hour per IP | US public domain | 🟢 |
 | 7 | NOAA NWS National Water Prediction Service (official forecasts, flood stages) | Official baseline + official thresholds | NRKW1 and NKSW1 forecasts issued about daily (15:36 UTC on Oct 7), 6-hourly points to 7 days (NRKW1, 29 points) or 10 days (NKSW1, 40 points); observed series ~37 min behind | US public domain (NWS) | 🟢 |
+| 8 | ECCC historical hourly climate (Fraser Valley stations) | Training feature (observed rainfall) | Hourly; latency to be measured | ECCC Data Servers End-use Licence (OGL-Canada on open.canada.ca) | 🟢 |
+| 9 | NOAA NCEI Global Hourly (KBLI only) and USDA NRCS SNOTEL hourly (3 Nooksack sites) | Training feature (observed rainfall, snow) | Hourly; latency to be measured | US public domain | 🟢 |
+| 10 | Open-Meteo reanalysis, historical forecasts and previous runs (basin points) | Training feature (basin rainfall; as-issued forecasts where they exist) | Hourly | CC BY 4.0, free API non-commercial only | 🟡 non-commercial |
+| 11 | Archived NWS flood warnings and statements (IEM text archive) | Comparator: official hours of warning | As issued | Public domain | 🟢 |
 
 Yellow sources are never core dependencies. If their terms do not allow the intended use, we only link to them and compare against what any member of the public can see.
 
@@ -105,6 +109,79 @@ Yellow sources are never core dependencies. If their terms do not allow the inte
     Public domain "unless specifically noted otherwise". Conditions: do not claim it as our own,
     do not imply NOAA/NWS endorsement or affiliation, do not modify it and present it as official,
     do not use NWS logos. We show official forecasts unmodified and clearly labelled, next to ours.
+
+# Stage 3 (Oct 9): rainfall and official-warning history. Approved by the human on Oct 9 ("approve all").
+# Terms checked by the worker on 2026-10-09; the pages fetched are named in terms_checked_at.
+
+- source: ECCC historical hourly climate observations (precipitation, temperature)
+  url: https://api.weather.gc.ca/collections/climate-hourly
+  license: ECCC Data Servers End-use Licence v2.1.1 (Aug 2026) on this access route; the same data are published under OGL-Canada on open.canada.ca
+  license_url: https://eccc-msc.github.io/open-data/licence/readme_en/
+  terms_checked_at: https://eccc-msc.github.io/open-data/licence/readme_en/ (fetched 2026-10-09, "Version 2.1.1 - August 2026")
+  access_method: OGC API climate-hourly, one request per station-year (properties filtered), paced 1 request/s; stations in and near the Fraser Valley (Abbotsford A, Hope, Pitt Meadows, White Rock)
+  commercial_use: true
+  redistribution: true
+  attribution_required: true
+  share_alike: false
+  terms_reviewed: 2026-10-09
+  latency: to be measured in Stage 3 part 2
+  notes: Raw responses archived unchanged. Hourly precipitation is missing for many hours at some stations; recorded as found.
+
+- source: NOAA NCEI Global Hourly (Integrated Surface Database), US stations only
+  url: https://www.ncei.noaa.gov/access/services/data/v1?dataset=global-hourly
+  license: US Public Domain (NOAA) for US stations; non-US ISD data are under WMO Resolution 40 and are NOT used
+  license_url: https://www.ncei.noaa.gov/pub/data/noaa/readme.txt
+  terms_checked_at: https://www.ncei.noaa.gov/pub/data/noaa/readme.txt (fetched 2026-10-09; "The non-U.S. data in ISD are subject to WMO Resolution 40 restrictions, and cannot be redistributed")
+  access_method: NCEI Access Data Service, one CSV per station-year, paced 1 request / 3 s; Bellingham Intl Airport (KBLI, 727976-24217) only
+  commercial_use: true
+  redistribution: true
+  attribution_required: false   # credit "NOAA National Centers for Environmental Information"
+  share_alike: false
+  terms_reviewed: 2026-10-09
+  notes: Canadian stations come from ECCC directly (record above), never from ISD.
+
+- source: USDA NRCS SNOTEL hourly (precipitation accumulation, temperature, snow water equivalent, snow depth)
+  url: https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/data
+  license: US Government work, public domain (17 U.S.C. 105)
+  license_url: https://wcc.sc.egov.usda.gov/awdbRestApi/swagger-ui/index.html
+  terms_checked_at: AWDB REST API reachable 2026-10-09; the NRCS policy pages tried (nrcs.usda.gov/policy-and-legal/policy, /policies-and-links) returned 404 that day, so the public-domain status rests on 17 U.S.C. 105, not on a page we could read
+  access_method: AWDB REST API, hourly, one request per year for 3 Nooksack sites (Wells Creek 909, Elbow Lake 910, MF Nooksack 1011), paced 1 request / 2 s
+  commercial_use: true
+  redistribution: true
+  attribution_required: false   # credit "USDA NRCS"
+  share_alike: false
+  terms_reviewed: 2026-10-09
+  notes: Provisional data are revised; PREC is a season accumulation (inches), so hourly amounts are differences.
+
+- source: Open-Meteo historical weather (reanalysis), historical forecast and previous-runs APIs
+  url: https://open-meteo.com/en/docs/historical-weather-api
+  license: CC BY 4.0 (data); free API for non-commercial use only
+  license_url: https://open-meteo.com/en/licence
+  terms_checked_at: https://open-meteo.com/en/terms and https://open-meteo.com/en/licence and https://open-meteo.com/en/pricing (fetched 2026-10-09)
+  access_method: archive-api, historical-forecast-api and previous-runs-api, one request per basin point and year, paced 1 request / 30 s (≈ 52 calls/min, ≈ 3,100 calls/h, ≈ 7,100 calls in total, under the free limits of 600/min, 5,000/h and 10,000/day; a request longer than 2 weeks counts as several calls)
+  commercial_use: false   # the free API is non-commercial; a commercial FloodLead needs a paid Open-Meteo plan or a swap to ECCC/NOAA model archives
+  redistribution: true    # CC BY 4.0, with attribution
+  attribution_required: true    # "Weather data by Open-Meteo.com" (CC BY 4.0); underlying models credited per the licence page
+  share_alike: false
+  terms_reviewed: 2026-10-09
+  notes: >-
+    The historical-forecast API is assembled from the first hours of each archived model run, so it is close to a
+    short-lead forecast, not a 1-2 day forecast; the previous-runs API holds what was forecast 1 and 2 days before
+    each hour. Which one is a fair "as-issued" input, and from what date each exists for our basins, is decided in
+    Stage 3 part 2 (stage doc). Basin points are listed in src/floodlead/history/tasks.py.
+
+- source: Archived NWS text products (flood warnings FLWSEW and flood statements FLSSEW) via the Iowa Environmental Mesonet
+  url: https://mesonet.agron.iastate.edu/cgi-bin/afos/retrieve.py
+  license: Public domain (NWS products are US public domain; IEM states "The materials found on this website are in the public domain and may be used freely by anyone for any lawful purpose")
+  license_url: https://mesonet.agron.iastate.edu/disclaimer.php
+  terms_checked_at: https://mesonet.agron.iastate.edu/disclaimer.php (fetched 2026-10-09)
+  access_method: retrieve.py?pil=FLWSEW|FLSSEW&sdate&edate&fmt=text, one request per product and year since 2004, paced 1 request / 2 s
+  commercial_use: true
+  redistribution: true
+  attribution_required: false   # "Attributing the Iowa Environmental Mesonet of Iowa State University would be appreciated" — we do
+  share_alike: false
+  terms_reviewed: 2026-10-09
+  notes: The comparator for "hours of warning". The products are used as issued; parsed fields (P-VTEC, H-VTEC for NRKW1, NKSW1, NREW1, NOEW1) keep a link to the raw product.
 ```
 
 ## Freshness and lineage

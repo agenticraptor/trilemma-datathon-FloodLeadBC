@@ -58,6 +58,13 @@ def main(argv: list[str] | None = None) -> int:
     bu.add_argument("--api", choices=["auto", "ogc", "nwis"], default="auto",
                     help="auto: OGC API v1 when USGS_API_KEY is set, else legacy NWIS IV (no key needed)")
     bsub.add_parser("nwps", help="NWPS gauge metadata, flood categories and current forecasts")
+    h = sub.add_parser("history", help="Stage 3 history: paced, resumable downloads into the raw archive")
+    hsub = h.add_subparsers(dest="hcmd", required=True)
+    hd = hsub.add_parser("download", help="download one or more sources, in order (skips finished tasks)")
+    hd.add_argument("sources", nargs="+")
+    hd.add_argument("--pace", type=float, default=None, help="seconds between requests (default per source)")
+    hd.add_argument("--limit", type=int, default=None, help="stop after this many requests per source")
+    hsub.add_parser("status", help="tasks done, empty and failed per source")
     sub.add_parser("score", help="score settled forecast horizons now and refresh the summary")
     iss = sub.add_parser("issue", help="run the hourly issuance now (live only; no backdating)")
     iss.add_argument("--dry-run", action="store_true", help="compute forecasts but write nothing")
@@ -148,6 +155,10 @@ def main(argv: list[str] | None = None) -> int:
         jobs = {j.name: j for j in _jobs(pool)}
         jobs[args.job].fn()
         return 0
+    if args.cmd == "history":
+        from floodlead.history import cli as hcli
+
+        return hcli.main(pool, args)
     if args.cmd == "backfill":
         from floodlead.sources import eccc, nwps, usgs
 

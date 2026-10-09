@@ -88,6 +88,77 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
 
 ## Decisions
 
+### D-03.1 — History downloads: archive raw first, parse later; one paced, resumable task list per source
+
+- **Context:** Part 2 needs decades of ECCC daily data, rainfall and the NWS warning archive. The prompt asks to start the downloads at the very beginning, while part 1 is built, as one-off compose services that are paced and resumable.
+- **Options considered:**
+  - (a) download and parse in one step into tables;
+  - (b) download every payload unchanged into the raw archive, with a manifest table, and parse later from the archive.
+- **Choice:** (b).
+  - `floodlead history download <source…>` runs a fixed task list per source. Tasks are one station-year, one product-year, or one OGC page; follow-up pages are queued from each page's `numberReturned`.
+  - Each response goes through `archive.store` (gzip, sha256, `raw_objects`) and a row in a new `history_downloads` table, keyed by `(source, key)`. Tasks already `ok` or `empty` are skipped, so a run can stop and restart at any time.
+  - Pacing per source, well under the published limits:
+    - ECCC OGC API: 1 request/s;
+    - IEM: 1 request / 2 s;
+    - SNOTEL: 1 request / 2 s;
+    - NCEI: 1 request / 3 s;
+    - Open-Meteo: 1 request / 30 s, ≈ 52 calls/min against a limit of 600 (each point-year counts as ≈ 26 calls).
+  - Runs as `docker compose run -d --name hist-… backfill floodlead history download …`. The `backfill` service has `restart: "no"`.
+- **Why:**
+  - The downloads start within the first hour and need no parser decisions yet.
+  - Parsing bugs can be fixed and re-run without refetching.
+  - The raw payloads stay as the evidence for every parsed number, as in Stage 1.
+- **Reversibility / cost:**
+  - Downloads are additive and idempotent.
+  - Archive cost: about 2 MB per OGC page or station-year (uncompressed), compressed on disk.
+- **Follow-ups:** part 2 writes the parsers into new history tables (never `observations`, F3).
+
+### D-03.2 — Usage-rights records for the new sources, checked the same day
+
+- **Context:** AGENTS.md requires a record before code depends on a source. The prompt adds: check the current terms yourself, and record the URL and the date.
+- **Choice:** five records in `data-contract.md`, each naming the page fetched on 2026-10-09:
+  - ECCC climate-hourly: ECCC Data Servers End-use Licence v2.1.1 on this route; OGL-Canada on open.canada.ca.
+  - NCEI Global Hourly: **US stations only**. The readme states that non-US ISD data fall under WMO Resolution 40, so Canadian stations come from ECCC directly.
+  - NRCS SNOTEL: a US Government work. The NRCS policy pages returned 404 that day; the record says so.
+  - Open-Meteo: CC BY 4.0, and the free API is **non-commercial**. A commercial FloodLead needs a paid plan or a swap. Marked 🟡.
+  - IEM: "in the public domain and may be used freely by anyone for any lawful purpose".
+- **Why:** each record shows exactly what was checked, and what could not be checked.
+- **Reversibility / cost:** the Open-Meteo dependency is the only non-commercial one. It stays a training input, and its replacement path is written down.
+- **Follow-ups:** measure each source's publication latency (part 2, item 2).
+
+### D-03.3 — Which stations and points the downloads cover
+
+- **Context:** the task lists need concrete stations and points.
+- **Probes (19:55–20:05Z):**
+  - **ECCC annual peaks, BC:** 37,806 rows (level and flow, maximum and minimum).
+  - **ECCC daily means:** for example 08MH029 has 30,367 days, ending 2024-12-31 (approved HYDAT).
+  - **ECCC hourly climate stations** in the bbox −122.8 … −121.2, 48.9 … 49.5:
+    - Abbotsford A (3 IDs, 1953 → now);
+    - Hope (4 IDs);
+    - Pitt Meadows CS;
+    - White Rock CS.
+  - **ISD stations** within 48.6–49.1N, −122.8 … −121.3: KBLI is the only US one with long history.
+  - **SNOTEL in the Nooksack:**
+    - Wells Creek 909 (NF, 1995);
+    - MF Nooksack 1011 (2002);
+    - Elbow Lake 910 (SF, 1995).
+    - Hourly data were present on 2021-11-13.
+  - **Open-Meteo:**
+    - reanalysis returned data;
+    - historical forecast: no data on 2016-01-10, data on 2021-03-20 and 2022-06-01;
+    - previous runs: `previous_day1/2` empty on 2023-06-01, present on 2024-02-01.
+- **Choice:**
+  - all BC real-time ECCC stations for daily means; all BC annual peaks;
+  - the 8 climate IDs listed;
+  - KBLI;
+  - the 3 SNOTEL sites;
+  - 8 basin points (4 Nooksack, 4 Fraser Valley; `history/tasks.py`):
+    - Open-Meteo reanalysis from 2004;
+    - historical forecast from 2020;
+    - previous runs from 2023.
+  - The years before each start date are requested anyway and recorded as found (empty or null), which also measures the start dates.
+- **Reversibility / cost:** adding a point or station later is one more task; nothing is lost.
+
 ## Work log
 
 - `12:42` — `git checkout main && git pull` → `bd3d092`. Branch `stage-03-public`. Read the prompt and the inputs above.
@@ -107,6 +178,17 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   ```
   - The VM booted at 03:50:03Z, and all four containers came back on their own (`restart: unless-stopped`).
   - The supervisor's QA found 23 consecutive hourly issuances with 0 gaps across the reboot, so the 04:00Z base time was issued on time.
+
+- `12:55–13:15` — Draft PR #5 opened. Terms pages fetched and the probes above run (D-03.2, D-03.3).
+  - Wrote `migrations/006_history_downloads.sql` (a new table only), `src/floodlead/history/{download,tasks,cli}.py`, `archive.read`, and the five records in `data-contract.md` (inputs 8–11).
+  - Task counts:
+    - `eccc-peaks` 1+ pages;
+    - `eccc-daily` 1 page per station, + follow-ups;
+    - `eccc-climate` 122;
+    - `iem-nws` 46;
+    - `ncei` 23;
+    - `snotel` 23;
+    - `openmeteo-archive` 184, `-histfc` 56, `-prevruns` 32 (≈ 7,100 Open-Meteo calls in total).
 
 ## Measurements
 
