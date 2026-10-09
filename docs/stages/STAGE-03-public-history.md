@@ -232,6 +232,22 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
     - Examples: Dec 2025 — minor 20:15Z Dec 10, crest 150.44 ft, major 10:00Z Dec 11, onset 00:45Z Dec 11, first warning 06:17Z (148.4 ft forecast), lead 13.97 h. Nov 28, 2021 — first warning 09:29Z, lead 13.27 h.
   - **BC:** typical-peak crossings at 310 stations with an `ok` or flagged value. 2,576 station-years had an annual instantaneous maximum at or above the station's typical yearly peak (about half the years, by construction), and 274 stations had daily means at or above it on at least one day.
 
+- `15:05` — Open-Meteo downloads finished, 22:04:56Z; `hist-openmeteo` exit 0. 272 requests, 0 errors:
+  - prevruns 32 (12.6 MB, 19:50–20:05Z);
+  - histfc 56 (22.0 MB, 20:05–20:33Z);
+  - archive 184 (77.5 MB, 20:33–22:04Z), at 1 request / 30 s.
+- **Rainfall publication latency (part 2 item 2).** Hourly probes (`scratchpad/latency_probe.py`, 16 runs scheduled), the first two at 20:40Z and 21:40Z:
+  - SNOTEL Wells Creek: newest hour-ending value **40 and 41 min old**;
+  - ECCC Abbotsford A: newest hour 07:00Z, **about 14 h old, with no precipitation value**;
+  - NCEI KBLI: **no records in the last 7 days**, so it is a history source only;
+  - Open-Meteo "archive": values up to 23:00Z today, so its recent hours are model-filled, not reanalysis.
+  - `data-contract.md` latency fields updated.
+- **AC-8 numbers** (new tables):
+  - `eccc_daily`: 7,825,554 rows, 448 stations, 1903-04-01 → 2026-06-09, median 53 years per station (1–123), **665 MB**;
+  - `eccc_annual_peaks`: 37,789 rows, 962 BC stations, 1923–2025 (7,285 annual level maxima), 4.9 MB;
+  - `typical_peaks`: 256 kB;
+  - `nws_products` 14 MB, `nws_vtec` 9.1 MB.
+
   The Sumas USGS–ECCC overlap is only 427 days. The USGS hourly level at Sumas, WA needs at least 18 hours a day to make a daily mean, and its level record is short. As found.
 
 ## Decisions

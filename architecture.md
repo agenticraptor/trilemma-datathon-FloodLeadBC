@@ -101,7 +101,7 @@ data_architecture:
 |---|---|---|
 | Ingestor | Python 3.12, `httpx`, `psycopg` 3 (`src/floodlead/`) | Polls ECCC/USGS/NWPS, archives each raw payload (gzip, sha256, 0444) and upserts rows into Timescale |
 | Backfill | `floodlead backfill eccc-30d / usgs / nwps` | Datamart 30-day files; USGS 15-min history since 2004 (paced, resumable) |
-| History (Stage 3) | `floodlead history download <source…>` (`src/floodlead/history/`), one-off `backfill` containers | Paced, resumable downloads into the raw archive with a manifest (`history_downloads`): ECCC annual peaks, daily means and hourly climate; IEM NWS warnings; NCEI KBLI; SNOTEL; Open-Meteo. `floodlead history load peaks|daily` parses them into new tables; `floodlead history typical-peaks` computes the typical yearly peak per BC gauge |
+| History (Stage 3) | `floodlead history download <source…>` (`src/floodlead/history/`), one-off `backfill` containers | Paced, resumable downloads into the raw archive with a manifest (`history_downloads`): ECCC annual peaks, daily means and hourly climate; IEM NWS warnings; NCEI KBLI; SNOTEL; Open-Meteo. `floodlead history load peaks|daily` parses them into new tables; `floodlead history typical-peaks` computes the typical yearly peak per BC gauge. Part 2: `history load nws|rain`, `history build scorecard|relay|catalogue|datasets` (datasets to `/srv/floodlead/datasets`, not in git) |
 | HRDPS subsetter | `xarray` + `cfgrib` | Basin-mean precipitation per run |
 | Feature builder | SQL + pandas/polars | Lags, slopes, upstream travel-time lags, antecedent flow, forecast precip |
 | Models | LightGBM quantile + isotonic calibration; discrete-time hazard for time-to-crossing | CPU only |
@@ -166,6 +166,15 @@ eccc_daily(station_number, date, level, discharge, level_symbol, discharge_symbo
 typical_peaks(method, station_id, status, value_m, n_years, first_year, last_year, reason, checks jsonb, computed_at)
 feedback(feedback_id, received_at, route, station_id, useful, text_enc bytea, text_chars, key_id, app_version)
                                                                        -- append-only; no IP, name, email or phone
+-- Stage 3 part 2 (migrations 011-013):
+nws_products(product_id, pil, wfo, wmo, issued_at, text, raw_object_id)      -- NWS Seattle FLW/FLS/FFA/ESF via IEM
+nws_vtec(product_id, seq, segment, issued_at, action, phenomena, significance, etn, vtec_begin, vtec_end, nwsli,
+         severity, cause, flood_begin, flood_crest, flood_end, record, forecast_crest_ft, observed_crest_ft,
+         observed_stage_ft, segment_head)
+rain_hourly(source, site, ts, precip_mm, temp_c, swe_mm, snow_depth_cm, flags, raw_object_id)   -- ts = hour end, UTC
+openmeteo_hourly(kind, point, ts, precip_mm, rain_mm, snowfall_cm, temp_c, snow_depth_m, soil_moisture,
+                 freezing_level_m, precip_prev_day1_mm, precip_prev_day2_mm, temp_prev_day1_c, temp_prev_day2_c, ...)
+official_scorecards(scorecard_id, generated_at, body jsonb)                  -- derived; latest row served
 ```
 
 The Stage 1 sketch below of `forecast`/`score` is superseded by these: a forecast is a `forecast` ledger entry whose `canonical` JSON carries `q`, `qmax` and `p_exceed` per horizon (see the spec).
@@ -207,6 +216,7 @@ Live since Stage 1 (read-only; OpenAPI at `/docs`; every response carries `attri
 | GET | `/v1/scores/summary?source=&model=&horizon=`, `/v1/scores/official?lid=` | Materialised scorer output with its run ID (fair CRPS, `mean_crps_qs_m`, CRPSS and MAE skill; pure persistence included) |
 | GET | `/v1/gauges/fraser-valley` | Fraser Valley gauges: latest level, data age, typical yearly peak (FloodLead-derived, not official) and the distance below it |
 | GET | `/v1/track-record` | Forecasts issued, chain head and anchor, skill against pure persistence per horizon with n, and generated plain-language statements |
+| GET | `/v1/official-scorecard?point=` | How accurate the archived NWS river flood warnings were: crest error by lead, timing, category, first-warning lead, "major" vs the overflow onset (Stage 3 part 2) |
 | POST | `/v1/feedback` | Anonymous feedback (≤ 1,000 characters, encrypted at rest, never echoed); 202, or 400/413/429 |
 
 Planned:

@@ -13,5 +13,6 @@ Small **real** payloads, trimmed. They were taken on 2026-10-07 from the raw arc
 | `nwps_gauge_NRKW1.json` | NOAA NWPS `gauges/NRKW1` | only identity, `flood.categories`, units |
 | `nwps_stageflow_NRKW1.json` | NOAA NWPS `gauges/NRKW1/stageflow` (issued 2026-10-07T15:36Z) | last 3 observed points, first 4 forecast points |
 | `nwps_stageflow_forecast_NRKW1.json` | NOAA NWPS `gauges/NRKW1/stageflow/forecast`, fetched 2026-10-09 01:17Z (issued 2026-10-08T15:12Z; 40 points, while `stageflow` gave 30) | first 4 points + last 2 (Oct 18 06Z and 12Z, beyond the combined endpoint's 7-day cut) |
+| `iem_FLWSEW_2021_excerpt.txt` | IEM AFOS archive `retrieve.py?pil=FLWSEW&sdate=2021-01-01&edate=2022-01-01&fmt=text` (NWS Seattle flood warnings, public domain), fetched 2026-10-09 | 3 whole products: WGUS46 KSEW 151007 and 141950 (Nov 2021, North Cedarville ETN 78) and 280929 (Nov 28, 2021, ETN 88) |
 
-Credits: Contains information licensed under the Open Government Licence – Canada; contains data from Environment and Climate Change Canada. Credit: U.S. Geological Survey. NOAA National Weather Service (not affiliated with or endorsed by NOAA/NWS).
+Credits: Contains information licensed under the Open Government Licence – Canada; contains data from Environment and Climate Change Canada. Credit: U.S. Geological Survey. NOAA National Weather Service (not affiliated with or endorsed by NOAA/NWS). NWS text products via the Iowa Environmental Mesonet, Iowa State University.
