@@ -95,6 +95,18 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - **Rainfall parsers** (`src/floodlead/history/rain.py`, migration 012): ECCC climate, NCEI FM-15 AA1, SNOTEL accumulation → hourly (PST → UTC), and Open-Meteo, all with UTC hour-ending timestamps.
     - Tests: `tests/test_rain.py`.
   - Not deployed; production loads wait for PR 2.
+- `13:40` — **From which date as-issued forecast rainfall exists (part 2 item 2).** Binary search with one-day requests at the `nooksack-nf` point (48.90, −121.80), Open-Meteo `best_match`, 27 calls in all; "data" means at least 12 non-null hours that day:
+
+  | Series | First day with data | Probes | What it is |
+  |---|---|---|---|
+  | historical-forecast API `precipitation` | **2018-01-01** | 11 | Stitched from the first hours of each archived model run, so it is close to an analysis. It is **not** a forecast issued before our issue time for hours ahead |
+  | previous-runs API `precipitation_previous_day1` | **2024-01-19** | 8 | What was forecast for that hour **one day earlier**: as-issued, lead ≈ 24 h |
+  | previous-runs API `precipitation_previous_day2` | **2024-01-20** | 8 | As forecast two days earlier, lead ≈ 48 h |
+
+  **Consequence for fair replays:**
+  - Dec 2025 can be replayed with rainfall forecasts as they were issued 1–2 days ahead.
+  - Nov 2021 and earlier floods can only use observed rainfall up to the issue time (`honest`). Future observed rainfall stands in only in the labelled `oracle` variant.
+  - The historical-forecast series is not used as an "as-issued" input for lead times beyond its own run age. Decided in part 2.
 
 ## Decisions
 
