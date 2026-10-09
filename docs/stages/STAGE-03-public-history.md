@@ -485,6 +485,105 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - The forecast crests (148.9 and 148.4 ft) and the observed crossings and crests are reproduced in the scorecard.
 - **Reversibility / cost:** documentation and text only in part 1.
 
+### D-03.13 — NWS text products: VTEC and H-VTEC per segment, text crest values, WMO time authoritative
+
+- **Context:** part 2 item 3 and addendum item 3.1 need every official warning's times, category and forecast crest.
+- **Choice (`src/floodlead/history/nws.py`):**
+  - products split on `\x01`, segments on `$$`;
+  - each P-VTEC is paired with the H-VTEC line that follows it;
+  - issuance comes from the local time line, but the WMO heading's DDHHMM (UTC) wins when they differ: a correction keeps the original's text time;
+  - the forecast crest, observed crest and stage come from the segment text by explicit patterns ("crest near/of/at/around/to", not "a previous crest of"; "crested at"; "the stage was");
+  - PILs: FLWSEW, FLSSEW, FFASEW (watches) and ESFSEW (outlooks).
+- **Why:**
+  - VTEC gives machine-readable events, actions and times; the crest value exists only in the text;
+  - no archived RVF/HYD product with NRKW1 values was found (8 PILs probed).
+- **Limits:**
+  - 49 of 156 NRKW1 segments state no crest (mostly CAN/EXP);
+  - 27 spring/summer outlooks and 1 empty correction stay unparsed;
+  - categories use today's NWS stages.
+
+### D-03.14 — Rainfall history: one time convention, and only sources a live forecast could have used as inputs
+
+- **Convention:** every rain row's `ts` is the end of its hour, in UTC.
+  - SNOTEL timestamps are local standard time (UTC−8 all year). PREC is a water-year accumulation in inches, so hourly amounts are its increases; a negative step becomes 0 and is flagged.
+  - NCEI uses routine METARs only (FM-15, AA1 period 1 h).
+- **Which sources are honest inputs (measured):**
+
+  | Source | Status | Why |
+  |---|---|---|
+  | SNOTEL | Yes | newest hour about 40 min old |
+  | KBLI | Yes, as a stand-in for the live METAR feed | the same observations |
+  | NCEI's archive itself | Not a live source | nothing from the last 7 days |
+  | ECCC Abbotsford hourly | Not usable | 0 % precipitation; about 14 h behind |
+  | Open-Meteo reanalysis | **Oracle only** | — |
+  | Open-Meteo previous runs | The only as-issued forecast rain | from 2024-01-19 |
+  | Open-Meteo historical-forecast series | Not used as an as-issued forecast | stitched from each run's first hours |
+- **Reversibility:** all of these are derived tables, reloadable from the archive.
+
+### D-03.15 — Upstream links: rise correlation and peak-to-peak lags from the history
+
+- **Method:**
+  - hourly means per water year (constant bounds);
+  - lagged Pearson correlation of 1-h rises in Oct–Mar, at lags 0–36 h;
+  - for target events above the 95th percentile, at least 72 h apart: the lag of the upstream maximum in the 48 h before each.
+  - BC pairs use daily means and say that lags under a day are not resolvable.
+- **Result:** the Nooksack forks lead North Cedarville by about 4–5 h (n 216–237 events), so longer warnings must come from rain.
+
+### D-03.16 — Official-forecast scorecard definitions
+
+- **Units:**
+  - an event is one VTEC FL.W series (ETN, water year) at one point;
+  - the observed crest is the maximum 15-min stage in [first product − 12 h, last product or forecast flood end + 48 h].
+- **Per product:**
+  - lead = observed crest time − issuance;
+  - crest error = forecast − observed;
+  - crest-time error, from the H-VTEC crest time;
+  - category right;
+  - flood-begin error against the observed minor crossing.
+- **Per event:**
+  - the first warning's lead before minor;
+  - the first severity-3 product against the SR 544 onset (the replay definition).
+- **Published:** `/v1/official-scorecard`, `#/official-scorecard`, and a README table with n and the period.
+- **Why:** it reproduces the review's figures from the raw archive, and lets farmers calibrate trust in a "moderate" call. No agency publishes one.
+
+### D-03.17 — Training sets: hourly Nooksack (honest/oracle) and daily Fraser Valley
+
+- **Cut-offs:** every feature is cut at its own latency (`LATENCY`, D-03.14), and records the newest timestamp used (`asof_*`).
+- **As-issued forecast rain:** day 1 only for valid hours ≤ t + 18 h, day 2 ≤ t + 42 h (about 24/48 h issue lag plus 6 h for run availability); NaN before 2024-01-19.
+- **NWS-derived probabilities:** taken from the product in force at t.
+- **Targets:** levels at 1–48 h, and crossings at 6/12/24/48 h. Overflow targets only where the gauge existed, and not when water was already flowing.
+- **Splits:** by water year. WY2022 and WY2026 are flagged `holdout`.
+- **Tests (`tests/test_datasets.py`):**
+  - poisoning every value after each source's cut-off leaves every honest feature unchanged;
+  - targets do change;
+  - the NWS comparator switches on and off with the products;
+  - the held-out water years are flagged;
+  - the oracle columns appear only in `oracle`.
+  - The first version of the lookup had a bug the test caught: a 10-min window on a 15-min grid looked at no cell, so every level target would have been empty.
+- **Features table:** `docs/data/features-nooksack-v1.md`.
+
+### D-03.18 — Event catalogue and relay replay (relay value kept apart from model value)
+
+- **Catalogue:** for North Cedarville, the replay's minor events, each with its crossings, crest, SR 544 onset and first NWS warning. For BC, typical-peak crossings, from the annual instantaneous maxima and the daily means (the latter undercount).
+- **Relay replay:** three pre-registered tiers built only from archived products and gauges:
+  - heads-up: a flood watch naming Whatcom, 7 days before the minor crossing up to its end;
+  - prepare: an NRKW1 warning ≥ minor or an Everson-overflow warning, 72 h before to the end;
+  - move: the SR 544 onset, or North Cedarville ≥ minor and rising.
+  - Every event since the SR 544 gauge began is counted, and a minor event without overflow is a false alarm.
+  - Each fire is flagged daylight or night at Abbotsford (NOAA solar approximation, within 4 min of api.sunrise-sunset.org).
+  - BC River Forecast Centre watches cannot be replayed (not archived; licence yellow).
+
+### D-03.19 — Part 2 runs early, from draft PR #6, under its own image tag
+
+- **Context:** part 2 is due Oct 10 ~12:00Z, and PR #5 is in QA until Build Session 3. Waiting would idle the night.
+- **Choice:**
+  - part 2 is built in a separate git worktree (`../trilemma-part2`), so a part-1 build never picks up part-2 code;
+  - draft PR #6 (base `main`) was opened before any part-2 code touched production;
+  - part-2 code runs only as one-off `docker run --rm` containers of `floodlead-app:part2` into new tables;
+  - `floodlead-app:latest` and the live services stay on part 1.
+- **Cost:** PR #6's diff shows part 1 until #5 merges, then `main` is merged in.
+- **Slip:** one `git commit -a` swept a frontend draft into a parser-fix commit (`638d6d3`). It is recorded, not rewritten.
+
 ## Work log
 
 - `12:42` — `git checkout main && git pull` → `bd3d092`. Branch `stage-03-public`. Read the prompt and the inputs above.
