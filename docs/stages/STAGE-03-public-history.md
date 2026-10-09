@@ -271,6 +271,13 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
     - the 4 manifest rows were set to `error`; the refetch gave 4 × ~435 kB, 0 errors (22:32–22:34Z).
   - Rain reload and dataset rebuild rerun (results below).
 
+- `16:01–16:10` — **Training sets rebuilt and checked; protocol frozen.**
+  - The rain reload is complete: Open-Meteo reanalysis 1,597,056 rows.
+  - Datasets, image commit `f502b49`: Nooksack hourly honest and oracle, 193,007 rows each; Fraser Valley daily 93,805 rows each. The sha256 values are in the protocol.
+  - `python3 scripts/check_datasets.py /srv/floodlead/datasets` → **0 violations on every row** of both variants (leakage cut-offs, NWS issuance ≤ t, held-out flags), `RESULT OK`.
+  - **Finding:** North Cedarville never reached 150 ft outside the two held-out floods (0 development events; 5 at ≥ 148 ft; 3 development overflow events). The protocol fixes how this is handled: P(≥ 150 ft) comes only from the level distribution, and is reported descriptively on n = 2.
+  - **`docs/evaluation-protocol.md` FROZEN at commit `45367d1171b781656c2d859a8155fac254d79ed4`, sha256 `ecdefe0bcdb27ff00508c58da9d2819b13ad14b2c9e2febfe86a2741e230abad`.**
+
   The Sumas USGS–ECCC overlap is only 427 days. The USGS hourly level at Sumas, WA needs at least 18 hours a day to make a daily mean, and its level record is short. As found.
 
 ## Decisions
