@@ -278,9 +278,11 @@ table.skill td:first-child { white-space: nowrap; }
 .tag-held { background: #ebe6f6; color: #3e2f6e; }
 .sc-first { margin-top: 8px; }
 .sc-leads > h3:not(:first-child) { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+table.sc-events th { white-space: normal; min-width: 5.5em; vertical-align: bottom; }
 table.sc-events th small { font-weight: 400; }
-table.sc-events th.sc-major-h { min-width: 11em; }
-table.sc-events td.sc-ev-cell { white-space: nowrap; }
+table.sc-events th.sc-major-h { min-width: 13em; }
+table.sc-events td.sc-ev-cell, table.sc-events td.sc-nw { white-space: nowrap; }
+table.sc-events td.sc-major { min-width: 13em; }
 table.sc-events td.sc-ev-cell .tag { margin: 2px 0; }
 table.sc-events > tbody > tr.sc-ev > td { border-bottom: 0; padding-bottom: 2px; }
 table.sc-events > tbody > tr.sc-prod > td { padding-top: 0; }

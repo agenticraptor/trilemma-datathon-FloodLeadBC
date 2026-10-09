@@ -50,7 +50,8 @@
   const SC_LEAD_ORDER = ['after the crest', '0-6 h', '6-12 h', '12-24 h', '24-48 h', '48 h +'];
   const SC_HELD_OUT_WY = { 2022: 'Nov 2021 flood', 2026: 'Dec 2025 flood' }; // docs/evaluation-protocol.md: held out until one final run
   const SC_MIN_N = 5; // fewer products (or events) than this: "too few … to judge"
-  const VTEC_ACTIONS = { NEW: 'new', CON: 'continued', EXT: 'time extended', EXA: 'area extended', EXB: 'time and area extended', UPG: 'upgraded', CAN: 'cancelled', EXP: 'expired', COR: 'correction', ROU: 'routine' };
+  const VTEC_ACTIONS = { NEW: 'new warning', CON: 'continued', EXT: 'extended in time', EXA: 'extended in area', EXB: 'extended in time and area', UPG: 'upgraded', CAN: 'cancelled', EXP: 'expired', COR: 'correction', ROU: 'routine' };
+  const SC_CATEGORY = { action: 'action stage', minor: 'minor flood', moderate: 'moderate flood', major: 'major flood' };
   const VTEC_SEVERITY = { 0: 'none given', N: 'none', 1: 'minor', 2: 'moderate', 3: 'major', U: 'unknown' };
 
   // ---------------------------------------------------------------------------------------------
@@ -1808,8 +1809,8 @@
   function scLeadLabel(lab) {
     const s = lab == null ? '—' : String(lab);
     if (s === 'after the crest') return 'After the crest';
-    if (s === '48 h +') return '48 h or more';
-    return s.replace(/(\d)-(\d)/g, '$1–$2');
+    if (s === '48 h +') return '48\u00a0h or more';
+    return s.replace(/(\d)-(\d)/g, '$1–$2').replace(/ h\b/g, '\u00a0h');
   }
   function scHeldOut(e) { return isNum(e.water_year) && Object.prototype.hasOwnProperty.call(SC_HELD_OUT_WY, e.water_year); }
   function heldOutTag() { return h('span', { class: 'tag tag-held' }, 'held out for the final test'); }
@@ -1833,33 +1834,35 @@
       const s = scSummary(sc, lid);
       const sid = sc.points && typeof sc.points[lid] === 'string' ? sc.points[lid] : null;
       const nAll = scEvents(sc).filter((e) => e.point === lid).length;
+      const nScored = s && isNum(s.n_events) ? s.n_events : 0;
+      let count = 'No scored warning events';
+      if (nScored > 0) count = `${plural(nScored, 'warning event')} scored${nAll > nScored ? ` (${fmtInt(nAll - nScored)} more without a gauge record)` : ''}`;
+      else if (nAll > 0) count = `${plural(nAll, 'warning event')}, none with a gauge record to score against`;
       parts.push(h('h3', null, `${scPointName(lid)} (${lid})`),
-        h('p', { class: 'meta' },
-          s && isNum(s.n_events) ? `${plural(s.n_events, 'warning event')} scored` : 'No scored warning events',
-          nAll && s && isNum(s.n_events) && nAll > s.n_events ? ` (${fmtInt(nAll - s.n_events)} more without a gauge record)` : '',
-          sid && STATION_ID_RE.test(sid) ? h('span', null, ' · gauge ', h('a', { href: stationHref(sid) }, sid)) : null));
+        h('p', { class: 'meta' }, count, sid && STATION_ID_RE.test(sid) ? h('span', null, ' · gauge ', h('a', { href: stationHref(sid) }, sid)) : null));
       const bins = scBins(s);
       if (!bins.length) {
         parts.push(placeholder('No products with a forecast crest to score at this point.'));
-      } else {
-        const head = h('tr', null,
-          h('th', null, 'Lead'), h('th', { class: 'p' }, 'Products (n)'), h('th', { class: 'p' }, 'Events (n)'),
-          h('th', { class: 'p' }, 'Bias (ft)'), h('th', { class: 'p long' }, 'Mean absolute error (ft)'),
-          h('th', { class: 'p' }, 'Category right (%)'), h('th', { class: 'p long' }, 'Crest timing error, mean absolute (h)'));
-        const rows = bins.map((b) => h('tr', null,
-          h('td', null, scLeadLabel(b.lead)),
-          h('td', { class: 'p' }, fmtInt(b.n_products)),
-          h('td', { class: 'p' }, fmtInt(b.n_events)),
-          h('td', { class: 'p' }, fmtSigned(b.crest_bias_ft, 2),
-            isNum(b.crest_bias_ft) && Number(Math.abs(b.crest_bias_ft).toFixed(2)) !== 0 ? h('small', { class: 'muted' }, h('br'), b.crest_bias_ft < 0 ? 'too low' : 'too high') : null),
-          h('td', { class: 'p' }, fmt(b.crest_mae_ft, 2)),
-          h('td', { class: 'p' }, fmtShare(b.category_right_share)),
-          h('td', { class: 'p' }, fmt(b.crest_time_mae_h, 1))));
-        parts.push(
-          h('p', { class: 'table-caption' }, SC_CAPTION),
-          tableBox(h('table', { class: 'skill sc-lead' }, h('thead', null, head), h('tbody', null, rows))));
+        if (nScored > 0) parts.push(scFirstWarningLine(s));
+        continue;
       }
-      parts.push(scFirstWarningLine(s));
+      const head = h('tr', null,
+        h('th', null, 'Lead'), h('th', { class: 'p' }, 'Products (n)'), h('th', { class: 'p' }, 'Events (n)'),
+        h('th', { class: 'p' }, 'Bias (ft)'), h('th', { class: 'p long' }, 'Mean absolute error (ft)'),
+        h('th', { class: 'p' }, 'Category right (%)'), h('th', { class: 'p long' }, 'Crest timing error, mean absolute (h)'));
+      const rows = bins.map((b) => h('tr', null,
+        h('td', null, scLeadLabel(b.lead)),
+        h('td', { class: 'p' }, fmtInt(b.n_products)),
+        h('td', { class: 'p' }, fmtInt(b.n_events)),
+        h('td', { class: 'p' }, fmtSigned(b.crest_bias_ft, 2),
+          isNum(b.crest_bias_ft) && Number(Math.abs(b.crest_bias_ft).toFixed(2)) !== 0 ? h('small', { class: 'muted' }, h('br'), b.crest_bias_ft < 0 ? 'too low' : 'too high') : null),
+        h('td', { class: 'p' }, fmt(b.crest_mae_ft, 2)),
+        h('td', { class: 'p' }, fmtShare(b.category_right_share)),
+        h('td', { class: 'p' }, fmt(b.crest_time_mae_h, 1))));
+      parts.push(
+        h('p', { class: 'table-caption' }, SC_CAPTION),
+        tableBox(h('table', { class: 'skill sc-lead' }, h('thead', null, head), h('tbody', null, rows))),
+        scFirstWarningLine(s));
     }
     parts.push(h('p', { class: 'muted' }, 'Products: every warning and follow-up statement with a forecast crest in its text. Events (n): the warnings those products belong to. Category right: the forecast crest and the observed crest fall in the same NWS flood category. Crest timing error: hours between the forecast and the observed crest time, either way.'));
     return h('div', { class: 'sc-leads' }, parts);
@@ -1883,7 +1886,7 @@
     const scored = evs.filter((e) => e.status === 'scored').length;
     const stagesEv = evs.find((e) => e.stages_ft && typeof e.stages_ft === 'object');
     const st = stagesEv ? stagesEv.stages_ft : null;
-    const stageText = st ? STAGE_KEYS.filter((k) => isNum(st[k])).map((k) => `${STAGE_NAMES[k].toLowerCase()} ${fmtStageFt(st[k])} ft`).join(', ') : '';
+    const stageText = st ? STAGE_KEYS.filter((k) => isNum(st[k])).map((k) => `${SC_CATEGORY[k]} ${fmtStageFt(st[k])} ft`).join(', ') : '';
     const head = h('tr', null,
       h('th', null, 'Event', h('br'), h('small', null, 'crest date (Pacific)')),
       h('th', { class: 'wrap' }, 'First warning (Pacific)'),
@@ -1909,16 +1912,17 @@
     const held = scHeldOut(e);
     const ok = e.status === 'scored';
     const prods = Array.isArray(e.products) ? e.products.filter((p) => p && typeof p === 'object') : [];
-    const dateAt = toDate(e.observed_crest_at) || toDate(e.first_issued_at);
+    const crestAt = toDate(e.observed_crest_at);
+    const dateAt = crestAt || toDate(e.first_issued_at);
     const cls = (base) => [base, held ? 'held-out' : ''].filter(Boolean).join(' ') || null;
     const sub = [isNum(e.water_year) ? `water year ${e.water_year}` : null, isNum(e.etn) ? `NWS event no. ${e.etn}` : null].filter(Boolean).join(' · ');
 
     let observed;
-    if (!ok) observed = h('span', { class: 'muted' }, e.status === 'no_observations' ? 'no gauge record (not scored)' : 'not scored');
+    if (!ok) observed = h('span', { class: 'muted' }, e.status === 'no_observations' ? ['no gauge record', h('br'), '(not scored)'] : 'not scored');
     else {
       const cat = typeof e.observed_category === 'string' ? e.observed_category : '';
       observed = h('span', null, isNum(e.observed_crest_ft) ? `${fmtStageFt(e.observed_crest_ft)} ft` : '—',
-        h('small', { class: 'muted' }, h('br'), STAGE_KEYS.includes(cat) ? [h('span', { class: `swatch sw-${cat}` }), ' ', STAGE_NAMES[cat].toLowerCase()] : (cat || 'category unknown'),
+        h('small', { class: 'muted' }, h('br'), STAGE_KEYS.includes(cat) ? [h('span', { class: `swatch sw-${cat}` }), ' ', SC_CATEGORY[cat]] : (cat || 'category unknown'),
           e.observed_crest_at ? [h('br'), fmtPacificMd(e.observed_crest_at)] : null));
     }
 
@@ -1927,20 +1931,21 @@
     if (isNum(lv)) {
       const s = Math.abs(lv).toFixed(1);
       lead = Number(s) === 0 ? 'at the crossing' : `${s} h ${lv > 0 ? 'before' : 'after'}`;
-    } else if (ok && !e.observed_minor_cross) lead = h('span', { class: 'muted' }, 'minor stage not reached');
+    } else if (ok && !e.observed_minor_cross) lead = h('span', { class: 'muted' }, 'not reached');
     else lead = '—';
 
-    const fc = isNum(e.first_forecast_crest_ft) ? `${fmtStageFt(e.first_forecast_crest_ft)} ft` : h('span', { class: 'muted' }, 'no crest in the text');
+    const fc = isNum(e.first_forecast_crest_ft) ? `${fmtStageFt(e.first_forecast_crest_ft)} ft` : h('span', { class: 'muted' }, 'none in text');
 
     const row = h('tr', { class: cls(prods.length ? 'sc-ev' : '') },
       h('td', { class: 'sc-ev-cell' }, h('strong', null, dateAt ? fmtDate(dateAt) : '—'),
+        dateAt && !crestAt ? h('small', { class: 'muted' }, h('br'), '(date of the first warning)') : null,
         held ? [h('br'), heldOutTag()] : null,
         sub ? h('small', { class: 'muted' }, h('br'), sub) : null),
-      h('td', null, fmtPacificMd(e.first_issued_at)),
+      h('td', { class: 'sc-nw' }, fmtPacificMd(e.first_issued_at)),
       h('td', { class: 'p' }, ok || isNum(e.first_forecast_crest_ft) ? fc : '—'),
       h('td', { class: 'p' }, observed),
       h('td', { class: 'p' }, lead),
-      h('td', null, ok ? scMajorCell(e) : '—'));
+      h('td', { class: 'sc-major' }, ok ? scMajorCell(e) : '—'));
     if (!prods.length) return [row];
     const det = h('details', { class: 'sc-products' },
       h('summary', null, `${plural(prods.length, 'product')} issued in this warning`),
@@ -1992,7 +1997,7 @@
     if (!bins.length && !(f && isNum(f.n) && f.n > 0)) return placeholder('No scored North Cedarville warnings in this scorecard yet.');
     const lines = [];
     for (const b of bins) {
-      if (b.lead === 'after the crest') continue;
+      if (typeof b.lead !== 'string' || !b.lead || b.lead === 'after the crest') continue;
       const lead = scLeadLabel(b.lead);
       if (!isNum(b.n_products) || b.n_products < SC_MIN_N) {
         lines.push(`With a forecast ${lead} before the crest: too few products to judge (${isNum(b.n_products) ? plural(b.n_products, 'product') : 'count unknown'}).`);
@@ -2024,7 +2029,7 @@
     }
     return h('div', { class: 'sc-means' },
       h('h3', null, 'At North Cedarville (NRKW1)'),
-      lines.map((t) => h('p', null, t)),
+      lines.map((t) => h('p', null, t.replace(/(\d) (h|ft)\b/g, '$1\u00a0$2'))),
       h('p', { class: 'muted' }, `These sentences only restate the North Cedarville table above (scorecard ${isNum(sc.scorecard_id) ? sc.scorecard_id : '—'}). Fewer than ${SC_MIN_N} products in a lead window: “too few products to judge”.`));
   }
 

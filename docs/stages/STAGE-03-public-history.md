@@ -209,6 +209,23 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - Ferndale (NKSW1): 16 events. Everson (NREW1) and the overflow (NOEW1) have no point warnings; the Everson overflow warnings are areal (FA) products and feed the relay tiers.
   - The "after the crest" bin (crest-time MAE 288 h) is not a forecast. It is shown only for completeness, and dropped from the README table.
 
+- `14:09–14:19` — **Relay replay** (`floodlead history build relay`, 27 s) and the **rain load** (`history load rain`).
+  - The rain load's first run failed after 2.9 s, with nothing written: `relation "_stage" already exists`. The same transaction bug as the CRPS recompute: without autocommit, the per-payload `ON COMMIT DROP` temp table outlived each payload.
+    - Fixed with autocommit per payload. `test_load_two_overlapping_payloads` **fails without the fix and passes with it**.
+    - Rerun: `{'eccc-climate': 1007776, 'ncei': 188757, 'openmeteo-archive': 660264, 'openmeteo-histfc': 475008, 'openmeteo-prevruns': 264576, 'snotel': 587425}` rows in 450.5 s. The Open-Meteo reanalysis download was still running, so it is reloaded at the end.
+  - Relay tiers, 13 North Cedarville minor-stage events since the SR 544 gauge began (7 with overflow). The prepare window was first 7 days, which let in a warning from an earlier event (a 106.8 h "lead"). It is now 72 h before the minor crossing, as in the catalogue:
+
+    | Tier | Fired | Hits / overflow events | False alarms | POD | FAR | Lead before overflow onset (h) | Daylight share |
+    |---|---|---|---|---|---|---|---|
+    | Heads-up (NWS flood watch naming Whatcom) | 12 | 7 / 7 | 5 | 1.00 | 0.42 | 68.9, 69.1, 84.0, 101.2, 101.5, 120.6, 151.9 | 0.75 |
+    | Prepare (NRKW1 warning ≥ minor, or Everson-overflow warning) | 13 | 7 / 7 | 6 | 1.00 | 0.46 | 2.2, 6.6, 7.1, 9.3, 12.0, 13.4, 18.5 | 0.46 |
+    | Move (SR 544 onset, or North Cedarville ≥ minor and rising) | 13 | 7 / 7 | 6 | 1.00 | 0.46 | 0.1, 3.8, 4.5, 4.9, 5.2, 6.0, 6.4 | 0.62 |
+
+    These are relay value, with no model. With 7 overflow events, the exact 95 % interval on POD 7/7 is 0.59–1.00. Comparisons with Abbotsford's times and the 7-hour rule are in the relay output (`/srv/floodlead/datasets/relay.json`) and go into the part-2 report.
+- `14:19` — **`#/official-scorecard` page** ("How accurate were the official forecasts?", background frontend agent).
+  - **My mistake:** a `git commit -a` for the NWS month-name fix (`638d6d3`, pushed) also swept in the agent's unfinished draft of this page. Pushed history is not rewritten; the final page is committed separately.
+  - `/v1/official-scorecard` was added to the snapshot export; slug test 19 passed.
+
   The Sumas USGS–ECCC overlap is only 427 days. The USGS hourly level at Sumas, WA needs at least 18 hours a day to make a daily mean, and its level record is short. As found.
 
 ## Decisions
