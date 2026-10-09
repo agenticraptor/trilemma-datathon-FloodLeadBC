@@ -27,10 +27,13 @@ def test_pvtec_and_hvtec_for_north_cedarville() -> None:
     assert first.severity == "2" and first.cause == "ER" and first.record == "NO"
     assert first.flood_begin == datetime(2021, 11, 14, 22, 18, tzinfo=UTC)
     assert first.flood_crest == datetime(2021, 11, 15, 18, 0, tzinfo=UTC)
+    assert first.forecast_crest_ft == 148.9  # the first warning's crest (observed: 150.76 ft)
     upg = [v for v in ps[0].vtec if v.nwsli == "NRKW1"][0]
     assert (upg.action, upg.severity, upg.record, upg.begin) == ("EXT", "3", "NR", None)  # 000000T0000Z -> None
     nov28 = [v for v in ps[2].vtec if v.nwsli == "NRKW1"][0]
     assert (nov28.etn, nov28.flood_end) == (88, datetime(2021, 11, 29, 18, 28, tzinfo=UTC))
+    # "a crest of 148.5 feet" is the forecast; "a previous crest of 148.1 feet on 12/13/2010" is history, not used
+    assert (nov28.forecast_crest_ft, nov28.observed_stage_ft) == (148.5, 144.0)
 
 
 def test_every_pvtec_is_kept_even_without_hvtec() -> None:

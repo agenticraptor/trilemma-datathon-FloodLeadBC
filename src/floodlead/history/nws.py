@@ -29,6 +29,13 @@ MONTHS = {m: i for i, m in enumerate(["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
 SEVERITY = {"N": "none", "0": "areal or no forecast point", "1": "minor", "2": "moderate", "3": "major",
             "U": "unknown"}
 SEVERITY_RANK = {"N": 0, "0": 0, "U": 0, "1": 1, "2": 2, "3": 3}
+# Values stated in a segment's text (feet). Forecast crest: "crest near/of/at/around/to 148.9 feet", "cresting near",
+# but not "a previous crest of" (flood history). Observed crest: "crested at/near ... 150.2 feet". Stage: "the stage
+# was 144.0 feet".
+_NUM = r"(\d{2,3}\.\d+)\s*(?:feet|ft)\b"
+FC_CREST = re.compile(r"(?<!previous )\bcrest(?:ing)?\s+(?:near|of|at|around|to)\s+(?:about\s+|near\s+)?" + _NUM, re.I)
+OBS_CREST = re.compile(r"\bcrested\b[^.]{0,60}?" + _NUM, re.I | re.S)
+OBS_STAGE = re.compile(r"\bstage was\s+(?:about\s+)?" + _NUM, re.I)
 
 
 def vtec_time(s: str) -> datetime | None:
@@ -55,6 +62,9 @@ class Vtec:
     flood_end: datetime | None = None
     record: str | None = None
     segment: int = 0
+    forecast_crest_ft: float | None = None
+    observed_crest_ft: float | None = None
+    observed_stage_ft: float | None = None
 
 
 @dataclass
@@ -101,12 +111,17 @@ def parse_product(raw: str) -> Product | None:
                 wmo=f"{w.group(1)} {w.group(2)} {w.group(3)}{w.group(4)}{w.group(5)}{bbb}",
                 issued_at=t, text=raw.strip("\x01\x03\n"))
     for si, seg in enumerate(raw.split("$$")):
+        flat = re.sub(r"\s+", " ", seg)
+        fc, oc, ob = FC_CREST.search(flat), OBS_CREST.search(flat), OBS_STAGE.search(flat)
         last: Vtec | None = None
         for line in seg.splitlines():
             pm = PVTEC.search(line)
             if pm:
                 k, act, off, ph, sig, etn, b, e = pm.groups()
-                last = Vtec(k, act, off, ph, sig, int(etn), vtec_time(b), vtec_time(e), segment=si)
+                last = Vtec(k, act, off, ph, sig, int(etn), vtec_time(b), vtec_time(e), segment=si,
+                            forecast_crest_ft=float(fc.group(1)) if fc else None,
+                            observed_crest_ft=float(oc.group(1)) if oc else None,
+                            observed_stage_ft=float(ob.group(1)) if ob else None)
                 p.vtec.append(last)
                 continue
             hm = HVTEC.search(line)
@@ -152,10 +167,12 @@ def load(pool) -> dict[str, int]:  # type: ignore[no-untyped-def]
                         cur.executemany(
                             "INSERT INTO nws_vtec (product_id, seq, segment, issued_at, product_class, action, office,"
                             " phenomena, significance, etn, vtec_begin, vtec_end, nwsli, severity, cause, flood_begin,"
-                            " flood_crest, flood_end, record) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,"
-                            " %s, %s, %s, %s, %s, %s, %s)",
+                            " flood_crest, flood_end, record, forecast_crest_ft, observed_crest_ft, observed_stage_ft)"
+                            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,"
+                            " %s, %s)",
                             [(row[0], i, v.segment, p.issued_at, v.product_class, v.action, v.office, v.phenomena,
                               v.significance, v.etn, v.begin, v.end, v.nwsli, v.severity, v.cause, v.flood_begin,
-                              v.flood_crest, v.flood_end, v.record) for i, v in enumerate(p.vtec)])
+                              v.flood_crest, v.flood_end, v.record, v.forecast_crest_ft, v.observed_crest_ft,
+                              v.observed_stage_ft) for i, v in enumerate(p.vtec)])
                     n_vtec += len(p.vtec)
     return {"pages": len(pages), "products": n_prod, "vtec": n_vtec, "unparsed": skipped}

@@ -30,6 +30,9 @@ CREATE TABLE nws_vtec (
     flood_crest    timestamptz,
     flood_end      timestamptz,
     record         text,
+    forecast_crest_ft real,                        -- from the segment text ("crest near 148.9 feet")
+    observed_crest_ft real,                        -- "crested at ... feet"
+    observed_stage_ft real,                        -- "the stage was 144.0 feet"
     PRIMARY KEY (product_id, seq)
 );
 CREATE INDEX nws_vtec_point ON nws_vtec (nwsli, issued_at);
