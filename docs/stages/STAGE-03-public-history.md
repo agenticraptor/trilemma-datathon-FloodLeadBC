@@ -88,7 +88,7 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
 
 ### Part 2 progress log (branch `stage-03-history`; merged with part 1's doc when PR 1 is in `main`)
 
-- `13:33–13:45` — In a separate worktree (`../trilemma-part2`), so part-1 deploys never build part-2 code:
+- `13:33–13:39` — In a separate worktree (`../trilemma-part2`), so part-1 deploys never build part-2 code:
   - **NWS VTEC parser** (`src/floodlead/history/nws.py`, migration 011): products split on `\x01`, segments on `$$`, P-VTEC paired with the following H-VTEC, issuance from the local time line cross-checked against the WMO DDHHMM.
     - Tests on real Nov 2021 products (`tests/fixtures/iem_FLWSEW_2021_excerpt.txt`).
     - **The first North Cedarville flood warning of Nov 2021 (ETN 78, NEW) was issued at "1150 AM PST Sun Nov 14 2021" = 19:50Z**, WMO `141950`. Its H-VTEC: severity 2 (moderate), forecast flood begin 22:18Z, crest Nov 15 18:00Z. The supervisor's approximate ≈ 21:28Z is corrected here; the full timeline comes in part 2. The "major" upgrade (EXT, severity 3, record `NR`) was at 10:07Z Nov 15, as the supervisor said.
@@ -107,7 +107,7 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - Dec 2025 can be replayed with rainfall forecasts as they were issued 1–2 days ahead.
   - Nov 2021 and earlier floods can only use observed rainfall up to the issue time (`honest`). Future observed rainfall stands in only in the labelled `oracle` variant.
   - The historical-forecast series is not used as an "as-issued" input for lead times beyond its own run age. Decided in part 2.
-- `13:45–13:52` — **Upstream links (part 2 item 4)**, `src/floodlead/history/links.py`, read-only on production (hourly means per water year, constant bounds, 86.7 s + 21.3 s). Results in `docs/data/upstream_links.json`. Synthetic known-delay test: `tests/test_links.py` recovers a 5 h lag.
+- `13:42–13:45` — **Upstream links (part 2 item 4)**, `src/floodlead/history/links.py`, read-only on production (hourly means per water year, constant bounds, 86.7 s + 21.3 s). Results in `docs/data/upstream_links.json`. Synthetic known-delay test: `tests/test_links.py` recovers a 5 h lag.
 
   | Pair (hourly, 2004–2026) | Rise correlation: best lag, r, n hours | Peak-to-peak: median (IQR), n events |
   |---|---|---|
@@ -131,7 +131,7 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   | Fraser at Hope → Fraser at Mission (tidal) | 10,885 | 0 d, 0.706 | 1 d (0–2), 102 |
   | Coquihalla above Alexander Ck → below Needle Ck | 4,990 | 0 d, 0.857 | 0 d (0–0), 57 |
 
-- `13:52–13:58` — **Official NWS warnings for North Cedarville (part 2 item 3), first read of the whole archive** (read-only, in memory).
+- `13:45–13:46` — **Official NWS warnings for North Cedarville (part 2 item 3), first read of the whole archive** (read-only, in memory).
   - 5,181 products parsed; 1 unparsed (to inspect); 156 VTEC records with H-VTEC `NRKW1`, in 36 FL.W events from 2006 to 2026.
   - **The supervisor's spot checks, verified against the raw products:**
 
