@@ -232,6 +232,71 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - Losing `FEEDBACK_KEY` makes the stored text unreadable (stated in the open issues). It lives only in `.env`, as the other secrets do.
 - **Follow-ups:** retention period for feedback text (Stage 7, with the privacy policy).
 
+### D-03.7 — Typical yearly peak: median annual instantaneous maximum level over 2005–2024, with a datum check
+
+- **Context:** part 1 item 4. BC gauges have no official flood stages in our data. People need a level that matters, and it must be honest about what it is.
+- **Choice (`src/floodlead/typical_peaks.py`, method `typical-peak-v1`):**
+  - **Value:** the median of the annual instantaneous maximum *water level* (ECCC `hydrometric-annual-peaks`, HYDAT) over 2005–2024. Approved HYDAT ends in 2024, so this is the last 20 years.
+    - At least 10 years are required.
+    - Years marked "Ice Conditions" are left out.
+    - The median is reached or exceeded in about half of years. That is the label's claim, and nothing stronger.
+  - **Datum check:** a datum change makes old peaks meaningless against today's levels. Today's 30-day median live level (constant time bounds on `observations`) is compared with the daily mean levels (`eccc_daily`) for the same calendar days (Sep 10 – Oct 9) in the last 5 years that have them.
+    - **Rejected** if the live median lies outside that range by more than max(0.5 m, half the range).
+    - **Flagged** if there is no live level or no same-season history to check against, or if the level already reached the value in the last 30 days.
+  - **Stored** in `typical_peaks` with status, n, years, the reason and the checks (`jsonb`). This is apart from NOAA's official thresholds.
+- **Result (20:20Z):** 433 BC stations with level → **302 ok, 8 flagged, 1 rejected, 122 insufficient** (fewer than 10 years).
+  - Flag reasons:
+    - 6 reached the value in the last 30 days;
+    - 1 had no same-season daily history;
+    - 1 had no live level.
+  - Rejected: one station, whose 30-day median of 1.274 m lies outside its same-season range.
+  - All 7 Fraser Valley gauges are `ok` (table in the work log).
+- **Why the median of annual maxima:** a number that is directly verifiable from public ECCC data, needs no distribution fit, and fits "reached in about half of years" exactly.
+  - A 2-year return level from a fitted GEV would be close, but adds a model to explain.
+  - A percentile of daily means would understate instantaneous peaks.
+- **Reversibility / cost:**
+  - A new method version can be added next to `typical-peak-v1`; the table is keyed by method.
+  - The datum rule can miss a small datum change (under 0.5 m) and can flag a real but unusual season. Both are stated in the app.
+- **Follow-ups:** part 2 uses the same table for the BC event catalogue ("crossings of the typical yearly peak").
+
+### D-03.8 — The thresholds enter the ledger through new model cards, in the same issuance, before first use
+
+- **Context:** forecasts that include the typical-peak threshold must be verifiable. Its values and provenance must be in the ledger before the first forecast that uses them, without changing any existing card or entry.
+- **Options considered:**
+  - (a) new model cards for `persistence-v1` and `trend3h-v1` whose `params.typical_peak` holds the method, source, period, rules and every `ok` value;
+  - (b) a new entry type (for example `threshold_set`), which needs a schema change to the ledger's `entry_type` CHECK and verifier updates;
+  - (c) new model names (v2), which would break the continuity of the live scores.
+- **Choice:** (a). The issuer already appends a superseding card whenever a model's `params_hash` changes, in the same transaction and at lower seq than that issuance's forecasts.
+  - Each card says `change: "typical yearly peak thresholds added or updated (params.typical_peak); forecast method and other parameters unchanged"` and `supersedes_seq`.
+  - Each forecast for a station with an `ok` value gets a threshold `{"key": "typical:peak", "kind": "typical", "level_m", "label", "source": "typical-peak-v1 in the model card params (typical_peak)"}`, plus `p_exceed["typical:peak"]` at every horizon.
+  - `flagged` and `rejected` values are shown in the app with their reason, but not used in forecasts.
+- **Why:**
+  - no ledger schema change and no verifier change;
+  - the old cards are untouched (tested: the earlier cards are byte-identical after the new ones are appended);
+  - "before first use" holds by construction, and is tested (card seq < every forecast seq of that issuance).
+- **Reversibility / cost:**
+  - Each card carries all ~300 values, about 20 kB of canonical text. It is written only when the values change.
+  - Recomputing the table with different values would append new cards, which is visible and dated.
+- **Follow-ups:** the scorer already scores any threshold, so Brier for `typical:peak` appears once events settle.
+
+### D-03.9 — F4: the replay is refreshed in the background before its cache expires
+
+- **Context:** `/v1/replay/overflow` takes ~9 s cold. When its 1 h cache expired, one visitor paid that cost (one supervisor page load took 16.5 s).
+- **Choice:** the API's warm-up thread now loops. It recomputes the replay at start and every 50 min (`_REPLAY_REFRESH_S = 3000`), 10 min before the 1 h TTL, and swaps the cached copy in place. A failed refresh is logged, and the previous copy keeps serving until its TTL.
+- **Why:** the simplest change that removes the cold path for visitors.
+- **Reversibility / cost:** one computation every 50 min (about 9 s of database time).
+
+### D-03.10 — F3: statement timeouts as a database default, and a guarded shell for ad-hoc work
+
+- **Context:** the 01:38Z OOM was an unbounded ad-hoc query.
+- **Choice:**
+  - Migration 010 sets, for the current database (by name, so the disposable test database never touches production), `statement_timeout = 15min` and `idle_in_transaction_session_timeout = 30min` for every new session that does not set its own.
+  - `scripts/dbshell` runs psql with `statement_timeout = 5min` and `work_mem = 8MB`; checked with `SHOW` → `5min`, `8MB`.
+  - Long jobs set their own: the recompute 15 min, the typical-peak computation 10 min. `pg_dump` sets 0 itself.
+  - History data went into new tables (`eccc_annual_peaks`, `eccc_daily`, `typical_peaks`), never into `observations`.
+  - Raising `timescaledb.max_background_workers` and compressing old chunks were **skipped** in part 1 (time). They stay open issues, to be done with a dump first if they are done at all.
+- **Reversibility / cost:** one `ALTER DATABASE … RESET` undoes it. The 15-min backstop is well above every scheduled job (the longest is the issuance at about 77 s).
+
 ## Work log
 
 - `12:42` — `git checkout main && git pull` → `bd3d092`. Branch `stage-03-public`. Read the prompt and the inputs above.
@@ -286,12 +351,52 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - The test had passed only because the pooled connection was reused from an earlier `scorer.run`, which leaves autocommit on.
   - Fix: autocommit is set before the first statement. The test now uses a fresh pool, as production does: **it fails without the fix and passes with it**.
 
-- `13:05–13:25` — **Feedback** (D-03.6):
+- `12:58–13:04` — **Feedback** (D-03.6):
   - migration 008;
   - `src/floodlead/feedback.py`, `POST /v1/feedback`, health counts, `floodlead feedback list`, the issue form;
   - `tests/test_feedback.py`: validation, encryption round trip and wrong key, per-IP and global limits, end to end (202, not echoed, encrypted at rest, decrypted only by the reader, absent from captured logs and output, health counts, append-only), 413/400/429.
   - **The test caught a bug in my first version:** health folds every job block into the overall status, and the feedback block had none, so health would have returned 500. Feedback counts now sit outside the status roll-up.
   - `pytest -q` → **107 passed**.
+
+- `13:05` — Feedback deployed: `floodlead migrate` → `008_feedback.sql`; the API recreated with `FEEDBACK_KEY` (`.env`, generated on the VM, not printed).
+  - Public checks:
+    - `POST {}` → 400;
+    - a synthetic smoke test (`"Worker smoke test after deploy (synthetic, no personal data)."`) → 202 `{"status":"received"}`;
+    - `floodlead feedback list` → `#1 2026-10-09 20:05Z useful=yes route=#/ … 1 item(s)`;
+    - health `feedback: {counts_only: true, total: 0 → 1}`.
+- `13:05–13:15` — Typical yearly peaks (D-03.7), issuer thresholds through new cards (D-03.8), `/v1/gauges/fraser-valley`, `/v1/track-record`, F4 (D-03.9), F3 (D-03.10).
+  - New tests:
+    - `tests/test_typical_peaks.py` (5): the median and the ice rule, ok, insufficient, the datum shift rejected (with tolerance edges), flags;
+    - `test_typical_peaks_enter_the_ledger_in_new_cards_before_first_use`;
+    - contract tests for both endpoints.
+  - `pytest -q` → **115 passed**, 4 deselected.
+- `13:12–13:22` — **History loaded, peaks computed, deployed** (`8e48476`):
+  - `floodlead migrate` → `009_history_tables.sql`, `010_statement_timeouts.sql`;
+  - `floodlead history load peaks` → **37,789 rows** in 37.3 s (17 of 37,806 features have no value or date);
+  - `floodlead history load daily` → **448 stations, 7,825,554 daily rows** in 525.6 s (peak RSS 52 MB);
+  - `floodlead history typical-peaks` → `{'stations': 433, 'counts': {'ok': 302, 'insufficient': 122, 'flagged': 8, 'rejected': 1}}` in 24.3 s.
+  - Fraser Valley gauges (`/v1/gauges/fraser-valley` after the deploy at 20:22Z):
+
+    | Gauge | Level now (m) | Age (min) | Typical yearly peak (m) | n (years) | Below peak (m) |
+    |---|---|---|---|---|---|
+    | Sumas R. near Huntingdon (08MH029) | 1.266 | 48 | 3.397 | 12 (2013–2024) | 2.131 |
+    | Chilliwack R. at Vedder Crossing (08MH001) | 1.528 | 63 | 3.307 | 14 (2011–2024) | 1.779 |
+    | Chilliwack R. above Slesse Ck (08MH103) | 0.558 | 78 | 2.817 | 14 (2011–2024) | 2.259 |
+    | Fraser R. at Hope (08MF005) | 3.600 | 73 | 8.903 | 20 (2005–2024) | 5.303 |
+    | Fraser R. at Mission (08MH024), tidal | 0.975 | 73 | 5.562 | 20 (2005–2024) | 4.587 |
+    | Nicomekl R. at 203 St (08MH155) | 1.006 | 93 | 3.971 | 14 (2011–2024) | 2.965 |
+    | Coquihalla R. below Needle Ck (08MF062) | 1.817 | 48 | 2.958 | 13 (2011–2024) | 1.141 |
+
+  - `/v1/track-record` → 21,341 forecasts in 25 issuances, 0 gaps, 20 skill rows, 6 NOAA matched pairs; 0 official and 0 typical-peak crossings in the window.
+  - Its statements are generated from the numbers. Example: "Lower median error (MAE) than pure persistence only at: persistence-v1 USGS 1 h (+4.5 %, n 200); … 3 h (+2.2 %, n 180); … 6 h (+3.9 %, n 150). Everywhere else pure persistence is as good or better."
+- **Download progress** (`history_downloads`):
+  - **iem-nws:** 46 ok, 13.0 MB, 19:50:08 → 19:51:39Z.
+  - **snotel:** 23 ok, 85 MB, done 19:54:59Z.
+  - **ncei:** 22 ok + 1 empty (2026 not yet available), 183 MB, done 19:58:52Z.
+  - **eccc-peaks:** 4 pages, 21 MB.
+  - **eccc-daily:** 1,026 ok + 4 empty, done 20:09:17Z.
+  - **eccc-climate:** 121 ok + 1 empty, done 20:11:27Z.
+  - **openmeteo:** still running; paced at 30 s per point-year (≈ 2.3 h).
 
 ## Measurements
 
