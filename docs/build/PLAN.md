@@ -67,6 +67,25 @@ Full report: [`docs/research/fraser-valley-flood-warning-status-quo.md`](../rese
 - **Proof is slow.** Big overflows are rare (officials cite 1990, 2020, 2021, 2025). The SR 544 culvert becomes a bridge in 2026, and the Emerson Rd overflow gauge was offline on Oct 9, 2026. Claims about rare thresholds stay provisional.
 - **Farmers' stated priorities since 2025 are dikes, the pump station and relief, not warnings.** FloodLead must beat the improved 2025 baseline to matter.
 
+## Decision: satellites and AI rainfall (Oct 9)
+
+Sourced review: [`docs/research/satellite-imagery-for-flood-prediction.md`](../research/satellite-imagery-for-flood-prediction.md).
+
+- **No satellite imagery or vision models as forecast inputs.**
+  - Free radar looks at Sumas Prairie about every 3 days and publishes 2–6 h after sensing.
+  - In both floods every satellite view came after the gauges showed the overflow.
+  - Optical imagery is blind on flood days.
+  - No study shows satellite inputs improving 1–48 h timing in a gauged basin.
+  - Vision-language models score about 40% on geospatial benchmarks.
+- **AI rainfall forecasts (AIFS etc.) are the credible AI edge.** Before Demo Day they can be tested only as a labelled one-event case study (Dec 2025), at $0. After Demo Day, a live scored archive of AI and physics rainfall forecasts becomes the real test.
+- **EGS flood polygons** (NRCan, free, OGL-Canada) are used only to show where water went in 2021 and 2025.
+- **Not bought:**
+  - commercial radar tasking (≈ $1,000–15,000 per event);
+  - a home-built satellite pipeline (1.5–3 days);
+  - self-hosted weather models.
+
+Worker instructions: [Stage 3 addendum 2](prompts/STAGE-03-addendum-2.md).
+
 ## Value realism (what the supervisor will keep honest)
 
 - **Effective lead time = forecast horizon − data latency.** With ~1 h latency, a "6 h" forecast gives ~5 h of real warning. Every forecast stores `data_as_of`; the UI shows it.
