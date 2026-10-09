@@ -140,7 +140,13 @@ def test_issue_then_score_end_to_end(fresh: psycopg.Connection, test_dsn: str) -
         assert "mae_skill" in g["skill_vs"]["persistence-naive"]
         # Recomputing from the ledger reproduces the stored values exactly (idempotent), and naive keeps CRPS = AE.
         fresh.execute("UPDATE forecast_scores SET crps = NULL, crps_qs = NULL")
-        rc = scorer.recompute_crps(pool)
+        # A new pool, as in production (`floodlead score --recompute-crps` is its own process): its connections are
+        # not in autocommit, which the first version did not handle (it rolled back on production, 19:56Z).
+        pool2 = db.pool(test_dsn, max_size=1)
+        try:
+            rc = scorer.recompute_crps(pool2)
+        finally:
+            pool2.close()
         assert rc["recompute_crps"]["rows"] == 16
         after = fresh.execute("SELECT seq, h, crps, crps_qs FROM forecast_scores WHERE status = 'scored'"
                               " ORDER BY seq, h").fetchall()

@@ -354,6 +354,7 @@ def recompute_crps(pool: ConnectionPool) -> dict[str, Any]:
     t0 = time.monotonic()
     n = 0
     with pool.connection() as conn:
+        conn.autocommit = True  # each chunk below commits on its own
         conn.execute("SET statement_timeout = '15min'")
         seqs = [r[0] for r in conn.execute(
             "SELECT DISTINCT seq FROM forecast_scores WHERE status = 'scored' ORDER BY seq").fetchall()]
@@ -376,7 +377,6 @@ def recompute_crps(pool: ConnectionPool) -> dict[str, Any]:
             noaa = conn.execute(
                 "UPDATE forecast_scores_naive n SET noaa = f.noaa FROM forecast_scores f WHERE f.seq = n.seq"
                 " AND f.h = n.h AND f.noaa IS NOT NULL AND n.noaa IS NULL").rowcount
-        conn.autocommit = True
         run_id = conn.execute("INSERT INTO scorer_runs DEFAULT VALUES RETURNING scorer_run_id").fetchone()[0]
         now = datetime.now(UTC)
         summarise(conn, run_id, now)

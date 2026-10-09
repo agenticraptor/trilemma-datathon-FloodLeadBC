@@ -254,6 +254,11 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - `evaluation.md` corrected: the "ranks models" sentence is withdrawn.
 - `12:55` — Score tables dumped before migration 007 (D-03.5).
 
+- `12:56` — Migration 007 applied on production (`floodlead migrate` → `007_crps_qs.sql`).
+  - **First recompute failed and rolled back:** `psycopg.ProgrammingError: can't change 'autocommit' now: connection in transaction status INTRANS`, after 37.2 s. The chunk updates had run inside the first statement's implicit transaction, so the error rolled all of them back. Nothing changed on production.
+  - The test had passed only because the pooled connection was reused from an earlier `scorer.run`, which leaves autocommit on.
+  - Fix: autocommit is set before the first statement. The test now uses a fresh pool, as production does: **it fails without the fix and passes with it**.
+
 ## Measurements
 
 | What | Value | How measured | When |
