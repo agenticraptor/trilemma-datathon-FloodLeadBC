@@ -463,6 +463,7 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
     NKSW1 issuedTime 2026-10-08T15:12:00Z | NOAA points 40 | ledger points 40 | mismatches 0
     ```
     Stage ft and flow kcfs are compared as JSON numbers, with no rounding.
+- `19:20` — **AC-7 audit in a safe form.** `scripts/audit_leakage.sql` now reads constant time bounds from the ledger (`\gset`), copies the level rows in that range into a temp table (57,214 rows), and audits against that, with a `statement_timeout`. The checks are unchanged. Result over **5,977 forecasts (7 base times, 20Z–02Z)** → `0 | 0 | 0 | 0` of **47,816** horizons, in **6.7 s** (was 4 min 36 s). Every forecast has `inputs_n > 0`, so 0 count mismatches also shows the temp table held the matching rows. It is re-run at PR time.
 
 ## Measurements
 
