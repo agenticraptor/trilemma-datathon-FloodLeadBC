@@ -45,6 +45,8 @@ SLUG_CASES = {
     "/v1/replay/overflow": "v1_replay_overflow",
     "/v1/replay/overflow/2021-11-14/series": "v1_replay_overflow_2021-11-14_series",
     "/v1/ledger/head": "v1_ledger_head",
+    "/v1/gauges/fraser-valley": "v1_gauges_fraser-valley",
+    "/v1/track-record": "v1_track-record",
 }
 
 

@@ -398,6 +398,18 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - **eccc-climate:** 121 ok + 1 empty, done 20:11:27Z.
   - **openmeteo:** still running; paced at 30 s per point-year (≈ 2.3 h).
 
+- `13:23` — **Frontend** (a background agent briefed with the API contracts above; its files reviewed by the worker): `web/app.js`, `index.html`, `style.css`, `README.md`, `scripts/screenshots.cjs` (445 lines added, 15 removed).
+  - **Feedback box:** the last card on every route, Yes/No plus text with a live count, the privacy sentence, `POST /v1/feedback`, messages for 202/400/413/429/offline, and the GitHub link.
+  - **"Fraser Valley gauges":** a card on `#/` after the ledger panel, with a jump button in the hero.
+  - **"How to read this":** a `<details>` panel in `index.html` under the header, on every route.
+  - **`#/track-record`:** the statements first, then forecasts and the chain head and anchor, verify commands, one table per source, and the NOAA pair count.
+  - Worker review:
+    - no `innerHTML`, `eval` or inline styles or handlers added;
+    - user text is never rendered;
+    - the help text's colour claims match the chart (`COLORS.noaa #1f5fbf` blue, `COLORS.fl #5d7f78` grey-green).
+  - `tests/test_web.py` gains the two new snapshot slugs → 18 passed.
+  - **Deviation:** Caddy serves `./web` from this working tree, so the agent's edits were live on the public site about 5 minutes before this commit put them in PR #5. All the backend code they call was already in PR #5 and deployed.
+
 ## Measurements
 
 | What | Value | How measured | When |

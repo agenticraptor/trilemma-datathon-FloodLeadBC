@@ -21,9 +21,49 @@
     <nav class="nav" aria-label="Main">
       <a href="#/" data-route="watch">Overflow watch</a>
       <a href="#/stations" data-route="stations">All stations</a>
+      <a href="#/track-record" data-route="track">Track record</a>
     </nav>
   </div>
 </header>
+
+<div class="wrap help-row">
+  <details id="help" class="help">
+    <summary>How to read this</summary>
+    <div class="help-body">
+      <section>
+        <h3>Stage and gauge datum</h3>
+        <p>A gauge reads the water level above its own reference point (its datum), not the depth of the river.
+          Every gauge has a different datum, so levels from different gauges cannot be compared with each other.
+          Compare a gauge only with its own history and its own flood levels.</p>
+      </section>
+      <section>
+        <h3>Data age and provisional data</h3>
+        <p>Levels arrive 15–90 minutes after they are measured, so every reading shows its time and age.
+          Recent values are provisional: ECCC and USGS check them later and can revise them.</p>
+      </section>
+      <section>
+        <h3>“Chance of reaching”</h3>
+        <p>FloodLead’s baseline estimate of the chance that the river reaches a level at any time within the
+          forecast window (for example within 24 hours). It comes from simple statistical baselines, not a
+          hydrological model. It is not an official forecast.</p>
+      </section>
+      <section>
+        <h3>FloodLead baseline vs NOAA official</h3>
+        <p>NOAA/NWS forecasts (Nooksack gauges only) are official and shown unmodified, in blue. FloodLead’s
+          forecasts are experimental baselines, in grey-green; their skill is measured live on the
+          <a href="#/track-record">Track record</a> page.</p>
+      </section>
+      <section>
+        <h3>What the ledger proves</h3>
+        <p>Every FloodLead forecast is fixed in a public, hash-chained ledger before the outcome is known, and the
+          chain is published hourly to GitHub. Changing any past forecast would break the chain, so the track record
+          cannot be edited afterwards. Anyone can verify it: see the <a href="#/track-record">Track record</a> page.</p>
+      </section>
+      <p class="help-foot"><strong>Not a warning service.</strong> Follow EmergencyInfoBC, the BC River Forecast
+        Centre, NOAA/NWS and your local authority (links at the bottom of every page).</p>
+    </div>
+  </details>
+</div>
 
 <main id="app" class="wrap" tabindex="-1">
   <p class="loading">Loading live river data…</p>

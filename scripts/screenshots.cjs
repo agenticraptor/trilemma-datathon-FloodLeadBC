@@ -7,7 +7,9 @@
 //   console-errors.txt  console errors, page errors and failed requests per page, and a page-error count;
 //   layout-check.txt    per page and width: document.documentElement.scrollWidth vs the viewport width,
 //                       and when the page is wider than the viewport, every element wider than it
-//                       (tag, class, width). Also one load with navigator.language = 'en-US@posix'.
+//                       (tag, class, width). Pages: #/ (also with the "How to read this" panel open),
+//                       #/stations, two #/station/<id> pages and #/track-record. Also loads of #/ and
+//                       #/track-record with navigator.language = 'en-US@posix'.
 // Locale: Chromium runs with --lang=en-CA, the CDP locale override en-CA, and Accept-Language: en-CA.
 const puppeteer = require('puppeteer');
 const fs = require('fs');
@@ -76,6 +78,13 @@ const personal = process.argv[4] || '147.0';
     await card(p, `replay-${tag}`, 'replay');
     await card(p, `chances-${tag}`, 'chance');
     await card(p, `ledger-${tag}`, 'ledger');
+    await card(p, `fraser-valley-${tag}`, 'fraser valley');
+    await card(p, `feedback-${tag}`, 'was this useful');
+    // The "How to read this" panel (a <details> under the header on every page) must not widen the page either.
+    await p.evaluate(() => { const d = document.getElementById('help'); if (d) d.open = true; window.scrollTo(0, 0); });
+    await new Promise((r) => setTimeout(r, 300));
+    await checkLayout(p, `watch-${tag} (help open)`, '#/');
+    await p.screenshot({ path: `${out}/help-open-${tag}.png` });
     await p.close();
     const l = await open(`stations-${tag}`, width, '#/stations');
     await l.screenshot({ path: `${out}/stations-${tag}.png` });
@@ -86,16 +95,23 @@ const personal = process.argv[4] || '147.0';
     const u = await open(`station-usgs-${tag}`, width, '#/station/usgs:12210700');
     await u.screenshot({ path: `${out}/station-12210700-${tag}.png`, fullPage: true });
     await u.close();
+    const t = await open(`track-record-${tag}`, width, '#/track-record');
+    await t.screenshot({ path: `${out}/track-record-${tag}.png`, fullPage: true });
+    await t.close();
   }
   // A browser whose default locale is POSIX reports navigator.language = 'en-US@posix' (not a valid
   // BCP 47 tag). The page must still load with 0 page errors and draw its charts.
   const before = pageErrors;
-  const px = await open('posix-locale', 1280, '#/', () => {
+  const posix = () => {
     Object.defineProperty(navigator, 'language', { get: () => 'en-US@posix' });
     Object.defineProperty(navigator, 'languages', { get: () => ['en-US@posix'] });
-  });
+  };
+  const px = await open('posix-locale', 1280, '#/', posix);
   await px.screenshot({ path: `${out}/posix-locale-desktop.png` });
   await px.close();
+  const pt = await open('posix-locale-track-record', 1280, '#/track-record', posix);
+  await pt.screenshot({ path: `${out}/posix-locale-track-record-desktop.png` });
+  await pt.close();
   layout.push(`posix-locale: page errors=${pageErrors - before}`);
   log.push(`page errors (all pages): ${pageErrors}; with navigator.language=en-US@posix: ${pageErrors - before}`);
   fs.writeFileSync(`${out}/console-errors.txt`, (log.join('\n') || 'none') + '\n');

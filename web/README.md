@@ -9,9 +9,24 @@ It makes **no third-party requests** (no CDNs, web fonts or analytics) and works
 
 | Route | Screen |
 |---|---|
-| `#/` | **Sumas Prairie overflow watch** (default, the demo path): North Cedarville now vs. the NWS flood stages, the Overflow SR 544 gauge, a 7-day chart with NOAA's official forecast and the FloodLead baseline, FloodLead chances, your own level, the 2021/2025 replay, the ledger panel |
+| `#/` | **Sumas Prairie overflow watch** (default, the demo path): North Cedarville now vs. the NWS flood stages, the Overflow SR 544 gauge, a 7-day chart with NOAA's official forecast and the FloodLead baseline, FloodLead chances, your own level, the 2021/2025 replay, the ledger panel; then **Fraser Valley gauges** (latest level, data age and the position against each gauge's typical yearly peak, linking to `#/station/<id>`; a "Jump to the Fraser Valley gauges" button in the hero scrolls there) |
 | `#/stations` | Station picker: every gauge, searchable by name or ID |
 | `#/station/<id>` | One station: latest level, official thresholds, 7-day chart, latest FloodLead baseline forecast |
+| `#/track-record` | **Track record** (one scorer run, its ID on every table): the plain-language statements first, then forecasts issued (count, since when, gaps), the ledger chain head and latest public anchor with the two "verify it yourself" commands, a table per source (ECCC BC gauges, USGS Nooksack/Sumas gauges) of fair CRPS, CRPSS, MAE and MAE skill against pure persistence per model and horizon with n pairs, stations and days, and the NOAA matched-pair count |
+
+On every page:
+
+- **"How to read this"**: a collapsed `<details>` panel under the header (static HTML in `index.html`, so it works
+  without `app.js`): stage and gauge datum, data age and provisional data, "chance of reaching", FloodLead
+  baseline vs NOAA official, what the ledger proves.
+- **"Was this useful?"**: the last card of every route. Yes / No toggles plus optional text (max 1,000
+  characters, live count); no name, email or phone fields. Submit is disabled until Yes/No or text is set. It sends
+  `POST /v1/feedback` with `{"route", "station_id", "useful", "text", "app_version": "stage-03"}`; `station_id` is
+  the station of a `#/station/<id>` page and `null` on pages that show several stations. 202 → "Thank you…" and
+  the form resets; 429 → "Too many submissions…"; 400/413/422 → the response's `detail` as text; a network error or
+  snapshot mode (no API) → "Feedback cannot be sent from the offline snapshot." (no request is made once the app
+  knows it is on snapshot data). The typed text is never rendered anywhere, and server messages are set as text
+  only. A link "Prefer GitHub? Open an issue" opens a new GitHub issue with the `feedback.yml` template.
 
 ## Run it
 
@@ -78,6 +93,12 @@ The snapshot must contain exactly these paths (same parameter order) to cover th
 | `/v1/replay/overflow` | `v1_replay_overflow.json` |
 | `/v1/replay/overflow/<event_id>/series` (every event, at least `2021-11-14` and `2025-12-10`) | `v1_replay_overflow_2021-11-14_series.json`, … |
 | `/v1/ledger/head` | `v1_ledger_head.json` |
+| `/v1/gauges/fraser-valley` (home page, Fraser Valley gauges) | `v1_gauges_fraser-valley.json` |
+| `/v1/track-record` (`#/track-record`) | `v1_track-record.json` |
+
+If either of the last two files is missing, its card shows a placeholder ("… not available right now") and the
+rest of the page works. `POST /v1/feedback` is never part of a snapshot. In the Fraser Valley list the data age of
+a snapshot is shown relative to that file's `snapshot_at`, like every other age.
 
 The station screen (`#/station/<id>`) also requests `/v1/stations/<id>`,
 `/v1/stations/<id>/observations?param=level&days=7`, `/v1/stations/<id>/forecast` and, for stations with an
