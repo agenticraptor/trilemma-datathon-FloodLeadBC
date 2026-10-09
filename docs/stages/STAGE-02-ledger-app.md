@@ -506,6 +506,7 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
   - `--source github` → the same, from 8 files (2.7 s).
   - Health green, with issuer, scorer and anchor all green.
   - Base 03:00Z (seq 6850): `created_at` 03:15:00.101Z, `committed_at` 03:16:14.006Z (73.9 s). That makes **8 consecutive base times, 0 gaps**.
+- `20:52` — PR #4 marked ready for review, with the STAGE REPORT as its body. The last step follows: `sudo reboot`, once (addendum 1 item 5). Nothing is run after it. The supervisor checks recovery from outside.
 
 ## Measurements
 
@@ -553,7 +554,7 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
 | AC-9 Demo path | **PASS** | Screenshots of all 4 pages at 1280 px and 375 px. `scrollWidth` = viewport on every page. 0 page errors, including with `en-US@posix`. Replay = independent SQL on every field. Snapshot mode with `python3 -m http.server -d web 8080` works, with its banner and ages counted from the snapshot. Work log `13:07–13:10`, `15:00–15:08`, `18:55` |
 | AC-10 F1 and F2 | **PASS** | F1: fallback tests (`tests/test_eccc_rollover.py`); live dated-path check; the first live midnight rollover was clean (work log `17:21`). F2: one ECCC refresh went from 554,126 row updates to 0, and WAL from 139.1 MB to 15.7 MB; an identical re-fetch writes 0 rows (work log `14:07`, measurements) |
 | AC-11 ruff and pytest | **PASS** | `ruff check .` → All checks passed. `pytest -q` → 96 passed, 4 deselected (live), DB tests run. `pytest -m live -k nwps` → 1 passed. Work log `20:43`, `18:17–18:21` |
-| AC-12 Decisions, stage doc, contracts, runway | **PASS** | 18 decisions (D-02.1–D-02.18). The stage doc is in 24 of 29 part-2 commits and 5 part-1 commits, spread from Oct 8 19:41Z to the final commit on Oct 9. README, architecture, evaluation, data-contract, ledger-spec and product.yaml are updated (table below). Disk runway re-estimated from measured growth: ≈ 270 MB/day, ≈ 220 days to 80 % (work log `20:42`) |
+| AC-12 Decisions, stage doc, contracts, runway | **PASS** | 18 decisions (D-02.1–D-02.18). The stage doc is in 25 of the 29 part-2 commits on top of `main` (2 of the 29 are merges of `main`; the count includes this commit) and in 5 part-1 commits, spread from Oct 8 19:41Z to the final commit on Oct 9. README, architecture, evaluation, data-contract, ledger-spec and product.yaml are updated (table below). Disk runway re-estimated from measured growth: ≈ 270 MB/day, ≈ 220 days to 80 % (work log `20:42`) |
 
 ## Contract files changed
 
