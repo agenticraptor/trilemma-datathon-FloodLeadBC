@@ -107,6 +107,31 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - Dec 2025 can be replayed with rainfall forecasts as they were issued 1–2 days ahead.
   - Nov 2021 and earlier floods can only use observed rainfall up to the issue time (`honest`). Future observed rainfall stands in only in the labelled `oracle` variant.
   - The historical-forecast series is not used as an "as-issued" input for lead times beyond its own run age. Decided in part 2.
+- `13:45–13:52` — **Upstream links (part 2 item 4)**, `src/floodlead/history/links.py`, read-only on production (hourly means per water year, constant bounds, 86.7 s + 21.3 s). Results in `docs/data/upstream_links.json`. Synthetic known-delay test: `tests/test_links.py` recovers a 5 h lag.
+
+  | Pair (hourly, 2004–2026) | Rise correlation: best lag, r, n hours | Peak-to-peak: median (IQR), n events |
+  |---|---|---|
+  | NF Nooksack near Glacier → North Cedarville | 4 h, 0.703, 82,632 | 4 h (2–6), 237 |
+  | MF Nooksack near Deming → North Cedarville | 4 h, 0.759, 81,372 | 5 h (4–6), 234 |
+  | SF Nooksack at Saxon Bridge → North Cedarville | 4 h, 0.816, 77,997 | 4 h (3–5), 216 |
+  | North Cedarville → Everson | 2 h, 0.930, 43,577 | 1 h (1–2), 116 |
+  | North Cedarville → Ferndale | 6 h, 0.834, 82,140 | 7 h (6–9), 215 |
+
+  **The upstream Nooksack gauges lead North Cedarville by only about 4–5 h.** Warnings longer than that have to come from rainfall (observed and forecast), not from routing.
+
+  | Pair (daily means; lags under a day not resolvable) | Overlap (days) | Rise corr. (lag, r) | Peak-to-peak median (IQR), n |
+  |---|---|---|---|
+  | Chilliwack above Slesse Ck → Vedder Crossing | 5,079 | 0 d, 0.939 | 0 d (0–0), 71 |
+  | Slesse Ck → Chilliwack at Vedder Crossing | 4,863 | 0 d, 0.905 | 0 d (0–1), 72 |
+  | Chilliwack Lake outlet → Vedder Crossing | 5,055 | 0 d, 0.497 | 0 d (0–0), 72 |
+  | Sumas near Sumas, WA (USGS) → Sumas near Huntingdon | 427 | 0 d, 0.906 | 0 d (0–0), 14 |
+  | North Cedarville → Sumas near Huntingdon | 4,925 | 0 d, 0.639 | 0.5 d (0–1), 80 |
+  | Fraser above Texas Ck → Fraser at Hope | 5,016 | 0 d, 0.692 | 1 d (0–1), 64 |
+  | Thompson near Spences Bridge → Fraser at Hope | 4,964 | 0 d, 0.611 | 1 d (0–2), 65 |
+  | Fraser at Hope → Fraser at Mission (tidal) | 10,885 | 0 d, 0.706 | 1 d (0–2), 102 |
+  | Coquihalla above Alexander Ck → below Needle Ck | 4,990 | 0 d, 0.857 | 0 d (0–0), 57 |
+
+  The Sumas USGS–ECCC overlap is only 427 days. The USGS hourly level at Sumas, WA needs at least 18 hours a day to make a daily mean, and its level record is short. As found.
 
 ## Decisions
 
