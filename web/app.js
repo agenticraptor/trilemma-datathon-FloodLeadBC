@@ -1729,6 +1729,339 @@
   }
 
   // ---------------------------------------------------------------------------------------------
+  // Screen 5: how accurate were the official forecasts? (GET /v1/official-scorecard)
+  // Display only: every number comes from the scorecard as served; nothing is recomputed here.
+  // ---------------------------------------------------------------------------------------------
+  function renderScorecard(seq) {
+    const main = document.getElementById('app');
+    document.title = 'FloodLead BC: how accurate were the official forecasts?';
+    const metaEl = h('div', { class: 'sc-meta' }, h('p', { class: 'meta' }, 'Loading the scorecard…'));
+    const leadCard = card('Crest forecast error by lead time', 'Every archived warning product with a forecast crest, grouped by how long before the observed crest it was issued.');
+    const eventsCard = card('North Cedarville warnings, newest first', null);
+    const meansCard = card('What this means', null);
+    const methodCard = card('How this was computed', null);
+    fill(main,
+      h('div', { class: 'hero' },
+        h('p', { class: 'kicker' }, 'NOAA NWS river flood warnings, checked'),
+        h('h1', null, 'How accurate were the official forecasts?'),
+        h('p', { class: 'problem' }, SC_INTRO),
+        metaEl),
+      leadCard, eventsCard, meansCard, methodCard, feedbackBox(null));
+    const pSc = api('/v1/official-scorecard');
+    const missing = 'The official-forecast scorecard is not available right now.';
+
+    section(metaEl, seq, async () => {
+      const sc = await pSc;
+      if (isStale(seq)) return;
+      if (!sc) { fill(metaEl); return; }
+      const per = Array.isArray(sc.period) ? sc.period : [];
+      const events = scEvents(sc);
+      const scored = events.filter((e) => e.status === 'scored').length;
+      const npoints = new Set(events.map((e) => e.point)).size;
+      fill(metaEl,
+        toDate(per[0]) || toDate(per[1]) ? h('p', { class: 'meta' }, `Period: first warnings issued from ${fmtDate(per[0])} to ${fmtDate(per[1])} (Pacific).`) : null,
+        h('p', { class: 'meta' }, `Scorecard ${isNum(sc.scorecard_id) ? sc.scorecard_id : '—'}`,
+          sc.generated_at ? h('span', null, ', computed ', timeLine(sc.generated_at, false, snapOf(sc))) : null, '.',
+          events.length ? ` ${fmtInt(events.length)} warning event${events.length === 1 ? '' : 's'} at ${fmtInt(npoints)} NWS forecast point${npoints === 1 ? '' : 's'}, ${fmtInt(scored)} with a USGS gauge record to check against.` : ''));
+    });
+
+    section(leadCard, seq, async () => {
+      const sc = await pSc;
+      if (isStale(seq)) return;
+      if (!sc) { fill(leadCard.body, placeholder(missing)); return; }
+      fill(leadCard.body, scLeadBlock(sc));
+    });
+
+    section(eventsCard, seq, async () => {
+      const sc = await pSc;
+      if (isStale(seq)) return;
+      if (!sc) { fill(eventsCard.body, placeholder(missing)); return; }
+      fill(eventsCard.body, scEventsBlock(sc));
+    });
+
+    section(meansCard, seq, async () => {
+      const sc = await pSc;
+      if (isStale(seq)) return;
+      if (!sc) { fill(meansCard.body, placeholder(missing)); return; }
+      fill(meansCard.body, scMeansBlock(sc));
+    });
+
+    section(methodCard, seq, async () => {
+      const sc = await pSc;
+      if (isStale(seq)) return;
+      if (!sc) { fill(methodCard.body, placeholder(missing)); return; }
+      fill(methodCard.body, scMethodBlock(sc));
+    });
+  }
+
+  function scEvents(sc) { return Array.isArray(sc.events) ? sc.events.filter((e) => e && typeof e === 'object') : []; }
+  function scSummary(sc, lid) {
+    const s = sc.summary && typeof sc.summary === 'object' ? sc.summary[lid] : null;
+    return s && typeof s === 'object' ? s : null;
+  }
+  function scPointName(lid) { return SC_POINT_NAMES[lid] || String(lid); }
+  function scLeadRank(b) { const i = SC_LEAD_ORDER.indexOf(b && b.lead); return i < 0 ? SC_LEAD_ORDER.length : i; }
+  function scBins(s) {
+    return (s && Array.isArray(s.lead_bins) ? s.lead_bins.filter((b) => b && typeof b === 'object') : []).sort((a, b) => scLeadRank(a) - scLeadRank(b));
+  }
+  /** "0-6 h" -> "0–6 h", "48 h +" -> "48 h or more", "after the crest" -> "After the crest". */
+  function scLeadLabel(lab) {
+    const s = lab == null ? '—' : String(lab);
+    if (s === 'after the crest') return 'After the crest';
+    if (s === '48 h +') return '48 h or more';
+    return s.replace(/(\d)-(\d)/g, '$1–$2');
+  }
+  function scHeldOut(e) { return isNum(e.water_year) && Object.prototype.hasOwnProperty.call(SC_HELD_OUT_WY, e.water_year); }
+  function heldOutTag() { return h('span', { class: 'tag tag-held' }, 'held out for the final test'); }
+  const plural = (n, word) => `${fmtInt(n)} ${word}${n === 1 ? '' : 's'}`;
+
+  /** North Cedarville first, then every other forecast point that has events. */
+  function scPointList(sc) {
+    const events = scEvents(sc);
+    const keys = SC_POINT_ORDER.concat(Object.keys(sc.points || {}), Object.keys(sc.summary || {}), events.map((e) => String(e.point)))
+      .filter((k, i, a) => k && k !== 'undefined' && a.indexOf(k) === i);
+    return keys.filter((lid) => {
+      if (lid === 'NRKW1') return true;
+      const s = scSummary(sc, lid);
+      return (s && isNum(s.n_events) && s.n_events > 0) || events.some((e) => e.point === lid);
+    });
+  }
+
+  function scLeadBlock(sc) {
+    const parts = [];
+    for (const lid of scPointList(sc)) {
+      const s = scSummary(sc, lid);
+      const sid = sc.points && typeof sc.points[lid] === 'string' ? sc.points[lid] : null;
+      const nAll = scEvents(sc).filter((e) => e.point === lid).length;
+      parts.push(h('h3', null, `${scPointName(lid)} (${lid})`),
+        h('p', { class: 'meta' },
+          s && isNum(s.n_events) ? `${plural(s.n_events, 'warning event')} scored` : 'No scored warning events',
+          nAll && s && isNum(s.n_events) && nAll > s.n_events ? ` (${fmtInt(nAll - s.n_events)} more without a gauge record)` : '',
+          sid && STATION_ID_RE.test(sid) ? h('span', null, ' · gauge ', h('a', { href: stationHref(sid) }, sid)) : null));
+      const bins = scBins(s);
+      if (!bins.length) {
+        parts.push(placeholder('No products with a forecast crest to score at this point.'));
+      } else {
+        const head = h('tr', null,
+          h('th', null, 'Lead'), h('th', { class: 'p' }, 'Products (n)'), h('th', { class: 'p' }, 'Events (n)'),
+          h('th', { class: 'p' }, 'Bias (ft)'), h('th', { class: 'p long' }, 'Mean absolute error (ft)'),
+          h('th', { class: 'p' }, 'Category right (%)'), h('th', { class: 'p long' }, 'Crest timing error, mean absolute (h)'));
+        const rows = bins.map((b) => h('tr', null,
+          h('td', null, scLeadLabel(b.lead)),
+          h('td', { class: 'p' }, fmtInt(b.n_products)),
+          h('td', { class: 'p' }, fmtInt(b.n_events)),
+          h('td', { class: 'p' }, fmtSigned(b.crest_bias_ft, 2),
+            isNum(b.crest_bias_ft) && Number(Math.abs(b.crest_bias_ft).toFixed(2)) !== 0 ? h('small', { class: 'muted' }, h('br'), b.crest_bias_ft < 0 ? 'too low' : 'too high') : null),
+          h('td', { class: 'p' }, fmt(b.crest_mae_ft, 2)),
+          h('td', { class: 'p' }, fmtShare(b.category_right_share)),
+          h('td', { class: 'p' }, fmt(b.crest_time_mae_h, 1))));
+        parts.push(
+          h('p', { class: 'table-caption' }, SC_CAPTION),
+          tableBox(h('table', { class: 'skill sc-lead' }, h('thead', null, head), h('tbody', null, rows))));
+      }
+      parts.push(scFirstWarningLine(s));
+    }
+    parts.push(h('p', { class: 'muted' }, 'Products: every warning and follow-up statement with a forecast crest in its text. Events (n): the warnings those products belong to. Category right: the forecast crest and the observed crest fall in the same NWS flood category. Crest timing error: hours between the forecast and the observed crest time, either way.'));
+    return h('div', { class: 'sc-leads' }, parts);
+  }
+
+  function scFirstWarningLine(s) {
+    const f = s && s.first_warning_lead_before_minor_h;
+    const label = 'First warning before the river reached flood (minor) stage: ';
+    if (!f || !isNum(f.n) || f.n < 1 || !isNum(f.median)) return h('p', { class: 'sc-first' }, label, h('span', { class: 'muted' }, 'no event with both a warning and an observed minor-stage crossing.'));
+    return h('p', { class: 'sc-first' }, label,
+      h('strong', { class: 'num' }, `median ${fmtMinus(f.median, 1)} h`),
+      ` (range ${fmtMinus(f.min, 1)} to ${fmtMinus(f.max, 1)} h), ${plural(f.n, 'event')}.`,
+      isNum(f.min) && f.min < 0 ? h('span', { class: 'muted' }, ' A negative lead means the first warning came after the river had reached minor stage.') : null);
+  }
+
+  function scEventsBlock(sc) {
+    const evs = scEvents(sc).filter((e) => e.point === 'NRKW1');
+    if (!evs.length) return placeholder('No North Cedarville warning events in this scorecard.');
+    const when = (e) => { const d = toDate(e.first_issued_at) || toDate(e.observed_crest_at); return d ? d.getTime() : -Infinity; };
+    evs.sort((a, b) => when(b) - when(a));
+    const scored = evs.filter((e) => e.status === 'scored').length;
+    const stagesEv = evs.find((e) => e.stages_ft && typeof e.stages_ft === 'object');
+    const st = stagesEv ? stagesEv.stages_ft : null;
+    const stageText = st ? STAGE_KEYS.filter((k) => isNum(st[k])).map((k) => `${STAGE_NAMES[k].toLowerCase()} ${fmtStageFt(st[k])} ft`).join(', ') : '';
+    const head = h('tr', null,
+      h('th', null, 'Event', h('br'), h('small', null, 'crest date (Pacific)')),
+      h('th', { class: 'wrap' }, 'First warning (Pacific)'),
+      h('th', { class: 'p wrap' }, 'Its forecast crest'),
+      h('th', { class: 'p wrap' }, 'Observed crest (category)'),
+      h('th', { class: 'p wrap' }, 'First warning before minor stage'),
+      h('th', { class: 'wrap sc-major-h' }, 'First “major” product vs. the overflow onset'));
+    const rows = [];
+    for (const e of evs) rows.push(...scEventRows(e, 6));
+    return h('div', null,
+      h('p', null, `${plural(evs.length, 'warning event')} for North Cedarville (NRKW1), ${fmtInt(scored)} checked against the USGS gauge record. Open an event to see every product NWS issued in it.`),
+      h('p', { class: 'muted' }, heldOutTag(), ' Water years 2022 (the Nov 2021 flood) and 2026 (the Dec 2025 flood) are kept aside for the one final test of FloodLead’s own model. They are shown here as scored, like every other event.'),
+      tableBox(h('table', { class: 'sc-events' }, h('thead', null, head), h('tbody', null, rows))),
+      h('ul', { class: 'caveats' },
+        h('li', null, 'Observed crest: the highest USGS 15-minute stage from 12 h before the warning’s first product to 48 h after its last.',
+          stageText ? ` Categories use today’s NWS flood stages for this gauge (${stageText}); NWS stages can change over the years.` : ''),
+        h('li', null, 'First warning before minor stage: hours from the first product of the warning to the first reading at or above minor flood stage.'),
+        h('li', null, '“Major” product: the first product of the warning with NWS severity 3 (major). Overflow onset: the first record at the Overflow gauge on SR 544, as in the flood replay on the ',
+          h('a', { href: '#/' }, 'Overflow watch'), ' page; that gauge’s record begins in Nov 2015.')));
+  }
+
+  function scEventRows(e, cols) {
+    const held = scHeldOut(e);
+    const ok = e.status === 'scored';
+    const prods = Array.isArray(e.products) ? e.products.filter((p) => p && typeof p === 'object') : [];
+    const dateAt = toDate(e.observed_crest_at) || toDate(e.first_issued_at);
+    const cls = (base) => [base, held ? 'held-out' : ''].filter(Boolean).join(' ') || null;
+    const sub = [isNum(e.water_year) ? `water year ${e.water_year}` : null, isNum(e.etn) ? `NWS event no. ${e.etn}` : null].filter(Boolean).join(' · ');
+
+    let observed;
+    if (!ok) observed = h('span', { class: 'muted' }, e.status === 'no_observations' ? 'no gauge record (not scored)' : 'not scored');
+    else {
+      const cat = typeof e.observed_category === 'string' ? e.observed_category : '';
+      observed = h('span', null, isNum(e.observed_crest_ft) ? `${fmtStageFt(e.observed_crest_ft)} ft` : '—',
+        h('small', { class: 'muted' }, h('br'), STAGE_KEYS.includes(cat) ? [h('span', { class: `swatch sw-${cat}` }), ' ', STAGE_NAMES[cat].toLowerCase()] : (cat || 'category unknown'),
+          e.observed_crest_at ? [h('br'), fmtPacificMd(e.observed_crest_at)] : null));
+    }
+
+    let lead;
+    const lv = e.first_warning_lead_before_minor_h;
+    if (isNum(lv)) {
+      const s = Math.abs(lv).toFixed(1);
+      lead = Number(s) === 0 ? 'at the crossing' : `${s} h ${lv > 0 ? 'before' : 'after'}`;
+    } else if (ok && !e.observed_minor_cross) lead = h('span', { class: 'muted' }, 'minor stage not reached');
+    else lead = '—';
+
+    const fc = isNum(e.first_forecast_crest_ft) ? `${fmtStageFt(e.first_forecast_crest_ft)} ft` : h('span', { class: 'muted' }, 'no crest in the text');
+
+    const row = h('tr', { class: cls(prods.length ? 'sc-ev' : '') },
+      h('td', { class: 'sc-ev-cell' }, h('strong', null, dateAt ? fmtDate(dateAt) : '—'),
+        held ? [h('br'), heldOutTag()] : null,
+        sub ? h('small', { class: 'muted' }, h('br'), sub) : null),
+      h('td', null, fmtPacificMd(e.first_issued_at)),
+      h('td', { class: 'p' }, ok || isNum(e.first_forecast_crest_ft) ? fc : '—'),
+      h('td', { class: 'p' }, observed),
+      h('td', { class: 'p' }, lead),
+      h('td', null, ok ? scMajorCell(e) : '—'));
+    if (!prods.length) return [row];
+    const det = h('details', { class: 'sc-products' },
+      h('summary', null, `${plural(prods.length, 'product')} issued in this warning`),
+      scProductsTable(prods));
+    return [row, h('tr', { class: cls('sc-prod') }, h('td', { colspan: String(cols) }, det))];
+  }
+
+  /** When the first "major" (severity 3) product came, relative to the SR 544 overflow onset. */
+  function scMajorCell(e) {
+    const d = e.major_product_after_overflow_onset_h;
+    const major = toDate(e.first_major_product_at);
+    const onset = toDate(e.overflow_onset);
+    const small = (...kids) => h('small', { class: 'muted' }, h('br'), kids);
+    if (isNum(d)) {
+      const s = Math.abs(d).toFixed(1);
+      const main = Number(s) === 0 ? 'at the moment the overflow began' : d > 0 ? `+${s} h after the overflow began` : `${s} h before the overflow began`;
+      return h('span', null, main, small(`“major” ${fmtPacificMd(major)} · overflow ${fmtPacificMd(onset)}`));
+    }
+    if (major && onset) return h('span', null, `“major” ${fmtPacificMd(major)}`, small(`overflow ${fmtPacificMd(onset)}`));
+    if (major) return h('span', null, `“major” ${fmtPacificMd(major)}`, small('no overflow onset recorded'));
+    if (onset) return h('span', null, h('span', { class: 'muted' }, 'no “major” product'), small(`overflow began ${fmtPacificMd(onset)}`));
+    return h('span', { class: 'muted' }, 'no “major” product; no overflow onset recorded');
+  }
+
+  function scProductsTable(prods) {
+    const t = (p) => { const d = toDate(p.issued_at); return d ? d.getTime() : 0; };
+    const list = prods.slice().sort((a, b) => t(a) - t(b));
+    const head = h('tr', null, h('th', null, 'Issued (Pacific)'), h('th', null, 'Action'), h('th', null, 'NWS severity'),
+      h('th', { class: 'p' }, 'Forecast crest (ft)'), h('th', { class: 'p' }, 'Error (ft)'), h('th', { class: 'p' }, 'Lead (h)'));
+    const rows = list.map((p) => {
+      const act = typeof p.action === 'string' ? p.action : '';
+      const sev = p.severity == null ? '' : String(p.severity);
+      return h('tr', null,
+        h('td', null, fmtPacificMd(p.issued_at)),
+        h('td', null, act ? h('code', null, act) : '—', VTEC_ACTIONS[act] ? h('small', { class: 'muted' }, ` ${VTEC_ACTIONS[act]}`) : null),
+        h('td', null, sev ? (VTEC_SEVERITY[sev] || sev) : '—'),
+        h('td', { class: 'p' }, fmtStageFt(p.forecast_crest_ft)),
+        h('td', { class: 'p' }, fmtSigned(p.crest_error_ft, 2)),
+        h('td', { class: 'p' }, fmtMinus(p.lead_h, 1), p.lead_bin ? h('small', { class: 'muted' }, h('br'), scLeadLabel(p.lead_bin)) : null));
+    });
+    return h('table', { class: 'sc-prods' }, h('thead', null, head), h('tbody', null, rows));
+  }
+
+  /** "What this means": plain sentences that only restate the North Cedarville numbers. */
+  function scMeansBlock(sc) {
+    const s = scSummary(sc, 'NRKW1');
+    const bins = scBins(s);
+    const f = s && s.first_warning_lead_before_minor_h;
+    if (!bins.length && !(f && isNum(f.n) && f.n > 0)) return placeholder('No scored North Cedarville warnings in this scorecard yet.');
+    const lines = [];
+    for (const b of bins) {
+      if (b.lead === 'after the crest') continue;
+      const lead = scLeadLabel(b.lead);
+      if (!isNum(b.n_products) || b.n_products < SC_MIN_N) {
+        lines.push(`With a forecast ${lead} before the crest: too few products to judge (${isNum(b.n_products) ? plural(b.n_products, 'product') : 'count unknown'}).`);
+        continue;
+      }
+      const ev = isNum(b.n_events) ? (b.n_events === 1 ? 'the one event' : `the ${fmtInt(b.n_events)} events`) : 'the events';
+      let bias = 'the average crest error is not available';
+      if (isNum(b.crest_bias_ft)) {
+        bias = Number(Math.abs(b.crest_bias_ft).toFixed(2)) === 0
+          ? 'the official crest was on average neither too low nor too high (bias 0.00 ft)'
+          : `the official crest was on average ${fmt(Math.abs(b.crest_bias_ft), 2)} ft too ${b.crest_bias_ft < 0 ? 'low' : 'high'}`;
+      }
+      lines.push(`In ${ev} with a forecast ${lead} before the crest (${plural(b.n_products, 'product')}), ${bias}`
+        + (isNum(b.crest_mae_ft) ? `, and ${fmt(b.crest_mae_ft, 2)} ft off either way on average` : '')
+        + (isNum(b.category_right_share) ? `; the flood category was right in ${fmtShare(b.category_right_share)} of those products.` : '.'));
+    }
+    const after = bins.find((b) => b.lead === 'after the crest');
+    if (after && isNum(after.n_products)) {
+      lines.push(`${plural(after.n_products, 'product')}${isNum(after.n_events) ? ` in ${plural(after.n_events, 'event')}` : ''} ${after.n_products === 1 ? 'was' : 'were'} issued after the observed crest.`);
+    }
+    if (f && isNum(f.n) && f.n > 0) {
+      if (f.n < SC_MIN_N || !isNum(f.median)) lines.push(`First warning before minor flood stage: too few events to judge (${plural(f.n, 'event')}).`);
+      else {
+        const m = Math.abs(f.median).toFixed(1);
+        lines.push(Number(m) === 0
+          ? `The first warning came, at the median, when the river reached minor flood stage (${plural(f.n, 'event')}, range ${fmtMinus(f.min, 1)} to ${fmtMinus(f.max, 1)} h).`
+          : `The first warning came a median ${m} h ${f.median > 0 ? 'before' : 'after'} the river reached minor flood stage (${plural(f.n, 'event')}, range ${fmtMinus(f.min, 1)} to ${fmtMinus(f.max, 1)} h).`);
+      }
+    }
+    return h('div', { class: 'sc-means' },
+      h('h3', null, 'At North Cedarville (NRKW1)'),
+      lines.map((t) => h('p', null, t)),
+      h('p', { class: 'muted' }, `These sentences only restate the North Cedarville table above (scorecard ${isNum(sc.scorecard_id) ? sc.scorecard_id : '—'}). Fewer than ${SC_MIN_N} products in a lead window: “too few products to judge”.`));
+  }
+
+  function scMethodBlock(sc) {
+    const sources = Array.isArray(sc.sources) ? sc.sources.filter((x) => typeof x === 'string' && x) : [];
+    const method = typeof sc.method === 'string' ? sc.method.trim() : '';
+    return h('div', null,
+      h('p', null, 'FloodLead built this scorecard from public archives. NOAA/NWS does not publish an equivalent and has not reviewed or endorsed it.'),
+      sources.length ? [h('h3', null, 'Sources'), h('ul', { class: 'caveats' }, sources.map((x) => h('li', null, x)))] : null,
+      method ? h('details', { class: 'sc-method' }, h('summary', null, 'Method, as recorded with this scorecard'), proseBlocks(method)) : null);
+  }
+
+  /** Plain text (a docstring: blank-line paragraphs, "- " list items, hard-wrapped lines) as <p> and <ul>, text only. */
+  function proseBlocks(text) {
+    const out = [];
+    for (const para of String(text).split(/\n\s*\n/)) {
+      let cur = null;
+      for (const raw of para.split('\n')) {
+        const line = raw.trim();
+        if (!line) continue;
+        if (/^[-*] /.test(line)) {
+          if (!cur || cur.type !== 'ul') { cur = { type: 'ul', items: [] }; out.push(cur); }
+          cur.items.push(line.slice(2));
+        } else if (cur && cur.type === 'ul' && !/[.;:]$/.test(cur.items[cur.items.length - 1])) {
+          cur.items[cur.items.length - 1] += ` ${line}`;
+        } else if (cur && cur.type === 'p') {
+          cur.text += ` ${line}`;
+        } else {
+          cur = { type: 'p', text: line };
+          out.push(cur);
+        }
+      }
+    }
+    return out.map((b) => (b.type === 'p' ? h('p', null, b.text) : h('ul', { class: 'caveats' }, b.items.map((t) => h('li', null, t)))));
+  }
+
+  // ---------------------------------------------------------------------------------------------
   // Footer: data feed status
   // ---------------------------------------------------------------------------------------------
   async function renderHealth() {
@@ -1767,6 +2100,10 @@
       } else if (hash.startsWith('#/track-record')) {
         name = 'track';
         renderTrackRecord(seq);
+        try { window.scrollTo(0, 0); } catch (e) { /* not available */ }
+      } else if (hash.startsWith('#/official-scorecard')) {
+        name = 'scorecard';
+        renderScorecard(seq);
         try { window.scrollTo(0, 0); } catch (e) { /* not available */ }
       } else {
         renderWatch(seq);

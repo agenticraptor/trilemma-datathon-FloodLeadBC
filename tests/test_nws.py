@@ -81,3 +81,10 @@ def test_correction_heading_keeps_the_product_id() -> None:
     p = nws.parse_product(raw)
     assert p is not None and p.pil == "FLWSEW" and p.wmo == "WGUS46 KSEW 100623 CCA"
     assert p.issued_at == datetime(2025, 12, 10, 6, 23, tzinfo=UTC) and p.vtec[0].action == "COR"
+
+
+def test_full_month_names_in_outlooks() -> None:
+    raw = "\x01\n000 \nFGUS76 KSEW 192217 CCA\nESFSEW\n\nHYDROLOGIC OUTLOOK\n310 PM PDT MON JULY 19 2004\n\n$$\n"
+    p = nws.parse_product(raw)
+    # a correction (CCA) sent at 22:17Z keeps the original's text time (3:10 PM PDT = 22:10Z): the WMO time wins
+    assert p is not None and p.pil == "ESFSEW" and p.issued_at == datetime(2004, 7, 19, 22, 17, tzinfo=UTC)

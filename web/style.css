@@ -273,6 +273,29 @@ table.skill td:first-child { white-space: nowrap; }
 .cmd-line { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
 .cmd { display: block; flex: 1 1 auto; min-width: 0; background: var(--soft); border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
 
+/* Official-forecast scorecard (#/official-scorecard) */
+.sc-meta .meta { margin-bottom: .3em; }
+.tag-held { background: #ebe6f6; color: #3e2f6e; }
+.sc-first { margin-top: 8px; }
+.sc-leads > h3:not(:first-child) { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+table.sc-events th small { font-weight: 400; }
+table.sc-events th.sc-major-h { min-width: 11em; }
+table.sc-events td.sc-ev-cell { white-space: nowrap; }
+table.sc-events td.sc-ev-cell .tag { margin: 2px 0; }
+table.sc-events > tbody > tr.sc-ev > td { border-bottom: 0; padding-bottom: 2px; }
+table.sc-events > tbody > tr.sc-prod > td { padding-top: 0; }
+table.sc-events > tbody > tr.held-out > td { background: #f5f2fb; }
+table.sc-events > tbody > tr.held-out > td:first-child { box-shadow: inset 4px 0 0 #5b4b8a; }
+.sc-products > summary { cursor: pointer; color: var(--link); font-size: .85rem; padding: 2px 0; }
+.sc-products[open] > summary { margin-bottom: 4px; }
+table.sc-prods { font-size: .85rem; margin-bottom: 6px; background: var(--card); }
+table.sc-prods th, table.sc-prods td { padding: 3px 6px; }
+.sc-means p { max-width: 60em; }
+.sc-method { margin-top: 12px; }
+.sc-method > summary { cursor: pointer; color: var(--link); font-weight: 600; }
+.sc-method[open] > summary { margin-bottom: 6px; }
+.sc-method p, .sc-method li { font-size: .9rem; }
+
 /* "Was this useful?" feedback box (last card on every page) */
 .feedback textarea {
   display: block; width: 100%; max-width: 40em; min-height: 4.5em; resize: vertical;
