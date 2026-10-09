@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 import psycopg
 import pytest
 
-from floodlead import archive, store
+from floodlead import archive, db, store
 from floodlead.http import Fetched
 from floodlead.sources import eccc, nwps
 from tests.conftest import fixture_bytes
@@ -209,3 +209,19 @@ def test_issuer_never_uses_rows_first_seen_after_created_at(conn: psycopg.Connec
     _upsert(conn, [late], created + timedelta(minutes=5))  # first seen after created_at: must be invisible
     rows = issuer._rows(conn, "usgs:1", created - timedelta(hours=3), created, created)
     assert [v for _, v in rows] == [1.0]
+
+
+def test_pool_replaces_a_connection_killed_by_a_server_restart(test_dsn: str) -> None:
+    # 2026-10-09 01:38Z: PostgreSQL restarted after an OOM kill and each next job failed once on a dead pooled
+    # connection. The pool must test connections before handing them out.
+    p = db.pool(test_dsn, min_size=1, max_size=1)
+    try:
+        with p.connection() as c:
+            pid = c.execute("SELECT pg_backend_pid()").fetchone()[0]
+        with psycopg.connect(test_dsn, autocommit=True) as admin:
+            admin.execute("SELECT pg_terminate_backend(%s)", (pid,))
+        with p.connection() as c:
+            assert c.execute("SELECT 1").fetchone()[0] == 1
+            assert c.execute("SELECT pg_backend_pid()").fetchone()[0] != pid
+    finally:
+        p.close()
