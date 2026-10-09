@@ -11,30 +11,30 @@ from statistics import NormalDist, fmean
 import psycopg
 import pytest
 
-from floodlead import db, issuer, ledger, scorer, store
+from floodlead import crps, db, issuer, ledger, scorer, store
 
 N = NormalDist()
 QN = {k: N.inv_cdf(t) for t, k in zip(scorer.TAUS, scorer.KEYS, strict=True)}
 
 
-def test_quantile_score_equals_absolute_error_for_a_point_forecast() -> None:
+def test_fair_crps_and_quantile_score_equal_absolute_error_for_a_point_forecast() -> None:
     q = {k: 2.0 for k in scorer.KEYS}
     for y in (2.0, 2.3, 1.1, -5.0):
-        assert scorer.crps_qs(q, y) == pytest.approx(abs(y - 2.0))
+        assert crps.fair(q, y) == pytest.approx(abs(y - 2.0))
+        assert crps.quantile_score(q, y) == pytest.approx(abs(y - 2.0))
 
 
-def test_quantile_score_approximates_normal_crps() -> None:
-    """Stated tolerance: the 7-level quantile score is within 30 % of the analytic CRPS of N(0,1) pointwise for
-    |z| <= 2, and its expectation for a calibrated forecast is 15-25 % low (measured: -19.4 %)."""
+def test_fair_crps_matches_normal_crps_where_the_quantile_score_did_not() -> None:
+    """The fair CRPS of the 7 stored quantiles of N(0,1) is within 1 % of the analytic CRPS in expectation; the
+    quantile score (kept as crps_qs) is 15-25 % low (measured: -19.4 %)."""
     def analytic(z: float) -> float:
         return z * (2 * N.cdf(z) - 1) + 2 * N.pdf(z) - 1 / math.sqrt(math.pi)
 
-    for z in (-2, -1, -0.5, 0, 0.5, 1, 2):
-        assert scorer.crps_qs(QN, z) == pytest.approx(analytic(z), rel=0.30)
     r = random.Random(3)
     ys = [r.gauss(0, 1) for _ in range(20000)]
-    ratio = fmean(scorer.crps_qs(QN, y) for y in ys) / fmean(analytic(y) for y in ys)
-    assert 0.75 <= ratio <= 0.85
+    ex = fmean(analytic(y) for y in ys)
+    assert 0.99 <= fmean(crps.fair(QN, y) for y in ys) / ex <= 1.01
+    assert 0.75 <= fmean(crps.quantile_score(QN, y) for y in ys) / ex <= 0.85
 
 
 def test_pit_bin() -> None:
@@ -70,7 +70,8 @@ def fresh(test_dsn: str) -> Iterator[psycopg.Connection]:
         c.execute("SET session_replication_role = replica")
         c.execute("TRUNCATE forecast_scores, forecast_scores_naive, score_summaries, scorer_runs, ledger_anchors,"
                   " ledger_entries,"
-                  " observations, observation_revisions, official_forecasts, raw_objects, stations")
+                  " observations, observation_revisions, official_forecasts, history_downloads, raw_objects,"
+                  " stations")
         c.execute("SET session_replication_role = DEFAULT")
         yield c
 
@@ -132,6 +133,20 @@ def test_issue_then_score_end_to_end(fresh: psycopg.Connection, test_dsn: str) -
                            " WHERE status = 'scored'").fetchone()
         assert nv == (8, True)
         assert [x for x in summ["groups"] if x["model"] == "persistence-naive" and x["h"] == 6][0]["coverage"] is None
+        # F1: fair CRPS and the secondary quantile score are stored; MAE skill is paired point-vs-point.
+        before = fresh.execute("SELECT seq, h, crps, crps_qs FROM forecast_scores WHERE status = 'scored'"
+                               " ORDER BY seq, h").fetchall()
+        assert all(r[2] is not None and r[3] is not None for r in before)
+        assert "mae_skill" in g["skill_vs"]["persistence-naive"]
+        # Recomputing from the ledger reproduces the stored values exactly (idempotent), and naive keeps CRPS = AE.
+        fresh.execute("UPDATE forecast_scores SET crps = NULL, crps_qs = NULL")
+        rc = scorer.recompute_crps(pool)
+        assert rc["recompute_crps"]["rows"] == 16
+        after = fresh.execute("SELECT seq, h, crps, crps_qs FROM forecast_scores WHERE status = 'scored'"
+                              " ORDER BY seq, h").fetchall()
+        assert after == before
+        assert fresh.execute("SELECT bool_and(crps = crps_qs AND crps = ae_median) FROM forecast_scores_naive"
+                             " WHERE status = 'scored'").fetchone()[0]
     finally:
         pool.close()
 

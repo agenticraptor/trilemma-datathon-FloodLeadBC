@@ -53,9 +53,22 @@ Both live baselines use the same uncertainty method: point path + the same model
 - **Level truth:** the observation at `valid_at`, else the nearest within ±10 min, else `no_truth` (counted, never imputed).
 - **Event truth:** max over `(data_as_of, valid_at]`, the same window as `qmax` and `p_exceed`. It includes the feed-latency gap the forecaster could not see. Fewer than 80 % of the window's points → `insufficient_truth`.
 - **Rescoring:** scores are rewritten when a truth observation is revised.
-- **CRPS:** approximated by the **quantile score**, 2 × mean pinball loss over the 7 quantile levels. It equals the absolute error for a point forecast. It is measured to be **19 % below** the exact CRPS in expectation for a calibrated normal forecast; it is applied identically to every model, so it ranks models but its absolute values are not exact CRPS.
-- **Skill:** CRPSS and BSS against **both** `persistence-v1` and `persistence-naive`, on **paired samples only** (same station, base time and horizon, both scored, neither stale). "Too few events to judge" is shown instead of a skill number below 30 events.
-- **NOAA matched comparison:**
+- **CRPS (fair, from Stage 3; D-03.4):** each forecast's CDF is rebuilt from its stored quantiles and the CRPS is integrated exactly (`src/floodlead/crps.py`).
+  - Between quantiles the CDF is linear. Beyond the 0.05 and 0.95 quantiles it has exponential tails with the density of the edge segment.
+  - For a point forecast, such as `persistence-naive`, it is exactly the absolute error.
+  - Measured bias against the exact CRPS of the underlying distribution, with 7 levels (`tests/test_crps.py`): calibrated normal +0.0 %, log-normal +0.0 %, under-dispersed −0.2 %, over-dispersed +1.2 %. With 19 levels it is within ±0.1 %.
+  - **Correction (Oct 9).** Until Stage 3 the CRPS was approximated by the quantile score (2 × mean pinball loss over the 7 levels). This file said it "ranks models". That was wrong whenever a spread forecast is compared with a point forecast:
+    - the quantile score is exact for a point forecast, but 13–19 % below the CRPS of a spread forecast;
+    - so every CRPSS of `persistence-v1` or `trend3h-v1` against `persistence-naive` was inflated.
+    - The quantile score is kept only as a secondary column (`crps_qs`). All stored scores were recomputed (scorer run in the stage doc).
+- **Future models store 19 quantiles** (0.05 … 0.95 in steps of 0.05), so the rebuilt CDF is tight. The existing `persistence-v1` and `trend3h-v1` keep their 7 levels; their cards are not changed.
+- **Skill:** on **paired samples only** (same station, base time and horizon, both scored, neither stale), against **both** `persistence-v1` and `persistence-naive`:
+  - CRPSS (fair);
+  - **MAE skill of the median** (`1 − MAE / MAE_ref`, point against point);
+  - BSS.
+  - "Too few events to judge" is shown instead of a skill number below 30 events.
+  - The headline comparison is against pure persistence (`persistence-naive`). A model that does not beat it on both fair CRPS and median MAE has no skill to claim.
+- **NOAA matched comparison** (includes `persistence-naive` from Stage 3):
   - base times at 00/06/12/18Z and horizons that are multiples of 6 h;
   - NOAA's latest issuance whose points were fetched by our `created_at`, compared at the same `valid_at`;
   - metrics: absolute error, and Brier with p ∈ {0, 1} for the official categories; NOAA's own lead (`valid_at − issuedTime`) is reported, since NOAA issues about once a day.
@@ -67,7 +80,7 @@ Both live baselines use the same uncertainty method: point path + the same model
 |---|---|
 | Brier score and Brier skill score vs persistence | Accuracy of crossing probabilities |
 | Reliability diagram, expected calibration error (ECE) | Whether "70%" means 70% |
-| CRPS (quantile score over 7 levels: 0.05 … 0.95) | Accuracy of the level forecast |
+| CRPS (fair: exact integral of the CDF rebuilt from the stored quantiles; D-03.4) and MAE of the median | Accuracy of the level forecast; both against pure persistence |
 | Hit rate, false-alarm ratio | Alert usefulness |
 | Median lead time gained over advisory | The headline value |
 | Feed lag p95, alert-to-call p95 | System reliability |

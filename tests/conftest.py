@@ -56,5 +56,6 @@ def conn(test_dsn: str) -> Iterator[psycopg.Connection]:
         yield c
         # Clean mutable tables between tests (append-only guards apply to the production tables'
         # semantics; in the disposable DB we truncate, which is not blocked by row triggers).
-        c.execute("TRUNCATE observations, observation_revisions, official_forecasts, raw_objects, stations,"
+        c.execute("TRUNCATE observations, observation_revisions, official_forecasts, history_downloads, raw_objects,"
+                  " stations,"
                   " ingest_runs, fetch_state, backfill_chunks, payload_coverage")

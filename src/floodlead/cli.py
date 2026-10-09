@@ -65,7 +65,9 @@ def main(argv: list[str] | None = None) -> int:
     hd.add_argument("--pace", type=float, default=None, help="seconds between requests (default per source)")
     hd.add_argument("--limit", type=int, default=None, help="stop after this many requests per source")
     hsub.add_parser("status", help="tasks done, empty and failed per source")
-    sub.add_parser("score", help="score settled forecast horizons now and refresh the summary")
+    sc = sub.add_parser("score", help="score settled forecast horizons now and refresh the summary")
+    sc.add_argument("--recompute-crps", action="store_true",
+                    help="recompute crps (fair) and crps_qs for every stored score, then refresh the summary")
     iss = sub.add_parser("issue", help="run the hourly issuance now (live only; no backdating)")
     iss.add_argument("--dry-run", action="store_true", help="compute forecasts but write nothing")
     lg = sub.add_parser("ledger", help="ledger tools")
@@ -120,6 +122,9 @@ def main(argv: list[str] | None = None) -> int:
 
         from floodlead import scorer
 
+        if args.recompute_crps:
+            print(json.dumps(scorer.recompute_crps(pool), indent=1, default=str))
+            return 0
         print(json.dumps(scorer.run(pool), indent=1, default=str))
         return 0
     if args.cmd == "issue":

@@ -159,6 +159,52 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - The years before each start date are requested anyway and recorded as found (empty or null), which also measures the start dates.
 - **Reversibility / cost:** adding a point or station later is one more task; nothing is lost.
 
+### D-03.4 — Fair CRPS: rebuild the CDF from the quantiles, exponential tails, exact integral (F1)
+
+- **Context:** the quantile score is exact for a point forecast, but about 19 % low for a spread forecast. So every CRPSS against `persistence-naive` was inflated (the supervisor's F1). The live ECCC h1 CRPSS of +0.30 sat next to a median that was worse than naive.
+- **Options considered:**
+  - (a) a piecewise-linear CDF between quantiles, with these tail rules:
+    - point masses at the 0.05/0.95 quantiles;
+    - linear extension of the edge slope down to F = 0 and up to 1;
+    - exponential tails with the edge segment's density;
+  - (b) fit a parametric distribution (normal or skew-normal) to the quantiles;
+  - (c) keep the quantile score and rescale it.
+- **Measured** (prototype, 3,000 truth draws per case, 7 levels; bias against the exact CRPS of the true forecast distribution):
+
+  | Case | exp tails | linear tails | point masses | quantile score |
+  |---|---|---|---|---|
+  | calibrated normal | +0.0 % | +0.1 % | +0.2 % | −19.4 % |
+  | log-normal (s = 0.5) | +0.1 % | +0.2 % | +0.3 % | −18.0 % |
+  | under-dispersed (sd 0.5 vs 1) | −0.2 % | +0.2 % | +0.7 % | −14.5 % |
+  | over-dispersed (sd 2 vs 1) | +1.2 % | +1.2 % | +1.0 % | −12.6 % |
+
+  With 19 levels, all three tail rules are within ±0.4 %.
+- **Choice:** (a) with **exponential tails**:
+  - `F(x) = τ₁·exp(λ(x − q₁))` below q₁, with `λ = f₁/τ₁`, and symmetrically above q_K;
+  - every piece is integrated in closed form (`src/floodlead/crps.py`);
+  - a zero-width edge segment becomes a point mass, so a point forecast gives exactly |y − q|.
+- **Why:**
+  - the smallest bias in the skewed and under-dispersed cases;
+  - exact and deterministic: no sampling, and no distribution family assumed (b would favour models whose shape matches the family);
+  - (c) cannot fix the point-vs-spread asymmetry, which is the actual problem.
+- **Kept:**
+  - `crps_qs` (the quantile score) as a secondary column, in `/v1/scores/summary` as `mean_crps_qs_m`;
+  - MAE-of-median skill against both references (`mae_skill`, `paired_mae`);
+  - `persistence-naive` in `/v1/scores/official` (naive rows now carry their persistence-v1 row's NOAA point).
+- **Reversibility / cost:** scores are derived. `floodlead score --recompute-crps` rebuilds `crps` and `crps_qs` from the ledger and the stored truth, idempotently (tested).
+- **Follow-ups:** future model versions store 19 quantiles (evaluation.md).
+
+### D-03.5 — Migration 007 (`crps_qs` column) after a dump of the score tables
+
+- **Context:** F1 adds a column to two existing tables and recreates the `all_scores` view. CLAUDE.md requires a `pg_dump` before any migration that touches existing tables.
+- **Choice:**
+  - `pg_dump -Fc` of the 4 score tables (`forecast_scores`, `forecast_scores_naive`, `score_summaries`, `scorer_runs`) to `/srv/floodlead/backups/pre-007-score-tables-20261009T1955Z.dump`: 2,501,219 B, mode 0440, `pg_restore --list` shows 4 TABLE DATA entries.
+  - Not the whole database (4.8 GB): the migration touches only these tables, and they are derived data.
+  - Then `ALTER TABLE … ADD COLUMN crps_qs`, and `CREATE OR REPLACE VIEW all_scores`. The view was created with `SELECT *` and would otherwise miss the new column.
+- **Reversibility / cost:**
+  - Adding a nullable column is instant.
+  - The values are recomputed from the ledger, so the dump is the belt-and-braces copy.
+
 ## Work log
 
 - `12:42` — `git checkout main && git pull` → `bd3d092`. Branch `stage-03-public`. Read the prompt and the inputs above.
@@ -179,7 +225,7 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - The VM booted at 03:50:03Z, and all four containers came back on their own (`restart: unless-stopped`).
   - The supervisor's QA found 23 consecutive hourly issuances with 0 gaps across the reboot, so the 04:00Z base time was issued on time.
 
-- `12:55–13:15` — Draft PR #5 opened. Terms pages fetched and the probes above run (D-03.2, D-03.3).
+- `12:44–12:49` — Draft PR #5 opened. Terms pages fetched and the probes above run (D-03.2, D-03.3).
   - Wrote `migrations/006_history_downloads.sql` (a new table only), `src/floodlead/history/{download,tasks,cli}.py`, `archive.read`, and the five records in `data-contract.md` (inputs 8–11).
   - Task counts:
     - `eccc-peaks` 1+ pages;
@@ -189,6 +235,24 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
     - `ncei` 23;
     - `snotel` 23;
     - `openmeteo-archive` 184, `-histfc` 56, `-prevruns` 32 (≈ 7,100 Open-Meteo calls in total).
+
+- `12:50` — **Downloads started** (`docker compose run -d --name hist-{eccc,us,openmeteo} backfill floodlead history download …`, image `7e91866`), after `floodlead migrate` → `006_history_downloads.sql`. 19:50:03Z.
+  - `iem-nws` finished at 19:51:39Z: 46 requests, 13,034,726 B, 0 errors.
+  - `eccc-peaks`: 4 pages (37,806 rows), 21.9 MB.
+- `12:51–12:55` — **F1 fair CRPS** (D-03.4).
+  - `src/floodlead/crps.py` and `tests/test_crps.py`: point forecast = AE; tied edges; equality with a numerical integral of the same CDF; bias tables.
+  - Scorer: `crps` is now fair, `crps_qs` is kept, plus MAE skill; naive rows carry NOAA points; `recompute_crps`.
+  - `pytest -q -s tests/test_crps.py`:
+    ```
+    7 levels  calibrated normal                fair +0.0 %   quantile score -19.3 %
+    7 levels  log-normal (s=0.5)               fair +0.0 %   quantile score -18.2 %
+    7 levels  under-dispersed (sd 0.5 vs 1)    fair -0.2 %   quantile score -14.2 %
+    7 levels  over-dispersed (sd 2 vs 1)       fair +1.2 %   quantile score -12.9 %
+    19 levels (all four cases)                 fair +0.0 … +0.1 %
+    ```
+  - Full suite → **102 passed**, 4 deselected. Test fixtures now truncate `history_downloads` with `raw_objects` (new FK).
+  - `evaluation.md` corrected: the "ranks models" sentence is withdrawn.
+- `12:55` — Score tables dumped before migration 007 (D-03.5).
 
 ## Measurements
 

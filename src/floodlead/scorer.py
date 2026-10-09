@@ -8,9 +8,10 @@ a truth observation is revised. Rules (docs/stages/STAGE-02-ledger-app.md, D-02.
 - Event truth: the maximum observation over (data_as_of, valid_at], the same window as qmax and p_exceed (it
   includes the feed-latency gap the forecaster could not see); `insufficient_truth` if observations cover < 80 % of
   the window's grid.
-- CRPS is approximated by the quantile score: 2 x mean pinball loss over the 7 quantile levels (equals the absolute
-  error for a point forecast). Also: absolute error of the median, 25-75/10-90/5-95 % coverage, PIT bin, and Brier
-  per threshold.
+- CRPS is the fair CRPS of the CDF rebuilt from the stored quantiles (floodlead.crps, D-03.4: piecewise linear with
+  exponential tails, integrated exactly; exactly the absolute error for a point forecast). The quantile score (2 x
+  mean pinball loss, used until Stage 3) is kept as `crps_qs`. Also: absolute error of the median, 25-75/10-90/5-95 %
+  coverage, PIT bin, and Brier per threshold.
 - NOAA matched comparison: base times at 00/06/12/18Z, horizons that are multiples of 6 h, stations with an NWPS
   forecast; NOAA's latest issuance with fetched_at <= our created_at, its point at the same valid_at (fetched by
   then); absolute error, and Brier with p in {0, 1} for the official categories (NOAA's points in the window).
@@ -19,7 +20,6 @@ a truth observation is revised. Rules (docs/stages/STAGE-02-ledger-app.md, D-02.
 from __future__ import annotations
 
 import json
-import statistics
 import time
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
@@ -30,6 +30,7 @@ from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
 
 from floodlead import baselines as bl
+from floodlead import crps as fair_crps
 from floodlead import log
 from floodlead.units import FT_TO_M
 
@@ -43,15 +44,6 @@ LOOKBACK = timedelta(hours=60)  # base times older than this are fully settled o
 MIN_EVENTS = 30
 TAUS = bl.QUANTILES
 KEYS = bl.QKEYS
-
-
-def pinball(tau: float, u: float) -> float:
-    return u * tau if u >= 0 else u * (tau - 1.0)
-
-
-def crps_qs(q: dict[str, float], y: float) -> float:
-    """CRPS approximated by the quantile score: 2 x mean pinball loss over the quantile levels."""
-    return 2.0 * statistics.fmean(pinball(t, y - q[k]) for t, k in zip(TAUS, KEYS, strict=True))
 
 
 def pit_bin(q: dict[str, float], y: float) -> int:
@@ -91,7 +83,8 @@ def score_one(d: dict[str, Any], hz: dict[str, Any], created_at: datetime,
         y = tr[1]
         q = hz["q"]
         out.update(status="scored", truth_ts=tr[0], truth_m=y, truth_first_seen_at=tr[2], truth_revision_count=tr[3],
-                   q50_m=q["0.5"], crps=crps_qs(q, y), ae_median=abs(y - q["0.5"]),
+                   q50_m=q["0.5"], crps=fair_crps.fair(q, y), crps_qs=fair_crps.quantile_score(q, y),
+                   ae_median=abs(y - q["0.5"]),
                    in_50=q["0.25"] <= y <= q["0.75"], in_80=q["0.1"] <= y <= q["0.9"],
                    in_90=q["0.05"] <= y <= q["0.95"], pit_bin=pit_bin(q, y))
     wmax, cov = window(obs, asof, valid, STEP[src])
@@ -125,13 +118,15 @@ NAIVE = "persistence-naive"
 
 def score_naive(d: dict[str, Any], s: dict[str, Any]) -> dict[str, Any]:
     """Pure persistence from a persistence-v1 entry: the level at data_as_of as a point forecast at every horizon.
-    Its quantile score equals the absolute error; coverage and PIT do not apply to a point forecast."""
+    Its CRPS (fair and quantile score alike) equals the absolute error; coverage and PIT do not apply to a point
+    forecast. It carries the persistence-v1 row's NOAA matched point, so pure persistence appears in the official
+    comparison too."""
     lvl = d["level_at_data_as_of_m"]
     out = {k: s.get(k) for k in ("status", "truth_ts", "truth_m", "truth_first_seen_at", "truth_revision_count",
                                  "event_status", "window_coverage", "window_max_m", "valid_at")}
-    out.update(q50_m=lvl, in_50=None, in_80=None, in_90=None, pit_bin=None, noaa=None, events={})
+    out.update(q50_m=lvl, in_50=None, in_80=None, in_90=None, pit_bin=None, noaa=s.get("noaa"), events={})
     if s["status"] == "scored":
-        out["crps"] = out["ae_median"] = abs(s["truth_m"] - lvl)
+        out["crps"] = out["crps_qs"] = out["ae_median"] = abs(s["truth_m"] - lvl)
     if s["event_status"] == "ok":
         levels = {t["key"]: t["level_m"] for t in d["thresholds"]}
         for k, ev in s["events"].items():
@@ -146,16 +141,16 @@ def _row(seq: int, hz_h: int, sid: str, model: str, base: datetime, d: dict[str,
             s.get("truth_ts"), s.get("truth_m"), s.get("truth_first_seen_at"), s.get("truth_revision_count"),
             s.get("q50_m"), s.get("crps"), s.get("ae_median"), s.get("in_50"), s.get("in_80"), s.get("in_90"),
             s.get("pit_bin"), s["event_status"], s["window_coverage"], s["window_max_m"], Jsonb(s["events"]),
-            Jsonb(s["noaa"]) if s.get("noaa") else None, now, run_id)
+            Jsonb(s["noaa"]) if s.get("noaa") else None, now, run_id, s.get("crps_qs"))
 
 
 _UPSERT = (" (seq, h, station_id, source, model, base_time, valid_at,"
            " stale_inputs, status, truth_ts, truth_m, truth_first_seen_at, truth_revision_count, q50_m,"
            " crps, ae_median, in_50, in_80, in_90, pit_bin, event_status, window_coverage, window_max_m,"
-           " events, noaa, scored_at, scorer_run_id) VALUES (" + ", ".join(["%s"] * 27) + ")"
+           " events, noaa, scored_at, scorer_run_id, crps_qs) VALUES (" + ", ".join(["%s"] * 28) + ")"
            " ON CONFLICT (seq, h) DO UPDATE SET status = EXCLUDED.status, truth_ts = EXCLUDED.truth_ts,"
            " truth_m = EXCLUDED.truth_m, truth_first_seen_at = EXCLUDED.truth_first_seen_at,"
-           " truth_revision_count = EXCLUDED.truth_revision_count, crps = EXCLUDED.crps,"
+           " truth_revision_count = EXCLUDED.truth_revision_count, crps = EXCLUDED.crps, crps_qs = EXCLUDED.crps_qs,"
            " ae_median = EXCLUDED.ae_median, in_50 = EXCLUDED.in_50, in_80 = EXCLUDED.in_80,"
            " in_90 = EXCLUDED.in_90, pit_bin = EXCLUDED.pit_bin, event_status = EXCLUDED.event_status,"
            " window_coverage = EXCLUDED.window_coverage, window_max_m = EXCLUDED.window_max_m,"
@@ -273,7 +268,8 @@ def summarise(conn: psycopg.Connection, run_id: int, now: datetime) -> dict[str,
             " 'no_truth' AND model <> %s), count(*) FILTER (WHERE stale_inputs AND model <> %s), min(base_time),"
             " max(valid_at) FROM all_scores", (NAIVE, NAIVE, NAIVE)).fetchone()
     rows = q("SELECT model, h, source, count(*), count(DISTINCT station_id), count(DISTINCT base_time::date),"
-             " avg(crps), avg(ae_median), avg(in_50::int)::float, avg(in_80::int)::float, avg(in_90::int)::float"
+             " avg(crps), avg(ae_median), avg(in_50::int)::float, avg(in_80::int)::float, avg(in_90::int)::float,"
+             " avg(crps_qs)"
              " FROM all_scores WHERE status = 'scored' AND NOT stale_inputs GROUP BY 1, 2, 3 ORDER BY 1, 3, 2"
              ).fetchall()
     fam = "CASE WHEN e.k LIKE 'official:%%' THEN 'official' ELSE e.k END"
@@ -285,13 +281,16 @@ def summarise(conn: psycopg.Connection, run_id: int, now: datetime) -> dict[str,
         brier[(model, h, src)][family] = {"n": n, "events": int(events or 0), "brier": mb}
     skill: dict[tuple[str, int, str], dict[str, Any]] = defaultdict(dict)
     for target, ref in SKILL_PAIRS:
-        for h, src, n, mt, mr in q(
-                "SELECT t.h, t.source, count(*), avg(t.crps), avg(r.crps) FROM all_scores t JOIN all_scores r"
+        for h, src, n, mt, mr, at, ar in q(
+                "SELECT t.h, t.source, count(*), avg(t.crps), avg(r.crps), avg(t.ae_median), avg(r.ae_median)"
+                " FROM all_scores t JOIN all_scores r"
                 " ON r.station_id = t.station_id AND r.base_time = t.base_time AND r.h = t.h AND r.model = %s"
                 " WHERE t.model = %s AND t.status = 'scored' AND r.status = 'scored' AND NOT t.stale_inputs"
                 " AND NOT r.stale_inputs GROUP BY 1, 2", (ref, target)).fetchall():
             skill[(target, h, src)][ref] = {"n_pairs": n, "crpss": None if not mr else round(1 - mt / mr, 4),
-                                            "paired_crps": {target: mt, ref: mr}, "bss": {}}
+                                            "paired_crps": {target: mt, ref: mr},
+                                            "mae_skill": None if not ar else round(1 - at / ar, 4),
+                                            "paired_mae": {target: at, ref: ar}, "bss": {}}
         for h, src, family, n, events, bt, br in q(
                 f"SELECT t.h, t.source, {fam}, count(*), sum((e.v->>'outcome')::int), avg((e.v->>'brier')::float),"
                 " avg((r.events->e.k->>'brier')::float) FROM all_scores t CROSS JOIN LATERAL jsonb_each(t.events)"
@@ -300,14 +299,15 @@ def summarise(conn: psycopg.Connection, run_id: int, now: datetime) -> dict[str,
                 " AND r.status = 'scored' AND NOT t.stale_inputs AND NOT r.stale_inputs AND t.event_status = 'ok'"
                 " GROUP BY 1, 2, 3", (ref, target)).fetchall():
             ok = events is not None and events >= MIN_EVENTS
-            skill[(target, h, src)].setdefault(ref, {"n_pairs": 0, "crpss": None, "bss": {}})["bss"][family] = {
+            skill[(target, h, src)].setdefault(ref, {"n_pairs": 0, "crpss": None, "mae_skill": None, "bss": {}})[
+                "bss"][family] = {
                 "n_pairs": n, "events": int(events or 0),
                 "value": round(1 - bt / br, 4) if ok and br else None,
                 "note": None if ok else "too few events to judge"}
     groups = []
-    for model, h, src, n, st, days, crps, mae, c50, c80, c90 in rows:
+    for model, h, src, n, st, days, crps, mae, c50, c80, c90, crps_qs in rows:
         g: dict[str, Any] = {"model": model, "h": h, "source": src, "n": n, "stations": st, "days": days,
-                             "mean_crps_m": crps, "mae_median_m": mae,
+                             "mean_crps_m": crps, "mean_crps_qs_m": crps_qs, "mae_median_m": mae,
                              "coverage": None if model == NAIVE else {"25-75": c50, "10-90": c80, "5-95": c90},
                              "brier": {}, "skill_vs": skill.get((model, h, src), {})}
         for family, b in brier.get((model, h, src), {}).items():
@@ -316,7 +316,7 @@ def summarise(conn: psycopg.Connection, run_id: int, now: datetime) -> dict[str,
     official = []
     for lid, model, h, n, mae, noaa_mae, lead in q(
             "SELECT noaa->>'lid', model, h, count(*), avg(ae_median), avg((noaa->>'ae')::float),"
-            " percentile_cont(0.5) WITHIN GROUP (ORDER BY (noaa->>'lead_h')::float) FROM forecast_scores"
+            " percentile_cont(0.5) WITHIN GROUP (ORDER BY (noaa->>'lead_h')::float) FROM all_scores"
             " WHERE noaa IS NOT NULL AND status = 'scored' GROUP BY 1, 2, 3 ORDER BY 1, 2, 3").fetchall():
         official.append({"lid": lid, "model": model, "h": h, "n": n, "mae_median_m": mae, "noaa_mae_m": noaa_mae,
                          "noaa_median_lead_h": lead})
@@ -331,8 +331,13 @@ def summarise(conn: psycopg.Connection, run_id: int, now: datetime) -> dict[str,
                               "(scored from the persistence-v1 entries; CRPS = absolute error)"},
             "rules": {"settle_h": 3, "truth_tolerance_min": 10, "event_window": "(data_as_of, valid_at]",
                       "min_window_coverage": MIN_COVERAGE,
-                      "crps": "quantile score: 2 x mean pinball loss (7 levels); ~19 % below exact CRPS for a "
-                              "calibrated normal forecast",
+                      "crps": "fair CRPS of the CDF rebuilt from the stored quantiles (piecewise linear, exponential "
+                              "tails, exact integral); |bias| <= 1.2 % on synthetic forecasts; equals the absolute "
+                              "error for a point forecast (D-03.4)",
+                      "crps_qs": "quantile score (2 x mean pinball loss over 7 levels), the approximation used "
+                                 "until Stage 3: 13-19 % below the CRPS of a spread forecast, exact for a point "
+                                 "forecast, so it inflated skill against persistence-naive",
+                      "mae_skill": "1 - MAE(median) / MAE(reference median), paired: point against point",
                       "skill": "paired samples only (same station, base time, horizon); vs persistence-v1 and vs "
                                "persistence-naive", "min_events_for_skill": MIN_EVENTS,
                       "stale": "stale-input forecasts excluded"},
@@ -340,3 +345,44 @@ def summarise(conn: psycopg.Connection, run_id: int, now: datetime) -> dict[str,
     q("INSERT INTO score_summaries (scorer_run_id, generated_at, body) VALUES (%s, %s, %s)",
       (run_id, now, Jsonb(body)))
     return body
+
+
+def recompute_crps(pool: ConnectionPool) -> dict[str, Any]:
+    """Recompute `crps` (fair) and `crps_qs` for every scored row from its ledger entry and stored truth (F1). The
+    truth, status and events are unchanged; pure persistence gets crps = crps_qs = absolute error and the NOAA
+    matched point of its persistence-v1 row. Then a fresh summary is written."""
+    t0 = time.monotonic()
+    n = 0
+    with pool.connection() as conn:
+        conn.execute("SET statement_timeout = '15min'")
+        seqs = [r[0] for r in conn.execute(
+            "SELECT DISTINCT seq FROM forecast_scores WHERE status = 'scored' ORDER BY seq").fetchall()]
+        for i in range(0, len(seqs), 2000):
+            chunk = seqs[i:i + 2000]
+            entries = {s_: json.loads(c)["data"] for s_, c in conn.execute(
+                "SELECT seq, canonical FROM ledger_entries WHERE seq = ANY(%s)", (chunk,)).fetchall()}
+            upd = []
+            for seq, h, y in conn.execute(
+                    "SELECT seq, h, truth_m FROM forecast_scores WHERE status = 'scored' AND seq = ANY(%s)",
+                    (chunk,)).fetchall():
+                hz = next(z for z in entries[seq]["horizons"] if z["h"] == h)
+                upd.append((fair_crps.fair(hz["q"], y), fair_crps.quantile_score(hz["q"], y), seq, h))
+            with conn.transaction(), conn.cursor() as cur:
+                cur.executemany("UPDATE forecast_scores SET crps = %s, crps_qs = %s WHERE seq = %s AND h = %s", upd)
+            n += len(upd)
+        with conn.transaction():
+            naive = conn.execute("UPDATE forecast_scores_naive SET crps = ae_median, crps_qs = ae_median"
+                                 " WHERE status = 'scored'").rowcount
+            noaa = conn.execute(
+                "UPDATE forecast_scores_naive n SET noaa = f.noaa FROM forecast_scores f WHERE f.seq = n.seq"
+                " AND f.h = n.h AND f.noaa IS NOT NULL AND n.noaa IS NULL").rowcount
+        conn.autocommit = True
+        run_id = conn.execute("INSERT INTO scorer_runs DEFAULT VALUES RETURNING scorer_run_id").fetchone()[0]
+        now = datetime.now(UTC)
+        summarise(conn, run_id, now)
+        runtime = round(time.monotonic() - t0, 1)
+        details = {"runtime_s": runtime, "recompute_crps": {"rows": n, "naive_rows": naive, "naive_noaa": noaa}}
+        conn.execute("UPDATE scorer_runs SET finished_at = now(), status = 'ok', scored = 0, rescored = %s,"
+                     " details = %s WHERE scorer_run_id = %s", (n, Jsonb(details), run_id))
+    L.info("crps recomputed", **log.kv(run_id=run_id, rows=n, naive_rows=naive, runtime_s=runtime))
+    return {"scorer_run_id": run_id, **details}
