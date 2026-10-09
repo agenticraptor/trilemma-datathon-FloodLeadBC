@@ -177,6 +177,38 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
 
   **Abbotsford has essentially no hourly precipitation in ECCC's climate archive.** The live probe also found its newest hour about 14 h old with no precipitation. So the Fraser Valley rain features cannot rest on the airport next to Sumas Prairie: Hope and Pitt Meadows bracket the valley, with KBLI and SNOTEL on the US side. Open-Meteo reanalysis serves as the oracle and the basin average.
 
+- `14:01–14:08` — **Draft PR #6 opened** (`stage-03-history`, base `main`). Until PR #5 merges it also shows part 1; the PR body says so. It was opened so that part-2 code runs only from an open PR.
+  - Part-2 code runs from its own image tag, `floodlead-app:part2` (built from this worktree), in one-off `docker run --rm` containers. The live services keep `floodlead-app:latest` (part 1), so no part-2 code reaches them.
+  - `floodlead migrate` → `011_nws_products.sql`, `012_rain.sql`, `013_official_scorecard.sql` (new tables only).
+  - `history download iem-nws` → 46 new requests (FFASEW and ESFSEW, 2004–2026), 3,865,352 B; 46 skipped.
+  - `history load nws` → **7,278 + 15 products, 11,018 VTEC records** in 22.8 s. 28 unparsed: 27 spring/summer water-supply outlooks (ESFSEW) with irregular date lines ("June 20 2017", "Thu July 8, 2021") and 1 empty correction (FLSSEW 2006). None is a flood product.
+  - Parser fix: full month names ("JULY"); test added.
+- `14:08` — **Official-forecast scorecard built** (`floodlead history build scorecard`, 2.3 s; `official_scorecards` row 2). The addendum's corrected numbers are reproduced from the archive and our gauge record:
+
+  | | Nov 2021 (ETN 78) | Dec 2025 (ETN 47) |
+  |---|---|---|
+  | First North Cedarville warning | 19:50Z Nov 14, forecast crest **148.9 ft** | 06:17Z Dec 10, forecast crest **148.4 ft** |
+  | Observed crest (our USGS record) | **150.76 ft** (major) | **150.44 ft** (major); the review cites ≈ 150.49–150.5 |
+  | Observed minor crossing | **21:30Z Nov 14** | **20:15Z Dec 10** |
+  | First warning's lead before minor | **1.67 h** | **13.97 h** |
+  | First "major" product | 10:07Z Nov 15 | 01:32Z Dec 11 (5:32 PM PST Dec 10) |
+  | SR 544 overflow onset (replay definition) | 02:25Z Nov 15 | 00:45Z Dec 11 |
+  | "Major" relative to the onset | **7.7 h after** | **0.8 h after** (the review: ~3 h after the Emerson Rd rise at 2:30 PM) |
+
+  North Cedarville, all archived warnings: 36 events, of which 32 are scored and 4 (2006-11 to 2007-03) predate our level record. Crest error of the official forecast crest by lead before the observed crest:
+
+  | Lead | Products | Events | Bias (ft) | MAE (ft) | Category right | Crest-time MAE (h) |
+  |---|---|---|---|---|---|---|
+  | 0–6 h | 31 | 24 | +0.50 | 0.82 | 38.7 % | 3.6 |
+  | 6–12 h | 12 | 12 | +0.87 | 1.05 | 25.0 % | 4.4 |
+  | 12–24 h | 11 | 7 | **−0.59** | 1.09 | 27.3 % | 5.2 |
+  | 24–48 h | 4 | 3 | **−1.48** | 1.49 | 25.0 % | 4.4 |
+
+  - First warning before minor stage: median **1.67 h**, range −1.52 to 23.7 h, n = 19 events that reached minor.
+  - Small n at the longer leads (7 and 3 events). The pattern matches the review: low a day out, slightly high in the last hours.
+  - Ferndale (NKSW1): 16 events. Everson (NREW1) and the overflow (NOEW1) have no point warnings; the Everson overflow warnings are areal (FA) products and feed the relay tiers.
+  - The "after the crest" bin (crest-time MAE 288 h) is not a forecast. It is shown only for completeness, and dropped from the README table.
+
   The Sumas USGS–ECCC overlap is only 427 days. The USGS hourly level at Sumas, WA needs at least 18 hours a day to make a daily mean, and its level record is short. As found.
 
 ## Decisions
