@@ -252,7 +252,7 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
    - Ages are computed per response, relative to the snapshot's `snapshot_at` ("48 min before the snapshot"), so live and snapshot data mixed on one page both read correctly. The chart's "now" line becomes a "snapshot" line.
    - **POSIX locale:** uPlot runs `new Intl.NumberFormat(navigator.language)` at load. The new `web/locale-guard.js` (same-origin, loaded before uPlot; it does nothing for a valid tag) maps an invalid tag to `en-CA`, or else wraps `Intl.NumberFormat`/`DateTimeFormat` to fall back for invalid tags. Every chart also gets explicit formatters, and the sorts use an explicit locale.
    - Result with `navigator.language = 'en-US@posix'`: **0 page errors**, both charts drawn.
-9. **First live rollover (F1):** the ECCC runs from 23:55 to 00:20Z will be recorded in the work log.
+9. **First live rollover (F1):** recorded in the work log (`17:21`). The dated directory switched at the first run after midnight, with no fallback, no 404 and no failed run.
 
 ### D-02.17 — `persistence-v1` is "level + typical change"; pure persistence is scored as `persistence-naive`
 
@@ -331,6 +331,24 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
   - `heads.txt` = 3 lines.
   - `verify_ledger.py --source github` → `OK entries 2577, head fd94c322…df42, anchors_checked 3, files 3`; `--api` → the same.
   - Publication: 395,114 / 396,798 / 397,541 B per hour.
+- `16:16` — **Base 23:00Z** issued: `created_at` 23:15:01.235Z, `committed_at` 23:16:18.717Z (**77.5 s**). Runtime 76.4 s; 853 forecasts (persistence 427, trend 426).
+- `17:16` — **Base 00:00Z** issued: `created_at` 00:15:01.901Z, `committed_at` 00:16:19.609Z (**77.7 s**). Runtime 76.6 s; 854 forecasts (427 each).
+  - Of the 834 ECCC forecasts, 0 are flagged `stale_inputs`.
+  - Five consecutive base times so far (20, 21, 22, 23, 00Z), with 0 gap entries.
+- `17:21` — **First live midnight rollover (F1, addendum 2 item 9).** ECCC `hourly` runs from `ingest_runs`, shown as run | start | status | files | fetched | rows | `listing_dir` | fallbacks:
+  ```
+  579 | 23:52:01 | ok | 429 |   0 |    0 | …/20261008/WXO-DD/hydrometric/csv/BC/hourly/ | []
+  580 | 23:57:01 | ok | 429 |   0 |    0 | …/20261008/WXO-DD/hydrometric/csv/BC/hourly/ | []
+  582 | 00:02:01 | ok | 429 | 429 | 4554 | …/20261009/WXO-DD/hydrometric/csv/BC/hourly/ | []
+  584 | 00:07:01 | ok | 429 |   0 |    0 | …/20261009/WXO-DD/hydrometric/csv/BC/hourly/ | []
+  585 | 00:12:01 | ok | 429 |   0 |    0 | …/20261009/WXO-DD/hydrometric/csv/BC/hourly/ | []
+  587 | 00:17:02 | ok | 429 |   0 |    0 | …/20261009/WXO-DD/hydrometric/csv/BC/hourly/ | []
+  ```
+  - The new dated directory served the first run after 00:00Z. No run needed a fallback (no 404); `error_text` was empty and the ingest log had no ECCC warnings or errors between 23:50 and 00:21Z.
+  - Run 582 downloaded all 429 files once (35 s). This was expected: `fetch_state` is keyed by URL (D-02.2 side effect).
+  - On Oct 8, by contrast, the 00:03:50Z run failed on the `today/` 404.
+  - The newest ECCC level at 00:21Z was 23:50Z. That is ECCC's normal publication lag, not a rollover gap; continuity past 00:00Z is checked after the 01:00Z publish.
+  - The 30-day `daily/` listing is fetched only by the manual `backfill eccc-30d` command, not by the schedule, so it had no live rollover to observe. Its fallback is covered by `tests/test_eccc_rollover.py`.
 
 ## Measurements
 
