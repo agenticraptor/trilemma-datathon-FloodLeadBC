@@ -89,8 +89,10 @@ def build(pool: ConnectionPool, what: str, out: Path) -> int:
             t1 = (datetime.now(UTC) - timedelta(hours=48)).replace(minute=0, second=0, microsecond=0)
             t0 = datetime(2004, 10, 1, tzinfo=UTC)
             inp = datasets.load_inputs(conn, t0, t1)
+            files = datasets.write(inp, out, t0, t1)
+            files["fraser_valley"] = datasets.fraser_valley_daily(conn, out)
             res = {"built_at": datetime.now(UTC), "period": [t0, t1], "latency_min": datasets.LATENCY,
-                   "holdout_water_years": list(datasets.HOLDOUT_WY), "files": datasets.write(inp, out, t0, t1)}
+                   "holdout_water_years": list(datasets.HOLDOUT_WY), "files": files}
     path = out / f"{what}.json"
     path.write_text(json.dumps(res, indent=1, default=str))
     print(json.dumps(res.get("summary") or res.get("files") or {"written": str(path)}, indent=1, default=str))

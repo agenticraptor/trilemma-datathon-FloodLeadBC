@@ -294,3 +294,94 @@ def write(inp: Inputs, out_dir: Path, t0: datetime, t1: datetime) -> dict[str, A
                              "sha256": sha, "label": "UPPER BOUND: uses future observed rain" if variant == "oracle"
                              else "honest: only information available at issue time"}
     return manifest
+
+
+# Fraser Valley (BC) daily dataset: ECCC daily means (HYDAT, approved, to 2024). Issue at the end of day d, using days
+# <= d (daily means are published after the day ends; in live use the day's provisional mean is known the next
+# morning, so a day-d issue is made early on d+1). Targets: daily mean level on d+1..d+3 and whether any of them
+# reaches the station's typical yearly peak (typical-peak-v1). Rain: daily sums at Hope (1113542/1113543) and Pitt
+# Meadows (1106178), where reported; the oracle variant adds the next 3 days of reanalysis rain at the basin point.
+FV_TARGETS = {"eccc:08MH029": ("sumas-abbotsford", ("usgs:12214500",)),
+              "eccc:08MH001": ("chilliwack-upper", ("eccc:08MH103", "eccc:08MH056", "eccc:08MH016")),
+              "eccc:08MH103": ("chilliwack-upper", ("eccc:08MH016",)),
+              "eccc:08MF005": ("coquihalla-hope", ("eccc:08MF040", "eccc:08LF051")),
+              "eccc:08MH024": ("coquihalla-hope", ("eccc:08MF005",)),
+              "eccc:08MH155": ("nicomekl-langley", ()),
+              "eccc:08MF062": ("coquihalla-hope", ("eccc:08MF068",))}
+FV_RAIN = {"hope": ("1113542", "1113543"), "pitt_meadows": ("1106178",)}
+
+
+def fraser_valley_daily(conn: psycopg.Connection, out_dir: Path) -> dict[str, Any]:
+    conn.execute("SET statement_timeout = '15min'")
+    from datetime import date
+
+    def daily_level(sid: str) -> dict[date, float]:
+        stn = sid.split(":", 1)[1]
+        return {d: float(v) for d, v in conn.execute(
+            "SELECT date, level FROM eccc_daily WHERE station_number = %s AND level IS NOT NULL", (stn,))}
+
+    rain = {}
+    for name, ids in FV_RAIN.items():
+        rain[name] = {d: float(v) for d, v in conn.execute(
+            "SELECT (ts - interval '1 second')::date, sum(precip_mm) FROM rain_hourly WHERE source = 'eccc-climate'"
+            " AND site = ANY(%s) AND precip_mm IS NOT NULL GROUP BY 1 HAVING count(*) >= 20", (list(ids),))}
+    tp = {sid: v for sid, v in conn.execute("SELECT station_id, value_m FROM typical_peaks WHERE method ="
+                                             " 'typical-peak-v1' AND status IN ('ok', 'flagged')")}
+    out_dir.mkdir(parents=True, exist_ok=True)
+    manifest: dict[str, Any] = {}
+    for variant in ("honest", "oracle"):
+        path = out_dir / f"fraser_valley_daily_{variant}_v1.csv.gz"
+        n = 0
+        with gzip.open(path, "wt", newline="") as fh:
+            w: csv.DictWriter | None = None
+            for sid, (point, ups) in FV_TARGETS.items():
+                lv = daily_level(sid)
+                up = {u: daily_level(u) if u.startswith("eccc:") else {} for u in ups}
+                era = {d: float(v) for d, v in conn.execute(
+                    "SELECT (ts - interval '1 second')::date, sum(precip_mm) FROM openmeteo_hourly WHERE kind ="
+                    " 'archive' AND point = %s GROUP BY 1", (point,))} if variant == "oracle" else {}
+                for d in sorted(lv):
+                    r: dict[str, Any] = {"station_id": sid, "issue_date": d.isoformat(),
+                                         "wy": d.year + 1 if d.month >= 10 else d.year, "variant": variant,
+                                         "data_status": "approved history (HYDAT)"}
+                    r["holdout"] = r["wy"] in HOLDOUT_WY
+                    for lag in (0, 1, 2, 7):
+                        r[f"lvl_d{lag}"] = lv.get(d - timedelta(days=lag), "")
+                    for u, s in up.items():
+                        r[f"up_{u.split(':')[1]}_d0"] = s.get(d, "")
+                        r[f"up_{u.split(':')[1]}_d1"] = s.get(d - timedelta(days=1), "")
+                    for name, rr in rain.items():
+                        r[f"rain_{name}_d0"] = rr.get(d, "")
+                        r[f"rain_{name}_3d"] = (sum(rr[x] for x in (d - timedelta(days=k) for k in range(3)) if x in rr)
+                                                if any((d - timedelta(days=k)) in rr for k in range(3)) else "")
+                    doy = d.timetuple().tm_yday
+                    r["doy_sin"], r["doy_cos"] = math.sin(2 * math.pi * doy / 365.25), math.cos(2 * math.pi * doy /
+                                                                                                   365.25)
+                    if variant == "oracle":
+                        r["oracle_future_rain_3d"] = sum(era.get(d + timedelta(days=k), 0.0) for k in (1, 2, 3))
+                    fut = [lv.get(d + timedelta(days=k)) for k in (1, 2, 3)]
+                    for k, v in zip((1, 2, 3), fut, strict=True):
+                        r[f"y_lvl_d{k}"] = "" if v is None else v
+                    peak = tp.get(sid)
+                    r["typical_peak_m"] = "" if peak is None else peak
+                    r["y_reach_typical_peak_3d"] = ("" if peak is None or all(v is None for v in fut) else
+                                                    float(any(v is not None and v >= peak for v in fut)))
+                    if w is None:
+                        w = csv.DictWriter(fh, fieldnames=_fv_columns(variant), extrasaction="raise")
+                        w.writeheader()
+                    w.writerow({c: r.get(c, "") for c in _fv_columns(variant)})
+                    n += 1
+        manifest[variant] = {"file": path.name, "rows": n, "bytes": path.stat().st_size,
+                             "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+    return manifest
+
+
+def _fv_columns(variant: str) -> list[str]:
+    ups = sorted({u.split(":")[1] for _, us in FV_TARGETS.values() for u in us if u.startswith("eccc:")})
+    cols = ["station_id", "issue_date", "wy", "variant", "data_status", "holdout"]
+    cols += [f"lvl_d{lag}" for lag in (0, 1, 2, 7)]
+    cols += [f"up_{u}_d{k}" for u in ups for k in (0, 1)]
+    cols += [f"rain_{n}_{p}" for n in FV_RAIN for p in ("d0", "3d")]
+    cols += ["doy_sin", "doy_cos"] + (["oracle_future_rain_3d"] if variant == "oracle" else [])
+    cols += ["y_lvl_d1", "y_lvl_d2", "y_lvl_d3", "typical_peak_m", "y_reach_typical_peak_3d"]
+    return cols
