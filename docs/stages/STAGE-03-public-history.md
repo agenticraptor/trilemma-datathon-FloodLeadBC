@@ -226,6 +226,12 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - **My mistake:** a `git commit -a` for the NWS month-name fix (`638d6d3`, pushed) also swept in the agent's unfinished draft of this page. Pushed history is not rewritten; the final page is committed separately.
   - `/v1/official-scorecard` was added to the snapshot export; slug test 19 passed.
 
+- `14:20` — **Event catalogue** (`floodlead history build catalogue`, 30.7 s → `/srv/floodlead/datasets/catalogue.json`):
+  - **Nooksack:** 20 North Cedarville minor-stage events since 2007, 8 of them with an SR 544 overflow onset (where the gauge existed), and a first NWS North Cedarville warning found for all 20.
+    - Each event carries its crossings, crest, onset, and the first warning's issuance, forecast begin, crest time, crest value and lead before minor.
+    - Examples: Dec 2025 — minor 20:15Z Dec 10, crest 150.44 ft, major 10:00Z Dec 11, onset 00:45Z Dec 11, first warning 06:17Z (148.4 ft forecast), lead 13.97 h. Nov 28, 2021 — first warning 09:29Z, lead 13.27 h.
+  - **BC:** typical-peak crossings at 310 stations with an `ok` or flagged value. 2,576 station-years had an annual instantaneous maximum at or above the station's typical yearly peak (about half the years, by construction), and 274 stations had daily means at or above it on at least one day.
+
   The Sumas USGS–ECCC overlap is only 427 days. The USGS hourly level at Sumas, WA needs at least 18 hours a day to make a daily mean, and its level record is short. As found.
 
 ## Decisions
