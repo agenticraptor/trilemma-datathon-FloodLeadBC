@@ -1,6 +1,6 @@
 # FloodLead BC — pre-registered evaluation protocol (Stage 4)
 
-> **Status: DRAFT.** It will be frozen in Stage 3 part 2, before any model is trained. From then on this file changes only through dated amendments at the end, each logged in the stage doc. The supervisor reviews it before Stage 4 starts.
+> **Status: FROZEN on 2026-10-09 (Stage 3 part 2), before any model was trained.** From now on this file changes only through dated amendments at the end, each logged in the stage doc. The supervisor reviews it before Stage 4 starts. The commit and sha256 of this frozen version are recorded in `docs/stages/STAGE-03-public-history.md`.
 > Written by the build worker on Oct 9, 2026, after the supervisor's [Stage 3 addendum 1](build/prompts/STAGE-03-addendum-1.md) and the [status-quo review](research/fraser-valley-flood-warning-status-quo.md). Every target below is reported as **met or not met**, never tuned to pass.
 
 ## 1. What is being tested
@@ -48,6 +48,24 @@ Layers 1 and 2 are model-free (`src/floodlead/relay.py`). Layer 3 is the Stage 4
   - its crossings and crest;
   - the SR 544 onset;
   - the first NWS warning and its forecast times.
+
+### 2.1 How many events there are (from the frozen catalogue), and what that allows
+
+| Threshold at North Cedarville | Development events (WY2008–2021, 2023–2025) | Held-out events (WY2022, WY2026) |
+|---|---|---|
+| Minor (146.5 ft) | 16 | 4 |
+| Moderate (≥ 148 ft) | 5: Jan 2009, Dec 2010, Nov 2015, Nov 2017, Feb 2020 | 2: Nov 2021, Dec 2025 |
+| Major (≥ 150 ft) | **0** | 2: Nov 2021, Dec 2025 |
+| SR 544 overflow (gauge operating) | 3: Nov 2015, Nov 2017, Feb 2020 | 4: Nov 14 2021, Nov 28 2021, Dec 2025, Mar 2026 |
+
+As hourly rows (`scripts/check_datasets.py`), the counts of positive y_major_24h / y_moderate_24h / y_overflow_12h are: development 0 / 161 / 50; held-out 56 / 91 / 70.
+
+Consequences, fixed now:
+- **P(≥ 150 ft) cannot be learned or calibrated on development data.** There is no positive example.
+  - The model must derive it from its level distribution (forecast quantiles of the crest), never from a classifier trained on 150-ft labels.
+  - Its calibration cannot be checked before the final run. At the final run it rests on 2 events and is reported descriptively. It is never claimed as "reliable".
+- **Overflow and ≥ 148 ft alert rules are chosen on 3 and 5 development events respectively.** Every event-based rate carries its exact binomial interval: 3 of 3 has a 95 % lower bound of 0.29.
+- The held-out years contain more large events than the development years. This is stated next to every held-out result.
 
 ## 3. Comparators (all scored on the same rows and events)
 
@@ -126,7 +144,8 @@ So T1 and T2 use labelled **ranges** from analogues (for 2025, a crossing 10–2
 - **The Emerson Rd overflow gauge** (record from Jan 2024) was offline on Oct 9, 2026.
 - **Large overflows are rare:** officials cite 1990, 2020, 2021 and 2025. Every event-based number rests on a handful of events, and its interval is shown.
 - **NWS flood stages** are today's values. Older products were judged against stages that may have differed.
-- **NWS-derived probabilities are 0/1**, so a Brier comparison favours any calibrated forecaster. This is stated with T3.
+- **NWS-derived probabilities are 0/1**, so a Brier comparison favours any calibrated forecaster. This is stated with T3. "Across all archived warnings" means the walk-forward out-of-sample predictions for WY2016–2025 plus the held-out run, at every hourly issuance with a North Cedarville warning in force (0.2 % of rows).
+- **The North Cedarville level record** in our history begins in WY2008. Earlier rows have gauge features but no North Cedarville level.
 
 ## 11. Reporting: the exact table published, whatever it shows
 
@@ -138,7 +157,18 @@ For each target (T1–T5) and each ablation, one row:
 - Every event is listed with its times, including the events where FloodLead does worse.
 - Held-out results (WY2022, WY2026, live) are shown separately from walk-forward results.
 
-**Frozen inputs** (filled in when frozen): build commit, dataset sha256s and row counts, catalogue sha256, this file's sha256.
+**Frozen inputs** (built 2026-10-09 22:45–23:03Z by image `floodlead-app:part2` at commit `f502b4924e6bd36e2ecebb85c9506adf96080dd5`; on the VM in `/srv/floodlead/datasets`; checked by `scripts/check_datasets.py` → 0 violations):
+
+| File | Rows | sha256 |
+|---|---|---|
+| `nooksack_hourly_honest_v1.csv.gz` | 193,007 (136 columns) | `e0d165a99afd0103d209be37284efebe7878d85ba7426e07ce0c10a78e81549d` |
+| `nooksack_hourly_oracle_v1.csv.gz` | 193,007 (140 columns) | `5ffea66a3cfed2fa9ea075e4a6114db8fedd7d3eece10852c6a60329e7400054` |
+| `fraser_valley_daily_honest_v1.csv.gz` | 93,805 | `88a4e92ae51b83c279efb7ca306de22fecf64252b7796dd780661034d2a0f6bf` |
+| `fraser_valley_daily_oracle_v1.csv.gz` | 93,805 | `63356ef750fb951a84cf16b333364358176a15f51425b4ae30c833baa64ee5cb` |
+| `docs/data/catalogue-v1.json` (event catalogue) | 20 Nooksack events; BC typical-peak crossings | `0cbc83dbef5ac66a54bb17b3daef2a7184b8591cc1ce5314d5f803c09722bca9` |
+| `docs/data/relay-v1.json` (relay replay) | 13 events | `28671f8d05b363e7841f1cc63148bd49feff91c0ca8459809840daec23d76667` |
+
+Water years: held out are WY2022 (Oct 2021–Sep 2022) and WY2026 (Oct 2025–Sep 2026, including the live period to date). The development years are all others from WY2005 (from WY2008 for North Cedarville level; from WY2016 for the overflow).
 
 ## Amendments
 
