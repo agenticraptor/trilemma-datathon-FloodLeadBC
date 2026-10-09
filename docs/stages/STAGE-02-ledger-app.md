@@ -349,6 +349,25 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
   - On Oct 8, by contrast, the 00:03:50Z run failed on the `today/` 404.
   - The newest ECCC level at 00:21Z was 23:50Z. That is ECCC's normal publication lag, not a rollover gap; continuity past 00:00Z is checked after the 01:00Z publish.
   - The 30-day `daily/` listing is fetched only by the manual `backfill eccc-30d` command, not by the schedule, so it had no live rollover to observe. Its fallback is covered by `tests/test_eccc_rollover.py`.
+- `17:25` — **AC-2, from outside the VM:** `python3 -I scripts/verify_ledger.py --api https://<host>` → `OK entries 4287, head aebed4bf…91de, by_type {genesis 1, model_card 3, forecast 4269, issuance 5, official_forecast 9}, anchors_checked 4` (2.2 s).
+  - Tamper tests: `pytest tests/test_verify_script.py tests/test_ledger.py` → **12 passed**.
+  - **Live tamper demo** on a clone of the published `ledger` branch (4 hourly files, 3,431 entries, 4 anchors). The clean copy verifies (`OK entries 3431, anchors_checked 4`). The tampered copies were made with throwaway scripts that are not committed, then checked with `verify_ledger.py --source files`:
+
+    | Tamper | Verifier result |
+    |---|---|
+    | q0.5 at h1 of seq 865 changed by +0.1 m, hash left alone | `FAIL seq 865: entry_hash != sha256(...)` |
+    | seq 870 deleted | `FAIL seq 871: expected seq 870` |
+    | seq 866 and 867 exchange positions, seq fields renumbered | `FAIL seq 866: prev_hash does not link` |
+    | seq 865 changed and the rest of that hour's file re-hashed | `FAIL seq 1719: prev_hash does not link` (the next file) |
+    | seq 865 changed and every later hash recomputed up to the head | `FAIL seq 1718: anchor 21:30:00Z says 6a8f0bef…, chain has 17c3c960…` |
+
+    - The last case **passes with `--no-heads`**: a self-consistent rewrite can only be caught by the external anchors. That is why the spec calls the ledger tamper-evident through its anchors.
+    - Swapping two lines in a file while keeping their `seq` fields is not a change to the chain: the verifier orders by `seq`, and the result was OK.
+- `17:30` — **AC-5:**
+  - All 142 NOAA points held in `official_forecasts` (4 issuances: NKSW1 40 + 40, NRKW1 32 + 30) are in the ledger with the same `lid`, `issued_at`, `valid_at`, stage and flow. 0 are missing and 0 are duplicated.
+  - The latest NRKW1 issuance (`issuedTime` 2026-10-08T15:12Z) compared with `api.water.noaa.gov/nwps/v1/gauges/NRKW1/stageflow/forecast` at 00:26Z: **all 30 points we hold match exactly** (stage ft and flow kcfs).
+  - NOAA had appended 10 more points (Oct 16 06Z – Oct 18 12Z) after our 00:05Z fetch. The 00:35Z fetch and the 01:15Z run should add them, and the comparison will be repeated then.
+- `17:31` — **AC-7 interim:** `scripts/audit_leakage.sql` over 4,269 forecasts (base times 20Z–00Z) → `0 | 0 | 0 | 0` of 34,152 horizons, in 4 min 36 s. The final run, after base 01:00Z, will cover all six base times.
 
 ## Measurements
 
