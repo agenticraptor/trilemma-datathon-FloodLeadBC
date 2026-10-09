@@ -124,7 +124,7 @@ The goal is leakage-safe datasets that let Stage 4 train and walk-forward test a
    - **Access:** `https://mesonet.agron.iastate.edu/cgi-bin/afos/retrieve.py?pil=FLWSEW&sdate=…&edate=…&fmt=text` (also `FLSSEW`).
    - **Parse:** each product's issuance time, its P-VTEC (action, event number) and the H-VTEC for `NRKW1` (also `NKSW1`, `NREW1`, `NOEW1`): severity, and forecast flood begin, crest and end times.
    - **Build:** an "official warning timeline" for every event in the history.
-   - **Supervisor's check (corrected Oct 9 ~20:50Z; an earlier version of this item was wrong), from the archived warning texts:**
+   - **Supervisor's check (corrected Oct 9 ~20:35Z; an earlier version of this item was wrong), from the archived warning texts:**
      - **Nov 2021:** the first North Cedarville warning (NEW, "moderate") came at 11:50 AM PST Nov 14 (19:50Z) with a forecast crest of 148.9 ft. The river crossed minor stage at 21:30Z (≈ 1 h 40 min later) and crested at 150.76 ft. The Everson overflow warning came at 3:40 PM PST. The upgrade to "major" came at 2:07 AM PST Nov 15, after the overflow had begun.
      - **Dec 2025:** the first warning (NEW, "moderate") came at 10:17 PM PST Dec 9 (06:17Z Dec 10) with a forecast crest of 148.4 ft. The minor crossing was at 20:15Z Dec 10 (≈ 14 h later), and the crest about 150.5 ft. The upgrade to "major" came at 5:32 PM PST Dec 10, after the overflow had begun.
    - These official times are the comparator FloodLead has to beat or complement. Report them as found.

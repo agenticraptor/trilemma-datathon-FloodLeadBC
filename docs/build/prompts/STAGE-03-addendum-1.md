@@ -1,4 +1,4 @@
-# Stage 3 — addendum 1 (supervisor, Oct 9 ~20:55 UTC)
+# Stage 3 — addendum 1 (supervisor, Oct 9 ~20:35 UTC)
 
 Read [`docs/research/fraser-valley-flood-warning-status-quo.md`](../../research/fraser-valley-flood-warning-status-quo.md) first: a sourced review of what Sumas Prairie farmers actually have today. It changes what "value" means for FloodLead, and so what Stage 4 will be judged on.
 
