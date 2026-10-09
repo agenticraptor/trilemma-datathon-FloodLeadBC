@@ -106,11 +106,11 @@ curl https://34-130-109-216.sslip.io/v1/scores/summary                    # live
 
 ### What works now, and what remains before Build Session 3
 
-| Works now (Oct 8) | Next in this stage (part 2) | Before Build Session 3 (Oct 9) |
-|---|---|---|
-| Live ingestion of 442 BC gauges, 10 Nooksack/Sumas gauges and NOAA official forecasts; immutable raw archive; public API; overflow watch; replay; station picker; snapshot mode. **Hourly baseline forecasts** (`persistence-v1`, `trend3h-v1`) for ~426 gauges with chances of crossing each stage and any personal level, fixed in a [hash-chained public ledger](docs/ledger-spec.md) since 2026-10-08 20:00Z (verify: `GET /v1/ledger`) | Scoring against what the river did, next to persistence, trend and NOAA's official forecast; hourly anchors and the ledger entries published to the `ledger` branch; a standard-library verifier | BC station thresholds (Stage 3), so BC farmers get the same "chance of crossing" view; the first trained model is Stage 4 |
+| Works now (Oct 9) | Next (Stage 3 onward) |
+|---|---|
+| Live ingestion of 442 BC gauges, 10 Nooksack/Sumas gauges and NOAA official forecasts; immutable raw archive; public API; overflow watch; replay; station picker; snapshot mode. **Hourly baseline forecasts** (`persistence-v1`, `trend3h-v1`) for ~426 gauges, with chances of crossing each stage and any personal level, fixed in a [hash-chained public ledger](docs/ledger-spec.md) since 2026-10-08 20:00Z. NOAA's official forecasts go into the same ledger exactly as published. **Hourly scoring** against what the river did (`/v1/scores/summary`: CRPS, MAE, interval coverage, Brier, paired skill against `persistence-v1` and pure persistence, each with its sample size and scorer run ID). **Hourly anchors**, with the entries published to the [`ledger` branch](https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC/tree/ledger), and a standard-library verifier | BC station thresholds (Stage 3), so BC farmers get the same "chance of crossing" view. NOAA matched-pair results once they settle (the first at 09:40Z on Oct 9). Tidal and regulated stations flagged before any rise-event skill is reported. The first trained model is Stage 4 |
 
-FloodLead's forecasts are **baselines** (what the river did after similar recent states), labelled "live skill being measured". No skill number is claimed until the scorer produces one.
+FloodLead's forecasts are **baselines** (what the river did after similar recent states), labelled "live skill being measured". Scores are published every hour with their sample sizes, but they cover about one day, so no skill number is claimed yet ([`evaluation.md`](evaluation.md) sets the rules).
 
 **Screenshots** (headless Chromium, `scripts/screenshots.cjs`):
 - [overflow watch, desktop](docs/stages/img/stage-02/overflow-watch-desktop-full.png)

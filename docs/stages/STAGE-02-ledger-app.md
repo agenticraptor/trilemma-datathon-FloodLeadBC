@@ -464,6 +464,7 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
     ```
     Stage ft and flow kcfs are compared as JSON numbers, with no rounding.
 - `19:20` — **AC-7 audit in a safe form.** `scripts/audit_leakage.sql` now reads constant time bounds from the ledger (`\gset`), copies the level rows in that range into a temp table (57,214 rows), and audits against that, with a `statement_timeout`. The checks are unchanged. Result over **5,977 forecasts (7 base times, 20Z–02Z)** → `0 | 0 | 0 | 0` of **47,816** horizons, in **6.7 s** (was 4 min 36 s). Every forecast has `inputs_n > 0`, so 0 count mismatches also shows the temp table held the matching rows. It is re-run at PR time.
+- `19:30` — README "What works now" brought up to date for part 2 (contract-files table updated).
 
 ## Measurements
 
@@ -501,6 +502,10 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
 | `docs/stages/STAGE-01-live-archive.md` | Dated note on open issue 2 (snapshots declined) | Addendum item 2 |
 | `product.yaml` | `status: spec → prototype`, `maturity 1 → 2` (`Prototype`), output: the overflow-watch app | Status changed: a deployed app and hourly forecasts (values from the schema's `status` enum: idea, spec, prototype, mvp, showcase, active, archived) |
 | `README.md` (part 2) | "Check the forecasts yourself": both verifier modes, the reproduction script, the scores endpoint | Part G / AC-2 |
+| `README.md` (part 2) | "What works now" updated for Oct 9: scoring, anchors and publication, verifier, NOAA forecasts in the ledger. Next steps. Statement that scores cover about one day, so no skill is claimed | Facts changed |
+| `docs/ledger-spec.md` (part 2) | `created_at` defined exactly; `inserts_started_at` and `committed_at`; model-card supersession; `official_forecast` parts, with the NRKW1 7-day-cut explanation | Addendum 2 items 4 and 6; D-02.18 |
+| `data-contract.md` (part 2) | NWPS access method: `stageflow/forecast` for official forecasts (the combined endpoint cuts at +7 days) | D-02.18 |
+| `evaluation.md` (part 2) | `persistence-naive` is the headline baseline; `persistence-v1` described as level + typical change | D-02.17 |
 
 ## Open issues and handoff to next stage
 
