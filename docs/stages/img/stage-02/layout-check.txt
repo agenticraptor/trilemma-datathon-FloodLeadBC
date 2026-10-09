@@ -1,0 +1,10 @@
+watch-desktop #/: scrollWidth=1280 viewport=1280 OK · charts=2 legendWidths=[1034,1034] · navigator.language=en-US · ages=["49 min ago","19 min ago","64 min ago","109 min ago"]
+stations-desktop #/stations: scrollWidth=1280 viewport=1280 OK · charts=0 legendWidths=[] · navigator.language=en-US · ages=["64 min ago","49 min ago","34 min ago","19 min ago"]
+station-desktop #/station/eccc:08MH001: scrollWidth=1280 viewport=1280 OK · charts=1 legendWidths=[1034] · navigator.language=en-US · ages=["104 min ago","104 min ago","64 min ago","104 min ago"]
+station-usgs-desktop #/station/usgs:12210700: scrollWidth=1280 viewport=1280 OK · charts=1 legendWidths=[1034] · navigator.language=en-US · ages=["49 min ago","49 min ago","64 min ago","109 min ago"]
+watch-375px #/: scrollWidth=375 viewport=375 OK · charts=2 legendWidths=[317,317] · navigator.language=en-US · ages=["49 min ago","19 min ago","64 min ago","109 min ago"]
+stations-375px #/stations: scrollWidth=375 viewport=375 OK · charts=0 legendWidths=[] · navigator.language=en-US · ages=["64 min ago","49 min ago","34 min ago","19 min ago"]
+station-375px #/station/eccc:08MH001: scrollWidth=375 viewport=375 OK · charts=1 legendWidths=[317] · navigator.language=en-US · ages=["104 min ago","104 min ago","64 min ago","104 min ago"]
+station-usgs-375px #/station/usgs:12210700: scrollWidth=375 viewport=375 OK · charts=1 legendWidths=[317] · navigator.language=en-US · ages=["49 min ago","49 min ago","64 min ago","109 min ago"]
+posix-locale #/: scrollWidth=1280 viewport=1280 OK · charts=2 legendWidths=[1034,1034] · navigator.language=en-US@posix · ages=["50 min ago","20 min ago","65 min ago","110 min ago"]
+posix-locale: page errors=0

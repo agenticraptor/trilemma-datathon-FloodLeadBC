@@ -26,8 +26,10 @@ def connect(dsn: str | None = None, **kw: object) -> psycopg.Connection:
 
 
 def pool(dsn: str | None = None, min_size: int = 1, max_size: int = 6) -> ConnectionPool:
+    # `check`: test each connection before handing it out. Without it, after a PostgreSQL restart every idle pooled
+    # connection was dead and each next job failed once on it (2026-10-09 01:38Z: scorer, ECCC x2, USGS).
     p = ConnectionPool(dsn or get_settings().dsn(), min_size=min_size, max_size=max_size, open=False,
-                       kwargs=dict(NO_PREPARE))
+                       kwargs=dict(NO_PREPARE), check=ConnectionPool.check_connection)
     p.open(wait=True, timeout=60)
     return p
 

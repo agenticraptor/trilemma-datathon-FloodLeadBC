@@ -15,7 +15,7 @@ The ledger is one global sequence. Each entry has:
 |---|---|
 | `seq` | Position in the chain: 1 for genesis, then +1 per entry, no gaps |
 | `entry_type` | `genesis`, `model_card`, `issuance`, `forecast`, `official_forecast` or `gap` |
-| `created_at` | Creation time (for forecasts: the issue time and the input cutoff) |
+| `created_at` | For an hourly run's entries: the run's **data cut-off and the start of computation**. Inputs satisfy `ts ≤ created_at` and `first_seen_at ≤ created_at`. The entries are inserted about 70 s later and anchored at HH:30 (see §5) |
 | `canonical` | The exact UTF-8 JSON text that was hashed |
 | `prev_hash` | `entry_hash` of entry `seq − 1`; for genesis, 64 zeros |
 | `entry_hash` | `hex(sha256(prev_hash + "\n" + canonical))` |
@@ -50,7 +50,10 @@ Golden vector (also in `tests/test_ledger.py`; check with `printf '%s\n%s' "$pre
 ## 4. Entry types (`data` fields)
 
 - **`genesis`** (seq 1): `chain` = `floodlead-ledger-v1`, `hash_rule`, `canonical_rule`, `spec`, `repo`, `repo_commit` (the deployed git commit), `purpose`.
-- **`model_card`**: `model` (e.g. `persistence-v1`), `method` (plain-language description), `params` (every output-affecting parameter), `params_hash` (sha256 of the canonical `params`), `code_commit`. A new card is appended whenever a model's parameters change. Any output-changing change also means a new model version name.
+- **`model_card`**: `model` (e.g. `persistence-v1`), `method` (plain-language description), `params` (every output-affecting parameter), `params_hash` (sha256 of the canonical `params`), `code_commit`.
+  - A new card is appended whenever a model's parameters **or** its method description change. A newer card names the card it replaces in `supersedes_seq` and says what changed in `change`.
+  - Any output-changing change also means a new model version name.
+  - The first card for `persistence-v1` (seq 2) described the method too loosely, so a corrected card was appended on Oct 8 with unchanged parameters. The method is the level plus the station's historical changes, not "the level stays the same".
 - **`forecast`** (one per station × model × base time):
   - **Issue context:** `station_id`, `model`, `base_time`; `data_as_of` (time of the newest level observation used); `input_age_min` = `created_at − data_as_of`; `stale_inputs` (true when the input age exceeds the source's green lag: 150 min ECCC, 120 min USGS); `level_at_data_as_of_m`; `units` = `m`; `trend_slope_m_per_h` (trend model only).
   - **Reproducibility:** `input_hash` and `inputs_n` (sha256 of the canonical list `[[ts, value], …]` of the observations in the 3 h ending at `data_as_of`); `error_library` = `{hash, paths, definition}`.
@@ -60,12 +63,18 @@ Golden vector (also in `tests/test_ledger.py`; check with `printf '%s\n%s' "$pre
     - `qmax` gives the same quantiles of the **maximum level over (data_as_of, valid_at]**;
     - `p_exceed[key]` = P(that maximum ≥ the threshold), computed from the sample paths.
 - **`issuance`** (one per hourly run, after its forecasts): `base_time`, `models`, `horizons_h`, `stations_with_recent_level`, `forecasts` (count per model), `forecast_seq` ([first, last]), `skipped` (counts per reason), `runtime_s`, `peak_rss_mb`, `code_commit`.
+  - From base time 2026-10-08 22:00Z onward it also carries `inserts_started_at` and `committed_at`: database clock readings taken when the inserts began and just before the issuance insert, which is the last insert of the run's single transaction.
+  - So the delay between `created_at` and the commit is measured, not assumed.
 - **`gap`**: `base_time`, `detected_at`, `reason`. Written for a base time with no issuance: either the run started more than 30 min late, or no run happened (written by the next run).
 - **`official_forecast`** (Stage 2 part 2): a NOAA NWS issuance exactly as received (stage in ft, flow in kcfs, valid times, `generatedTime`, NOAA's `issuedTime`), with our `fetched_at` and the sha256 of the raw payload.
+  - `part = "issuance"` is the first fetch of an issuance. `part = "added points"` carries points of the same issuance first seen at a later fetch, with that fetch's `fetched_at`.
+  - Before 2026-10-09 ~01:30Z, NRKW1's "added points" came from our endpoint, not from NOAA: the combined `gauges/{lid}/stageflow` cut that gauge's forecast at request time + 7 days. Forecast rows now come from `gauges/{lid}/stageflow/forecast`, which returns the whole issuance.
 
 ## 5. Issuance rules
 
-- `base_time` = the top of each UTC hour. The run starts at HH:15. A run that starts more than 30 min after its base time issues nothing for it and records a `gap`. **Forecasts are never backdated and gaps are never filled.**
+- `base_time` = the top of each UTC hour. The run starts at HH:15. That start is `created_at`: the data cut-off and the start of computation.
+- Computation takes about 70 s; the entries are then inserted in one transaction, whose commit time is recorded in the issuance's `committed_at`.
+- The hourly anchor at HH:30 then publishes them. A run that starts more than 30 min after its base time issues nothing for it and records a `gap`. **Forecasts are never backdated and gaps are never filled.**
 - Inputs: only observations with `ts ≤ created_at` **and** `first_seen_at ≤ created_at` (the value as known then).
 - A horizon is dropped when `valid_at − created_at < 30 min`.
 - Each hourly run is appended in one database transaction, under an advisory lock, so concurrent writers cannot fork the chain or leave gaps.

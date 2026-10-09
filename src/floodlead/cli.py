@@ -15,7 +15,7 @@ def _pool(max_size: int = 6):  # type: ignore[no-untyped-def]
 
 
 def _jobs(pool):  # type: ignore[no-untyped-def]
-    from floodlead import issuer
+    from floodlead import anchor, issuer, scorer
     from floodlead.scheduler import Job
     from floodlead.sources import eccc, nwps, usgs
 
@@ -29,6 +29,10 @@ def _jobs(pool):  # type: ignore[no-untyped-def]
         # Station metadata daily (and at start).
         # Hourly forecast issuance into the ledger at HH:15 (after the HH:01 Datamart rewrite has landed).
         Job("ledger-issue", 3600, 900, lambda: issuer.run(pool)),
+        # Hourly anchor at HH:30 (after the HH:15 issuance has been written): head + new entries to the `ledger` branch.
+        Job("ledger-anchor", 3600, 1800, lambda: anchor.run(pool)),
+        # Hourly scoring at HH:40: settled horizons (valid_at >= 3 h old) and rescoring after truth revisions.
+        Job("scorer", 3600, 2400, lambda: scorer.run(pool)),
         Job("eccc-stations", 86400, 9 * 3600 + 600, lambda: eccc.refresh_stations(pool)),
         Job("usgs-stations", 86400, 9 * 3600 + 900, lambda: usgs.refresh_stations(pool)),
     ]
@@ -54,10 +58,12 @@ def main(argv: list[str] | None = None) -> int:
     bu.add_argument("--api", choices=["auto", "ogc", "nwis"], default="auto",
                     help="auto: OGC API v1 when USGS_API_KEY is set, else legacy NWIS IV (no key needed)")
     bsub.add_parser("nwps", help="NWPS gauge metadata, flood categories and current forecasts")
+    sub.add_parser("score", help="score settled forecast horizons now and refresh the summary")
     iss = sub.add_parser("issue", help="run the hourly issuance now (live only; no backdating)")
     iss.add_argument("--dry-run", action="store_true", help="compute forecasts but write nothing")
     lg = sub.add_parser("ledger", help="ledger tools")
     lgs = lg.add_subparsers(dest="ledger_cmd", required=True)
+    lgs.add_parser("anchor", help="publish the head and new entries to the `ledger` branch now")
     lv = lgs.add_parser("verify", help="verify the hash chain directly from the database")
     lv.add_argument("--from-seq", type=int, default=1)
     ex = sub.add_parser("export-demo", help="write the app's snapshot JSON (web/data/snapshot/) from the live DB")
@@ -102,6 +108,13 @@ def main(argv: list[str] | None = None) -> int:
         log.get(__name__).info("marked abandoned runs", **log.kv(count=n))
         run_forever(_jobs(pool))
         return 0
+    if args.cmd == "score":
+        import json
+
+        from floodlead import scorer
+
+        print(json.dumps(scorer.run(pool), indent=1, default=str))
+        return 0
     if args.cmd == "issue":
         import json
 
@@ -109,6 +122,14 @@ def main(argv: list[str] | None = None) -> int:
 
         print(json.dumps(issuer.run(pool, dry_run=args.dry_run), indent=1, default=str))
         return 0
+    if args.cmd == "ledger" and args.ledger_cmd == "anchor":
+        import json
+
+        from floodlead import anchor
+
+        res = anchor.run(pool)
+        print(json.dumps(res, indent=1, default=str))
+        return 0 if res.get("status") in ("ok", "up-to-date") else 1
     if args.cmd == "ledger" and args.ledger_cmd == "verify":
         from dataclasses import asdict
 

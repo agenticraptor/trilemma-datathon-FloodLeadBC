@@ -105,12 +105,25 @@
     }
   }
 
+  /** In snapshot mode, the time of the (earliest) snapshot used; null when showing live data. */
+  function snapshotRef() {
+    if (!state.snapshotTimes.length) return null;
+    const times = state.snapshotTimes.map(toDate).filter(Boolean).sort((a, b) => a - b);
+    return times.length ? times[0] : null;
+  }
+  /** The snapshot time of a response body that came from a snapshot file (live API bodies have none). */
+  function snapOf(body) { return body && typeof body.snapshot_at === 'string' ? body.snapshot_at : null; }
+  /** The chart's "now" line: at the snapshot time when the charted data came from a snapshot. */
+  function nowLine(ref) {
+    const r = toDate(ref);
+    return { t: (r ? r.getTime() : Date.now()) / 1000, color: COLORS.now, label: r ? 'snapshot' : 'now', dash: [2, 3], width: 1 };
+  }
+
   function updateBanner() {
     const el = document.getElementById('snapshot-banner');
     if (!el) return;
     if (state.snapshotTimes.length) {
-      const times = state.snapshotTimes.map(toDate).filter(Boolean).sort((a, b) => a - b);
-      const t = times[0];
+      const t = snapshotRef();
       el.textContent = t
         ? `Snapshot from ${fmtPacific(t)} (${fmtUtc(t)}) — live API not reachable`
         : 'Snapshot data — live API not reachable';
@@ -166,6 +179,26 @@
     el.body = body;
     return el;
   }
+  /** A table in a horizontal scroll box. When it is wider than the box, a right-edge fade and a
+   *  "scroll →" hint appear (toggled by a ResizeObserver and the scroll position). */
+  const scrollObserver = typeof ResizeObserver === 'function'
+    ? new ResizeObserver((entries) => { for (const e of entries) updateScrollCue(e.target.closest('.table-scroll')); })
+    : null;
+  function updateScrollCue(box) {
+    if (!box) return;
+    const wrap = box.querySelector('.table-wrap');
+    if (!wrap) return;
+    const over = wrap.scrollWidth > wrap.clientWidth + 1;
+    box.classList.toggle('has-overflow', over);
+    box.classList.toggle('at-end', !over || wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 2);
+  }
+  function tableBox(table) {
+    const wrap = h('div', { class: 'table-wrap' }, table);
+    const box = h('div', { class: 'table-scroll' }, h('p', { class: 'scroll-hint', 'aria-hidden': 'true' }, 'scroll →'), wrap);
+    wrap.addEventListener('scroll', () => updateScrollCue(box), { passive: true });
+    if (scrollObserver) { scrollObserver.observe(wrap); scrollObserver.observe(table); }
+    return box;
+  }
   function extLink(href, text) { return h('a', { href, rel: 'noopener' }, text); }
   function isStale(seq) { return seq !== state.renderSeq; }
 
@@ -196,6 +229,9 @@
   const dtfPacificShort = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   const dtfUtc = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   const dtfDate = new Intl.DateTimeFormat('en-US', { timeZone: TZ, year: 'numeric', month: 'short', day: 'numeric' });
+  const dtfAxisDay = new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'short', day: 'numeric' });
+  const dtfAxisHm = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  const dtfLegend = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   function fmtPacific(d) { d = toDate(d); return d ? dtfPacific.format(d) : '—'; }
   function fmtPacificYear(d) { d = toDate(d); return d ? dtfPacificYear.format(d) : '—'; }
   function fmtPacificShort(d) { d = toDate(d); return d ? dtfPacificShort.format(d) : '—'; }
@@ -210,28 +246,40 @@
     if (hh >= 72) return `${Math.round(hh / 24)} days`;
     return `${hh} h ${mm} min`;
   }
-  function ageText(d) {
+  /** Age of a data time. `snapRef` (the snapshot_at of the body the time came from) makes it relative
+   *  to the snapshot time, not the viewer's clock. */
+  function ageText(d, snapRef) {
     d = toDate(d);
     if (!d) return '';
+    const ref = toDate(snapRef);
+    if (ref) {
+      // Snapshot mode: ages relative to the snapshot time, not the viewer's clock.
+      const sm = (ref.getTime() - d.getTime()) / 60000;
+      if (sm < -5) return `${fmtDuration(-sm)} after the snapshot`;
+      if (sm < 1) return 'at snapshot time';
+      if (sm < 180) return `${Math.round(sm)} min before the snapshot`;
+      return `${fmtDuration(sm)} before the snapshot`;
+    }
     const min = (Date.now() - d.getTime()) / 60000;
     if (min < -1) return `${fmtDuration(-min)} ahead`;
     if (min < 1) return 'just now';
     if (min < 180) return `${Math.round(min)} min ago`;
     return `${fmtDuration(min)} ago`;
   }
-  function ageSpan(iso) {
+  function ageSpan(iso, snapRef) {
     const d = toDate(iso);
     if (!d) return null;
-    return h('span', { class: 'age', dataset: { ts: d.toISOString() } }, ageText(d));
+    const ref = toDate(snapRef);
+    return h('span', { class: 'age', dataset: ref ? { ts: d.toISOString(), snap: ref.toISOString() } : { ts: d.toISOString() } }, ageText(d, ref));
   }
   function updateAges() {
-    for (const el of document.querySelectorAll('.age[data-ts]')) el.textContent = ageText(el.dataset.ts);
+    for (const el of document.querySelectorAll('.age[data-ts]')) el.textContent = ageText(el.dataset.ts, el.dataset.snap);
   }
   /** "Thu, Oct 8, 12:15 PDT · Oct 8, 19:15 UTC · 33 min ago" */
-  function timeLine(iso, withUtc) {
+  function timeLine(iso, withUtc, snapRef) {
     const d = toDate(iso);
     if (!d) return h('span', { class: 'muted' }, 'time unknown');
-    return h('span', null, fmtPacific(d), withUtc === false ? null : ` · ${fmtUtc(d)}`, ' · ', ageSpan(d));
+    return h('span', null, fmtPacific(d), withUtc === false ? null : ` · ${fmtUtc(d)}`, ' · ', ageSpan(d, snapRef));
   }
   function fmtPct(p) {
     if (!isNum(p)) return '—';
@@ -266,10 +314,13 @@
   }
   function modelName(id) {
     if (!id) return 'model';
-    if (id.startsWith('persistence')) return `Persistence (${id})`;
+    if (id === 'persistence-v1') return 'Persistence + typical drift (persistence-v1)';
+    if (id === 'trend3h-v1') return 'Trend over 3 h, held after 6 h (trend3h-v1)';
+    if (id.startsWith('persistence')) return `Persistence + typical drift (${id})`;
     if (id.startsWith('trend')) return `Trend (${id})`;
     return id;
   }
+  const MODEL_EXPLAIN = "persistence-v1: the current level plus the station's typical past change over the same lead time (from its own history). trend3h-v1: the last 3 h trend, applied for at most 6 h.";
   function qmap(obj) {
     const out = new Map();
     if (!obj) return out;
@@ -335,6 +386,22 @@
     const w = Math.max(260, Math.floor(container.clientWidth || (container.parentElement && container.parentElement.clientWidth) || 600));
     return { width: w, height: w < 520 ? 250 : 330 };
   }
+  /** x-axis tick labels (Pacific time, explicit 'en-US' formatter; never navigator.language). */
+  function timeAxisValues(u, splits, axisIdx, foundSpace, foundIncr) {
+    let prevDay = null;
+    return splits.map((ts) => {
+      if (!isNum(ts)) return '';
+      const d = new Date(ts * 1000);
+      const day = dtfAxisDay.format(d);
+      if (isNum(foundIncr) && foundIncr >= 86400) return day;
+      const label = day !== prevDay ? `${dtfAxisHm.format(d)}\n${day}` : dtfAxisHm.format(d);
+      prevDay = day;
+      return label;
+    });
+  }
+  const X_SERIES = { label: 'Time (Pacific)', value: (u, ts) => (isNum(ts) ? dtfLegend.format(new Date(ts * 1000)) : '—') };
+  const X_AXIS = { stroke: COLORS.axis, grid: { stroke: COLORS.grid, width: 1 }, ticks: { stroke: COLORS.grid, width: 1 }, values: timeAxisValues };
+
   let resizeTimer = null;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
@@ -433,7 +500,7 @@
     const fmtV = (v) => (isNum(v) ? `${v.toFixed(dec)} ${unit}` : '—');
     const lists = [spec.obs];
     const series = [
-      {},
+      Object.assign({}, X_SERIES),
       { label: 'Observed (provisional)', stroke: COLORS.obs, width: 2, points: { show: false }, value: (u, v) => fmtV(v) },
     ];
     if (spec.noaa && spec.noaa.points && spec.noaa.points.length) {
@@ -471,7 +538,7 @@
     const size = chartSize(container);
     const narrow = size.width < 480;
     const axes = [
-      { stroke: COLORS.axis, grid: { stroke: COLORS.grid, width: 1 }, ticks: { stroke: COLORS.grid, width: 1 } },
+      Object.assign({}, X_AXIS),
       { scale: 'y', label: narrow ? undefined : (unit === 'ft' ? 'Stage (ft)' : 'Level (m)'), stroke: COLORS.axis, size: narrow ? 46 : 58, grid: { stroke: COLORS.grid, width: 1 }, ticks: { stroke: COLORS.grid, width: 1 }, values: (u, splits) => splits.map((v) => (unit === 'ft' ? v.toFixed(1) : v.toFixed(2))) },
     ];
     if (spec.mAxis && !narrow) {
@@ -592,7 +659,7 @@
     const thresholds = Array.isArray(model.thresholds) ? model.thresholds : [];
     const hz = TABLE_HORIZONS.map((hh) => (model.horizons || []).find((z) => z.h === hh) || null);
     if (!thresholds.length || hz.every((z) => !z)) return placeholder('This forecast has no thresholds or horizons to show.');
-    const head = h('tr', null, h('th', null, 'Chance the level reaches…'),
+    const head = h('tr', null, h('th', null, 'Chance of reaching…'),
       TABLE_HORIZONS.map((hh, i) => h('th', { class: 'p' }, `within ${hh} h`, hz[i] ? h('small', { class: 'muted' }, h('br'), `by ${fmtPacificShort(hz[i].valid_at)}`) : null)));
     const rows = thresholds.map((t) => {
       let lvl = '';
@@ -607,10 +674,10 @@
           return h('td', { class: pClass(p) }, fmtPct(p));
         }));
     });
-    return h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, head), h('tbody', null, rows)));
+    return tableBox(h('table', { class: 'chances' }, h('thead', null, head), h('tbody', null, rows)));
   }
 
-  function forecastMeta(model) {
+  function forecastMeta(model, snapRef) {
     const base = toDate(model.base_time);
     const asOf = toDate(model.data_as_of);
     const created = toDate(model.created_at);
@@ -618,8 +685,8 @@
     const inputAgeMin = isNum(model.input_age_min) ? model.input_age_min : (created && asOf ? (created - asOf) / 60000 : null);
     return h('div', null,
       h('dl', { class: 'kv' },
-        h('dt', null, 'Base time'), h('dd', null, base ? timeLine(model.base_time) : '—'),
-        h('dt', null, 'Data as of'), h('dd', null, asOf ? timeLine(model.data_as_of) : '—'),
+        h('dt', null, 'Base time'), h('dd', null, base ? timeLine(model.base_time, true, snapRef) : '—'),
+        h('dt', null, 'Data as of'), h('dd', null, asOf ? timeLine(model.data_as_of, true, snapRef) : '—'),
         h('dt', null, 'Input age when issued'), h('dd', null, isNum(inputAgeMin) ? fmtDuration(inputAgeMin) : '—'),
         h('dt', null, 'Ledger entry'), h('dd', null, isNum(model.seq) ? `seq ${model.seq} · ` : '', hashView(model.entry_hash))),
       model.stale_inputs ? h('p', { class: 'notice' }, 'Stale inputs: the newest observation was too old when this forecast was made. Treat it with extra caution.') : null);
@@ -639,9 +706,10 @@
         h('p', null, h('span', { class: 'tag tag-fl' }, fc.label || FL_LABEL), ' ',
           h('a', { href: '/v1/scores/summary' }, 'Scores'), h('span', { class: 'muted' }, ' (live skill being measured)')),
         modelTabs(models, idx, (i) => { idx = i; savePref(MODEL_KEY, models[i].model); render(); if (onModelChange) onModelChange(models[i]); }),
+        h('p', { class: 'model-explain' }, MODEL_EXPLAIN),
         chancesTable(m, us),
         h('p', { class: 'muted' }, 'Chance that the highest level between the data time and each horizon reaches the threshold, from the model’s simulated paths. These baselines are simple reference forecasts; their skill is being measured live.'),
-        forecastMeta(m));
+        forecastMeta(m, snapOf(fc)));
     };
     render();
     wrap.selectedModel = () => models[idx];
@@ -668,7 +736,7 @@
     const replayCard = card('Replay: how many hours did the gauge give?', 'The same gauges in past floods: when North Cedarville crossed minor flood stage, and when water first appeared at the Overflow gauge on SR 544.');
     const ledgerCard = card('Forecast ledger', 'Every FloodLead forecast is written to an append-only, hash-chained ledger when it is issued, before the outcome is known.');
 
-    fill(main, hero, nowCard, chartCard, h('div', { class: 'grid two' }, chancesCard, personalCard), replayCard, ledgerCard);
+    fill(main, hero, nowCard, chartCard, chancesCard, personalCard, replayCard, ledgerCard);
 
     const pStation = api(`/v1/stations/${CEDARVILLE}`);
     const pOverflow = api(`/v1/stations/${OVERFLOW}`);
@@ -718,7 +786,7 @@
           fl: flSeries(w.model, 'ft'),
           hlines: () => cats.map((c) => ({ value: c.ft, color: c.color, label: `${c.name} ${fmt(c.ft, 1)} ft`, dash: [6, 4] }))
             .concat(isNum(w.personalFt) ? [{ value: w.personalFt, color: COLORS.personal, label: `Your level ${fmt(w.personalFt, 1)} ft`, dash: [2, 3], width: 2 }] : []),
-          vlines: () => [{ t: Date.now() / 1000, color: COLORS.now, label: 'now', dash: [2, 3], width: 1 }],
+          vlines: () => [nowLine(snapOf(obs))],
         });
       };
       draw();
@@ -796,7 +864,7 @@
       fill(wrap,
         h('h3', null, titleCase(st.name), ' ', h('span', { class: 'muted' }, `(${st.station_id})`)),
         h('div', { class: 'now-row' }, h('span', { class: 'big' }, `${fmt(ft, 2)} ft`), h('span', { class: 'big-m' }, `${fmt(lv.value, 2)} m`)),
-        h('p', { class: 'meta' }, 'Observed ', timeLine(lv.ts), ' ', provisionalTag(), ' (USGS)'),
+        h('p', { class: 'meta' }, 'Observed ', timeLine(lv.ts, true, snapOf(st)), ' ', provisionalTag(), ' (USGS)'),
         cats.length ? stageList(cats, ft, w.personalFt) : h('p', { class: 'muted' }, 'No official flood stages published for this gauge.'),
         cats.length ? h('p', { class: 'muted' }, `Flood stages: NOAA NWS official flood categories for ${(st.official_thresholds && st.official_thresholds.lid) || NOAA_LID}.`) : null);
     };
@@ -817,7 +885,7 @@
       const ft = mToFt(lv.value);
       appendKids(box,
         h('div', { class: 'now-row' }, h('span', { class: 'big' }, `${fmt(ft, 2)} ft`), h('span', { class: 'big-m' }, `${fmt(lv.value, 2)} m`)),
-        h('p', { class: 'meta' }, 'Observed ', timeLine(lv.ts), ' ', provisionalTag(), ' (USGS)'),
+        h('p', { class: 'meta' }, 'Observed ', timeLine(lv.ts, true, snapOf(st)), ' ', provisionalTag(), ' (USGS)'),
         cats.length ? stageList(cats, ft, null) : null);
     }
     if (lv && isNum(lv.value)) {
@@ -858,13 +926,13 @@
     const clearBtn = h('button', { type: 'button', onclick: () => setLevel(null, true) }, 'Clear');
 
     let suggest = null;
-    const s = replay && replay.summary;
-    if (s && isNum(s.suggested_personal_level_ft)) {
+    const sg = suggestedLevel(replay, st);
+    if (sg) {
       suggest = h('div', { class: 'suggest' },
-        h('p', null, h('strong', null, `Suggested: ${fmt(s.suggested_personal_level_ft, 1)} ft`), ' ',
-          h('button', { type: 'button', class: 'small', onclick: () => setLevel(s.suggested_personal_level_ft, true) }, 'Use this level')),
-        s.suggested_text ? h('p', null, s.suggested_text) : null,
-        h('span', { class: 'tag tag-emp' }, 'empirical observation, not an official threshold'));
+        h('p', null, h('strong', null, `Suggested: ${fmt(sg.ft, 1)} ft`), ' ', h('span', { class: 'tag tag-official' }, sg.label), ' ',
+          h('button', { type: 'button', class: 'small', onclick: () => setLevel(sg.ft, true) }, 'Use this level')),
+        sg.text ? h('p', null, sg.text) : null,
+        h('p', { class: 'muted' }, 'Not every flood that reached this stage spilled over, and no single level separates the floods that did from those that did not (see the replay below).'));
     }
 
     function renderResult() {
@@ -873,7 +941,7 @@
       const parts = [];
       if (isNum(currentFt)) {
         const diff = L - currentFt;
-        parts.push(h('p', { class: 'result-line' }, 'North Cedarville is ', h('strong', null, diff > 0 ? `${fmt(diff, 2)} ft below` : `${fmt(-diff, 2)} ft above`), ` your level of ${fmt(L, 2)} ft (observed `, timeLine(lv.ts, false), ').'));
+        parts.push(h('p', { class: 'result-line' }, 'North Cedarville is ', h('strong', null, diff > 0 ? `${fmt(diff, 2)} ft below` : `${fmt(-diff, 2)} ft above`), ` your level of ${fmt(L, 2)} ft (observed `, timeLine(lv.ts, false, snapOf(st)), ').'));
       }
       if (!models.length) {
         parts.push(placeholder('No FloodLead forecast issued yet — hourly issuance starts soon. Your level is saved on this device.'));
@@ -896,9 +964,10 @@
           h('td', null, `within ${hh} h`, ref ? h('small', { class: 'muted' }, ` by ${fmtPacificShort(ref.z.valid_at)}`) : null),
           perModel.map((pm) => { const x = pm.hz.find((y) => y.z.h === hh); return h('td', { class: x ? pClass(x.r.p) : 'p' }, x ? x.r.text : '—'); }));
       });
-      parts.push(h('div', { class: 'table-wrap' }, h('table', null,
-        h('thead', null, h('tr', null, h('th', null, 'Chance of reaching your level'), perModel.map((pm) => h('th', { class: 'p' }, modelName(pm.m.model))))),
+      parts.push(tableBox(h('table', { class: 'personal-chances' },
+        h('thead', null, h('tr', null, h('th', null, 'Chance of reaching your level'), perModel.map((pm) => h('th', { class: 'p wrap' }, modelName(pm.m.model))))),
         h('tbody', null, rows))));
+      parts.push(h('p', { class: 'model-explain' }, MODEL_EXPLAIN));
       parts.push(h('p', null, h('span', { class: 'tag tag-fl' }, 'interpolated from FloodLead baseline quantiles'), ' ',
         h('span', { class: 'muted' }, `forecast data as of ${fmtPacific(models[0].data_as_of)}`)));
       fill(result, parts);
@@ -914,6 +983,87 @@
     renderResult();
   }
 
+  /** The suggested personal level. New API shape: the official NWS minor flood stage with its label
+   *  and rule text from the replay summary. Older shape (an empirical onset level): replaced here by the
+   *  official minor flood stage, with the same rule built from the summary counts. */
+  function suggestedLevel(replay, st) {
+    const s = replay && replay.summary;
+    if (!s) return null;
+    const label = typeof s.suggested_label === 'string' ? s.suggested_label : '';
+    const newShape = typeof s.separation_text === 'string' || Array.isArray(s.peaks_with_overflow_ft);
+    if (newShape && isNum(s.suggested_personal_level_ft) && !/empirical/i.test(label)) {
+      return { ft: s.suggested_personal_level_ft, label: label || 'NWS minor flood stage (official)', text: typeof s.suggested_text === 'string' ? s.suggested_text : '' };
+    }
+    const minor = stationCategories(st).find((c) => c.key === 'minor');
+    const ced = replay.gauges && replay.gauges.cedarville;
+    const ft = minor ? minor.ft : (ced && ced.stages_ft && isNum(ced.stages_ft.minor) ? ced.stages_ft.minor : null);
+    if (!isNum(ft)) return null;
+    const hm = s.hours_after_minor;
+    let text = '';
+    if (isNum(s.events_with_overflow) && isNum(s.events_with_gauge)) {
+      text = `${s.events_with_overflow} of ${s.events_with_gauge} minor-stage events since Nov 2015 were followed by water on the overflow path`
+        + (hm && isNum(hm.median) && isNum(hm.min) && isNum(hm.max) ? `, a median ${fmt(hm.median, 1)} h later (${fmt(hm.min, 1)}–${fmt(hm.max, 1)} h).` : '.');
+    }
+    return { ft: Math.round(ft * 10) / 10, label: 'NWS minor flood stage (official)', text };
+  }
+
+  /** Peaks at North Cedarville in events with and without an overflow (summary fields if the API has
+   *  them, otherwise derived from the events in the overflow-gauge era). */
+  function overflowPeaks(replay, events) {
+    const s = replay.summary || {};
+    let withP = Array.isArray(s.peaks_with_overflow_ft) ? s.peaks_with_overflow_ft.filter(isNum) : null;
+    let withoutP = Array.isArray(s.peaks_without_overflow_ft) ? s.peaks_without_overflow_ft.filter(isNum) : null;
+    if (!withP || !withoutP) {
+      const era = events.filter((e) => e.overflow_gauge_operating !== false && isNum(e.peak_ft));
+      withP = era.filter((e) => e.overflow).map((e) => e.peak_ft);
+      withoutP = era.filter((e) => !e.overflow).map((e) => e.peak_ft);
+    }
+    withP = withP.slice().sort((a, b) => a - b);
+    withoutP = withoutP.slice().sort((a, b) => a - b);
+    const range = (arr, r) => (r && isNum(r.min) && isNum(r.max) ? r : (arr.length ? { min: arr[0], max: arr[arr.length - 1] } : null));
+    const rW = range(withP, s.peak_range_with_overflow_ft);
+    const rN = range(withoutP, s.peak_range_without_overflow_ft);
+    const overlap = !!(rW && rN && rW.min <= rN.max && rN.min <= rW.max);
+    let text = typeof s.separation_text === 'string' && s.separation_text ? s.separation_text : '';
+    if (!text && rW && rN) {
+      text = overlap
+        ? `Peaks overlap (overflow ${fmt(rW.min, 1)}–${fmt(rW.max, 1)} ft, no overflow ${fmt(rN.min, 1)}–${fmt(rN.max, 1)} ft): no single level separates them.`
+        : `Peaks do not overlap in this small sample (overflow ${fmt(rW.min, 1)}–${fmt(rW.max, 1)} ft, no overflow ${fmt(rN.min, 1)}–${fmt(rN.max, 1)} ft).`;
+    }
+    return { withP, withoutP, rW, rN, overlap, text };
+  }
+
+  function peaksBlock(pk, minorFt) {
+    if (!pk.withP.length && !pk.withoutP.length) return null;
+    const all = pk.withP.concat(pk.withoutP, isNum(minorFt) ? [minorFt] : []);
+    const lo = Math.floor((Math.min(...all) - 0.2) * 2) / 2;
+    const hi = Math.ceil((Math.max(...all) + 0.2) * 2) / 2;
+    const pos = (v) => `${(100 * (v - lo) / (hi - lo)).toFixed(2)}%`;
+    const row = (name, cls, vals) => {
+      const track = h('div', { class: 'peak-track' });
+      if (isNum(minorFt)) { const m = h('span', { class: 'peak-minor' }); m.style.left = pos(minorFt); track.appendChild(m); }
+      for (const v of vals) { const d = h('span', { class: `peak-dot ${cls}`, title: `${fmt(v, 2)} ft` }); d.style.left = pos(v); track.appendChild(d); }
+      return h('div', { class: 'peak-row' }, h('span', { class: 'peak-name' }, `${name} (${vals.length})`), track);
+    };
+    const ticks = h('div', { class: 'peak-axis' });
+    for (let v = Math.ceil(lo); v <= hi; v += 1) { const t = h('span', null, `${v}`); t.style.left = pos(v); ticks.appendChild(t); }
+    const list = (vals) => (vals.length ? vals.map((v) => fmt(v, 2)).join(', ') + ' ft' : 'none');
+    return h('div', { class: 'peaks' },
+      h('h3', null, 'Peak at North Cedarville: floods with and without an overflow'),
+      h('div', { class: 'peak-strip', 'aria-hidden': 'true' },
+        row('Overflow followed', 'with', pk.withP),
+        row('No overflow', 'without', pk.withoutP),
+        h('div', { class: 'peak-row' }, h('span', { class: 'peak-name' }, 'ft'), ticks)),
+      h('ul', { class: 'peak-lists' },
+        h('li', null, h('span', { class: 'swatch sw-ovf' }), ` Overflow followed (${pk.withP.length}): `, h('span', { class: 'num' }, list(pk.withP))),
+        h('li', null, h('span', { class: 'swatch sw-marker' }), ` No overflow (${pk.withoutP.length}): `, h('span', { class: 'num' }, list(pk.withoutP))),
+        isNum(minorFt) ? h('li', null, h('span', { class: 'swatch sw-minor dashed' }), ` NWS minor flood stage ${fmt(minorFt, 1)} ft`) : null),
+      pk.text ? h('p', null, pk.text) : null,
+      pk.overlap ? h('p', null, h('strong', null, 'No single North Cedarville level separates the floods that spilled over from those that did not.'),
+        ' Some floods peaked higher without an overflow than others that had one, so treat any level as a prompt to watch, not as a trigger.') : null,
+      h('p', { class: 'muted' }, 'Events since the Overflow gauge began recording (Nov 2015), each event’s highest stage at North Cedarville.'));
+  }
+
   function replayBlock(body, replay, seq) {
     if (!replay || !Array.isArray(replay.events)) {
       fill(body, placeholder('The flood replay is being prepared and will appear here soon.'));
@@ -924,7 +1074,7 @@
     const ovf = g.overflow || {};
     const cedId = ced.station_id || CEDARVILLE;
     const ovfId = ovf.station_id || OVERFLOW;
-    const events = replay.events.filter(Boolean).slice().sort((a, b) => String(a.event_id).localeCompare(String(b.event_id)));
+    const events = replay.events.filter(Boolean).slice().sort((a, b) => String(a.event_id).localeCompare(String(b.event_id), 'en-CA'));
     const s = replay.summary || {};
     const minorFt = ced.stages_ft && isNum(ced.stages_ft.minor) ? ced.stages_ft.minor : 146.5;
 
@@ -941,6 +1091,8 @@
       isNum(s.events_with_overflow) ? `; overflow was recorded in ${s.events_with_overflow}. ` : (isNum(s.events_with_gauge) ? '. ' : ''),
       s.hours_after_minor && isNum(s.hours_after_minor.median) ? `Median time from minor stage to overflow: ${fmtDuration(s.hours_after_minor.median * 60)} (range ${fmtDuration(s.hours_after_minor.min * 60)} – ${fmtDuration(s.hours_after_minor.max * 60)}). ` : '',
       s.onset_cedarville_ft && isNum(s.onset_cedarville_ft.median) ? `North Cedarville stood at ${fmt(s.onset_cedarville_ft.min, 1)}–${fmt(s.onset_cedarville_ft.max, 1)} ft (median ${fmt(s.onset_cedarville_ft.median, 1)} ft) when the overflow began.` : '');
+    const peaks = peaksBlock(overflowPeaks(replay, events), minorFt);
+    const onsetNote = typeof s.onset_note === 'string' && s.onset_note ? h('p', { class: 'muted' }, s.onset_note) : null;
 
     const quick = h('div', { class: 'tabs' });
     const quickBtns = [];
@@ -985,6 +1137,8 @@
 
     fill(body,
       summaryP,
+      onsetNote,
+      peaks,
       h('h3', null, 'Pick a flood'), quick,
       answer, chartEl, legendKey([
         { cls: 'sw-obs', text: 'North Cedarville stage (ft, left axis)' },
@@ -993,7 +1147,7 @@
         { cls: 'sw-marker dotted', text: 'Minor crossed / overflow began' },
       ]), chartNote,
       h('h3', null, `All ${events.length} events`),
-      h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, head), h('tbody', null, rows))),
+      tableBox(h('table', null, h('thead', null, head), h('tbody', null, rows))),
       caveats,
       replay.generated_at ? h('p', { class: 'muted' }, `Computed from USGS historical data (approved where available), ${fmtPacific(replay.generated_at)}. Not what was visible in real time.`) : null);
 
@@ -1058,12 +1212,12 @@
         ovf: { range: (u, mn, mx) => [0, Math.max(isNum(mx) ? mx : 1, 1) * 1.1] },
       },
       axes: [
-        { stroke: COLORS.axis, grid: { stroke: COLORS.grid, width: 1 }, ticks: { stroke: COLORS.grid, width: 1 } },
+        Object.assign({}, X_AXIS),
         { scale: 'y', label: narrow ? undefined : 'North Cedarville (ft)', stroke: COLORS.axis, size: narrow ? 46 : 58, grid: { stroke: COLORS.grid, width: 1 }, values: (u, sp) => sp.map((v) => v.toFixed(1)) },
         { scale: 'ovf', side: 1, label: narrow ? undefined : 'Overflow SR 544 (ft)', stroke: COLORS.ovf, size: narrow ? 36 : 50, grid: { show: false }, values: (u, sp) => sp.map((v) => v.toFixed(1)) },
       ],
       series: [
-        {},
+        Object.assign({}, X_SERIES),
         { label: 'North Cedarville', scale: 'y', stroke: COLORS.obs, width: 2, points: { show: false }, value: (u, v) => (isNum(v) ? `${v.toFixed(2)} ft` : '—') },
         { label: 'Overflow SR 544', scale: 'ovf', stroke: COLORS.ovf, width: 2, points: { show: false }, value: (u, v) => (isNum(v) ? `${v.toFixed(2)} ft` : '—') },
       ],
@@ -1087,7 +1241,7 @@
     if (a) {
       anchor = h('span', null, h('span', { class: `dot ${a.status || ''}` }), `${a.status || 'unknown'}`,
         isNum(a.seq) ? ` · seq ${a.seq}` : '',
-        a.anchored_at ? h('span', null, ' · anchored ', timeLine(a.anchored_at, false)) : '',
+        a.anchored_at ? h('span', null, ' · anchored ', timeLine(a.anchored_at, false, snapOf(head))) : '',
         a.commit_url ? h('span', null, ' · ', extLink(a.commit_url, 'commit on GitHub')) : '');
     } else {
       anchor = h('span', { class: 'muted' }, 'not anchored yet');
@@ -1096,7 +1250,7 @@
     return h('div', null,
       h('dl', { class: 'kv' },
         h('dt', null, 'Head'), h('dd', null, `seq ${isNum(head.seq) ? head.seq : '—'} · `, hashView(head.entry_hash)),
-        h('dt', null, 'Head written'), h('dd', null, head.created_at ? timeLine(head.created_at) : '—', head.entry_type ? ` · ${head.entry_type}` : ''),
+        h('dt', null, 'Head written'), h('dd', null, head.created_at ? timeLine(head.created_at, true, snapOf(head)) : '—', head.entry_type ? ` · ${head.entry_type}` : ''),
         h('dt', null, 'Public anchor'), h('dd', null, anchor)),
       h('h3', null, 'Forecasts on this page'),
       items.length ? h('ul', null, items) : h('p', { class: 'muted' }, 'No FloodLead forecast on screen yet.'),
@@ -1133,7 +1287,7 @@
       if (isStale(seq)) return;
       const stations = data && Array.isArray(data.stations) ? data.stations.filter(Boolean) : [];
       if (!stations.length) { fill(count, ''); fill(list, placeholder('The station list is not available right now.')); return; }
-      stations.sort((a, b) => (isUsStation(b) - isUsStation(a)) || String(a.name || '').localeCompare(String(b.name || '')));
+      stations.sort((a, b) => (isUsStation(b) - isUsStation(a)) || String(a.name || '').localeCompare(String(b.name || ''), 'en-CA'));
       const render = () => {
         const q = input.value.trim().toLowerCase();
         const hits = q ? stations.filter((s) => `${s.name || ''} ${s.station_id || ''} ${s.native_id || ''} ${s.region || ''}`.toLowerCase().includes(q)) : stations;
@@ -1143,7 +1297,7 @@
           return h('li', null, h('a', { href: `#/station/${encodeURIComponent(s.station_id).replace(/%3A/gi, ':')}` },
             h('span', null, h('span', { class: 'name' }, titleCase(s.name) || s.station_id), h('br'),
               h('span', { class: 'id' }, `${s.station_id} · ${s.region || ''}${s.has_official_thresholds ? ' · NWS flood stages' : ''}`)),
-            h('span', { class: 'lvl' }, levelText(s, lv), lv ? h('br') : null, lv ? h('small', { class: 'muted' }, ageSpan(lv.ts)) : null)));
+            h('span', { class: 'lvl' }, levelText(s, lv), lv ? h('br') : null, lv ? h('small', { class: 'muted' }, ageSpan(lv.ts, snapOf(data))) : null)));
         }));
       };
       let t = null;
@@ -1193,8 +1347,8 @@
         lv ? h('div', { class: 'now-row' },
           h('span', { class: 'big' }, us ? `${fmt(mToFt(lv.value), 2)} ft` : `${fmt(lv.value, 3)} m`),
           us ? h('span', { class: 'big-m' }, `${fmt(lv.value, 2)} m`) : null) : placeholder('No recent level reading.'),
-        lv ? h('p', { class: 'meta' }, 'Observed ', timeLine(lv.ts), ' ', provisionalTag()) : null,
-        flow ? h('p', { class: 'meta' }, `Flow ${fmt(flow.value, flow.value < 10 ? 2 : 1)} m³/s, observed `, timeLine(flow.ts, false)) : null,
+        lv ? h('p', { class: 'meta' }, 'Observed ', timeLine(lv.ts, true, snapOf(st)), ' ', provisionalTag()) : null,
+        flow ? h('p', { class: 'meta' }, `Flow ${fmt(flow.value, flow.value < 10 ? 2 : 1)} m³/s, observed `, timeLine(flow.ts, false, snapOf(st))) : null,
         cats.length && lv ? stageList(cats, mToFt(lv.value), null) : null,
         cats.length ? h('p', { class: 'muted' }, `Flood stages: NOAA NWS official flood categories (${st.official_thresholds.lid || ''}).`) : h('p', { class: 'muted' }, 'No official flood thresholds are published for this gauge in FloodLead yet.'));
     });
@@ -1231,7 +1385,7 @@
           noaa: iss ? { points: noaaPoints(iss, unit), label: `NOAA NWS official forecast (unmodified), issued ${fmtPacificShort(iss.issued_at)}` } : null,
           fl: flSeries(ctx.model, unit),
           hlines: () => cats.map((c) => ({ value: us ? c.ft : c.m, color: c.color, label: `${c.name} ${us ? `${fmt(c.ft, 1)} ft` : `${fmt(c.m, 2)} m`}` })),
-          vlines: () => [{ t: Date.now() / 1000, color: COLORS.now, label: 'now', dash: [2, 3], width: 1 }],
+          vlines: () => [nowLine(snapOf(obs))],
         });
       };
       draw();

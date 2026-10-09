@@ -67,10 +67,12 @@ Full records: [`data-contract.md`](data-contract.md).
 
 ¹ The overflow gauge's record begins during this event, so it is left out of the summary.
 
-**Summary (from [`/v1/replay/overflow`](https://34-130-109-216.sslip.io/v1/replay/overflow), computed 2026-10-08 19:51Z):**
-- In **7 of 13** minor-stage events since the overflow gauge began (Nov 2015), water reached the overflow path.
-- North Cedarville stood at **146.20–148.44 ft (median 147.56 ft)** when it began, **0.1–6.4 h after minor stage (median 4.9 h)**.
-- 6 events crossed minor stage without a recorded overflow, with peaks up to 147.30 ft. The ranges overlap, so no single level separates "overflow" from "no overflow". The app offers 146.2 ft (the lowest onset seen) as a suggested personal level, labelled as an empirical observation, not an official threshold.
+**Summary** (from [`/v1/replay/overflow`](https://34-130-109-216.sslip.io/v1/replay/overflow); updated after supervisor QA on 2026-10-08):
+
+- **The rule the data supports:** 7 of 13 minor-stage events since Nov 2015 were followed by water on the overflow path, a median **4.9 h later (0.1–6.4 h)**.
+- **No single level separates overflow from no overflow:** peaks were 146.6–150.8 ft in events with an overflow and 146.7–147.3 ft in events without one. The ranges overlap.
+- **The level at onset is not a trigger level:** it ranged 146.20–148.44 ft. In March 2026 the overflow first appeared on the falling limb, about 3 h after North Cedarville peaked at 146.6 ft.
+- **The app's suggested personal level** is therefore the **official NWS minor flood stage, 146.5 ft**, together with that rule.
 
 **Caveats:**
 - This is approved historical data, not what was visible in real time.
@@ -91,13 +93,24 @@ docker compose up -d                         # db, ingest, api, caddy (+ backfil
 uv run floodlead export-demo                 # refresh web/data/snapshot/ from the database
 ```
 
+### Check the forecasts yourself
+
+Every FloodLead forecast is fixed in a public, hash-chained ledger **before** the river reaches it, and published hourly to the [`ledger` branch](https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC/tree/ledger). Spec: [`docs/ledger-spec.md`](docs/ledger-spec.md).
+
+```bash
+python3 scripts/verify_ledger.py --api https://34-130-109-216.sslip.io   # verify the chain via the API (stdlib only)
+python3 scripts/verify_ledger.py --source github                         # verify from the published files alone
+uv run python scripts/reproduce_forecast.py --api https://34-130-109-216.sslip.io --n 3   # recompute forecasts
+curl https://34-130-109-216.sslip.io/v1/scores/summary                    # live scores, with the scorer run ID
+```
+
 ### What works now, and what remains before Build Session 3
 
-| Works now (Oct 8) | Next in this stage (part 2) | Before Build Session 3 (Oct 9) |
-|---|---|---|
-| Live ingestion of 442 BC gauges, 10 Nooksack/Sumas gauges and NOAA official forecasts; immutable raw archive; public API; overflow watch; replay; station picker; snapshot mode. **Hourly baseline forecasts** (`persistence-v1`, `trend3h-v1`) for ~426 gauges with chances of crossing each stage and any personal level, fixed in a [hash-chained public ledger](docs/ledger-spec.md) since 2026-10-08 20:00Z (verify: `GET /v1/ledger`) | Scoring against what the river did, next to persistence, trend and NOAA's official forecast; hourly anchors and the ledger entries published to the `ledger` branch; a standard-library verifier | BC station thresholds (Stage 3), so BC farmers get the same "chance of crossing" view; the first trained model is Stage 4 |
+| Works now (Oct 9) | Next (Stage 3 onward) |
+|---|---|
+| Live ingestion of 442 BC gauges, 10 Nooksack/Sumas gauges and NOAA official forecasts; immutable raw archive; public API; overflow watch; replay; station picker; snapshot mode. **Hourly baseline forecasts** (`persistence-v1`, `trend3h-v1`) for ~426 gauges, with chances of crossing each stage and any personal level, fixed in a [hash-chained public ledger](docs/ledger-spec.md) since 2026-10-08 20:00Z. NOAA's official forecasts go into the same ledger exactly as published. **Hourly scoring** against what the river did (`/v1/scores/summary`: CRPS, MAE, interval coverage, Brier, paired skill against `persistence-v1` and pure persistence, each with its sample size and scorer run ID). **Hourly anchors**, with the entries published to the [`ledger` branch](https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC/tree/ledger), and a standard-library verifier | BC station thresholds (Stage 3), so BC farmers get the same "chance of crossing" view. NOAA matched-pair results once they settle (the first at 09:40Z on Oct 9). Tidal and regulated stations flagged before any rise-event skill is reported. The first trained model is Stage 4 |
 
-FloodLead's forecasts are **baselines** (what the river did after similar recent states), labelled "live skill being measured". No skill number is claimed until the scorer produces one.
+FloodLead's forecasts are **baselines** (what the river did after similar recent states), labelled "live skill being measured". Scores are published every hour with their sample sizes, but they cover about one day, so no skill number is claimed yet ([`evaluation.md`](evaluation.md) sets the rules).
 
 **Screenshots** (headless Chromium, `scripts/screenshots.cjs`):
 - [overflow watch, desktop](docs/stages/img/stage-02/overflow-watch-desktop-full.png)

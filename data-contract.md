@@ -95,7 +95,7 @@ Yellow sources are never core dependencies. If their terms do not allow the inte
   url: https://api.water.noaa.gov/nwps/v1/
   license: US Public Domain (NWS)
   license_url: https://www.weather.gov/disclaimer
-  access_method: NWPS REST API (gauges/{lid}, gauges/{lid}/stageflow)
+  access_method: NWPS REST API (gauges/{lid}; gauges/{lid}/stageflow/forecast for official forecasts, because gauges/{lid}/stageflow cuts some gauges' forecasts at request time + 7 days; gauges/{lid}/stageflow archived raw)
   commercial_use: true
   redistribution: true
   attribution_required: true    # credit NOAA/NWS; required by our own honesty rules
@@ -126,7 +126,13 @@ HRDPS GRIB2 ──► basin-mean precip (later stage) ────────�
 ```
 
 - Every observation row keeps `raw_object_id` (the payload that set its value), `published_at`, `first_seen_at`, `last_seen_at` and `revision_count`; every change is appended to `observation_revisions`.
-- Every forecast row (Stage 2+) stores `model_version`, `feature_snapshot_hash` and the latest observation timestamp it used.
+- Every forecast is a `forecast` ledger entry (Stage 2+). It stores:
+  - its `model`, with the model's parameters in a `model_card` entry;
+  - `data_as_of`, the newest observation it used;
+  - `input_hash` and the hash of its error library;
+  - only inputs with `ts ≤ created_at` and `first_seen_at ≤ created_at`.
+  See [`docs/ledger-spec.md`](docs/ledger-spec.md). NOAA official forecasts enter the ledger exactly as received (`official_forecast` entries).
+- Identical re-fetches write no observation rows (Stage 2, F2). `last_seen_at` is when the current value was last written. The per-station "last seen" for each payload kind is kept in `payload_coverage`.
 - Observations are stored as first received and as revised; scoring uses the value available at the time of the forecast for features, and the final value for ground truth.
 
 ## Freshness SLOs

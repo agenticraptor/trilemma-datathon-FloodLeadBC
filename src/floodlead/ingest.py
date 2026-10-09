@@ -39,6 +39,14 @@ def set_fetch_state(conn: psycopg.Connection, url: str, f: http.Fetched) -> None
     )
 
 
+def payload_kind(source: str, url: str) -> str:
+    if source == "eccc":
+        return "eccc:daily" if "/daily/" in url else "eccc:hourly"
+    if source == "usgs":
+        return "usgs:nwis" if "nwis" in url else "usgs:ogc"
+    return source
+
+
 def process_payload(
     conn: psycopg.Connection,
     run: store.Run,
@@ -65,7 +73,7 @@ def process_payload(
                 ],
             )
     with conn.transaction():
-        res = store.upsert_observations(conn, rows, ref.raw_object_id)
+        res = store.upsert_observations(conn, rows, ref.raw_object_id, kind=payload_kind(source, fetched.url))
         if on_parsed is not None:
             on_parsed(conn, rows, ref.raw_object_id)
     run.rows.add(res)

@@ -81,7 +81,8 @@ def lconn(test_dsn: str) -> Iterator[psycopg.Connection]:
         yield c
         # Disposable test database only: bypass the append-only triggers to reset between tests.
         c.execute("SET session_replication_role = replica")
-        c.execute("TRUNCATE ledger_anchors, ledger_entries")
+        c.execute("TRUNCATE forecast_scores, forecast_scores_naive, score_summaries, scorer_runs, ledger_anchors,"
+                  " ledger_entries")
         c.execute("SET session_replication_role = DEFAULT")
 
 
@@ -103,7 +104,8 @@ def test_db_rejects_update_delete_truncate_and_bad_appends(lconn: psycopg.Connec
     with lconn.transaction():
         ledger.append(lconn, [_pend(1)])
     for sql in ("UPDATE ledger_entries SET canonical = canonical WHERE seq = 2",
-                "DELETE FROM ledger_entries WHERE seq = 2", "TRUNCATE ledger_anchors, ledger_entries"):
+                "DELETE FROM ledger_entries WHERE seq = 2",
+                "TRUNCATE forecast_scores, ledger_anchors, ledger_entries"):
         with pytest.raises(psycopg.errors.RaiseException, match="append-only"):
             lconn.execute(sql)
     last_seq, last_hash = ledger.head(lconn)
@@ -121,6 +123,7 @@ def test_db_rejects_update_delete_truncate_and_bad_appends(lconn: psycopg.Connec
 def test_concurrent_appends_stay_gapless(lconn: psycopg.Connection, test_dsn: str) -> None:
     with lconn.transaction():
         ledger.append(lconn, [_pend(0)])
+    start = ledger.head(lconn)[0]
     errors: list[BaseException] = []
 
     def worker(k: int) -> None:
@@ -139,4 +142,24 @@ def test_concurrent_appends_stay_gapless(lconn: psycopg.Connection, test_dsn: st
         t.join()
     assert not errors
     r = ledger.verify_db(lconn)
-    assert r.ok and r.entries == 2 + 4 * 5 * 2 and r.last_seq == r.entries
+    assert r.ok and r.entries == start + 4 * 5 * 2 and r.last_seq == r.entries
+
+
+def test_entry_1_must_be_genesis_with_zero_prev_hash_in_every_mode() -> None:
+    """Addendum 2, item 5: a chain whose entry 1 is not a genesis entry, or whose genesis prev_hash is not zero,
+    fails even when every hash and link is self-consistent and verification starts at seq 1."""
+    def chain(first_type: str, first_prev: str) -> list[tuple[int, str, str, str, str]]:
+        rows, prev = [], first_prev
+        for seq in (1, 2):
+            t = first_type if seq == 1 else "forecast"
+            c = ledger.canonical_json({"seq": seq, "entry_type": t, "created_at": "x", "data": {}})
+            h = ledger.entry_hash(prev, c)
+            rows.append((seq, t, c, prev, h))
+            prev = h
+        return rows
+
+    for rows in (chain("forecast", ledger.ZERO_HASH), chain("genesis", "1" * 64)):
+        for kw in ({}, {"start_seq": 1}, {"start_seq": 1, "start_prev": None}):
+            r = ledger.verify_rows(rows, **kw)
+            assert not r.ok and r.failed_seq == 1 and "genesis" in (r.error or ""), kw
+    assert ledger.verify_rows(chain("genesis", ledger.ZERO_HASH), start_seq=1).ok

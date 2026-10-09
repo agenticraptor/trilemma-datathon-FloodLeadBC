@@ -60,7 +60,12 @@ _PROVENANCE_KEYS = "'time_series_id' - 'source_api'"
 _DIFFERS = f"""(o.raw_value IS DISTINCT FROM s.raw_value OR o.raw_unit IS DISTINCT FROM s.raw_unit
      OR (o.quality - {_PROVENANCE_KEYS}) IS DISTINCT FROM (s.quality - {_PROVENANCE_KEYS})
      OR o.is_sentinel IS DISTINCT FROM s.is_sentinel)"""
-_NOT_STALE = "(o.published_at IS NULL OR s.published_at IS NULL OR s.published_at >= o.published_at)"
+# F2: identical re-fetches write nothing, so a row's published_at is the publication time of the payload that last
+# set its value. An incoming differing value is stale if that is newer, or if a newer payload (of any kind) for the
+# station already covered this timestamp (payload_coverage), e.g. an older 30-day file after newer hourly files.
+_NOT_STALE = """((o.published_at IS NULL OR s.published_at IS NULL OR s.published_at >= o.published_at)
+     AND NOT EXISTS (SELECT 1 FROM payload_coverage c WHERE c.station_id = s.station_id
+                     AND c.published_at > s.published_at AND s.ts BETWEEN c.ts_min AND c.ts_max))"""
 
 
 def upsert_observations(
@@ -68,9 +73,11 @@ def upsert_observations(
     rows: list[Obs],
     raw_object_id: int | None,
     now: datetime | None = None,
+    kind: str | None = None,
 ) -> UpsertResult:
-    """Insert new rows, revise changed rows (appending to observation_revisions), and bump
-    last_seen_at on unchanged rows. Must be called inside a transaction."""
+    """Insert new rows and revise changed rows (appending to observation_revisions). Identical rows are counted
+    but not written (F2). With `kind`, the payload's coverage is recorded in payload_coverage. Must be called
+    inside a transaction."""
     res = UpsertResult()
     if not rows:
         return res
@@ -118,16 +125,10 @@ def upsert_observations(
         """,
         p,
     )
-    # Order matters: classify against the pre-update state (unchanged, stale) before revising.
-    cur = conn.execute(
-        f"""
-        UPDATE observations o SET last_seen_at = %(now)s,
-               published_at = GREATEST(o.published_at, s.published_at)
-        FROM stg_obs s WHERE {join} AND NOT {_DIFFERS}
-        """,
-        p,
-    )
-    res.unchanged = cur.rowcount
+    # Order matters: classify against the pre-update state (unchanged, stale) before revising. Unchanged rows are
+    # only counted: an identical re-fetch writes 0 observation rows.
+    cur = conn.execute(f"SELECT count(*) FROM stg_obs s JOIN observations o ON {join} WHERE NOT {_DIFFERS}", p)
+    res.unchanged = cur.fetchone()[0]  # type: ignore[index]
     cur = conn.execute(
         f"SELECT count(*) FROM stg_obs s JOIN observations o ON {join} WHERE {_DIFFERS} AND NOT {_NOT_STALE}",
         p,
@@ -156,6 +157,18 @@ def upsert_observations(
         p,
     )
     res.inserted = cur.rowcount
+    if kind is not None:
+        pubs = [r.published_at for r in batch if r.published_at is not None]
+        if pubs:
+            for sid in stations:
+                ts_s = [r.ts for r in batch if r.station_id == sid]
+                conn.execute(
+                    "INSERT INTO payload_coverage (station_id, kind, published_at, ts_min, ts_max, raw_object_id,"
+                    " last_seen_at) VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (station_id, kind) DO UPDATE SET"
+                    " published_at = EXCLUDED.published_at, ts_min = EXCLUDED.ts_min, ts_max = EXCLUDED.ts_max,"
+                    " raw_object_id = EXCLUDED.raw_object_id, last_seen_at = EXCLUDED.last_seen_at"
+                    " WHERE EXCLUDED.published_at >= payload_coverage.published_at",
+                    (sid, kind, max(pubs), min(ts_s), max(ts_s), raw_object_id, now))
     conn.execute("TRUNCATE stg_obs")
     return res
 

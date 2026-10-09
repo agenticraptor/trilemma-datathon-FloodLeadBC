@@ -37,6 +37,10 @@ HEALTH = {
              "reporting_green_frac": 0.8},
     "nwps": {"run_green_min": 90, "run_amber_min": 180, "issuance_green_h": 36, "issuance_amber_h": 72},
     "disk": {"amber_pct": 80, "red_pct": 90},
+    # Ledger jobs (hourly): green if the last good run is within 75 min, amber within 135 min, else red.
+    "issuer": {"green_min": 75, "amber_min": 135},
+    "scorer": {"green_min": 75, "amber_min": 135},
+    "anchor": {"green_min": 75, "amber_min": 135},
 }
 RATE_LIMIT_PER_MIN = 120
 _ORDER = {"green": 0, "amber": 1, "red": 2}
@@ -254,9 +258,61 @@ def _health() -> dict[str, Any]:
               " count(*) FILTER (WHERE archive_error IS NOT NULL) AS write_failures,"
               " count(*) FILTER (WHERE fetched_at > now() - interval '1 hour') AS files_last_hour"
               " FROM raw_objects")[0]
-    overall = _worst(*(v["status"] for v in sources.values()), disk["status"])
+    jobs = _ledger_health(now)
+    overall = _worst(*(v["status"] for v in sources.values()), disk["status"], *(v["status"] for v in jobs.values()))
     return _wrap({"status": overall, "generated_at": now, "sources": sources, "disk": disk,
-                  "archive": arch, "notice": NOT_A_WARNING})
+                  "archive": arch, **jobs, "notice": NOT_A_WARNING})
+
+
+def _age_status(age_min: float | None, t: dict[str, int]) -> str:
+    if age_min is None:
+        return "red"
+    return "green" if age_min <= t["green_min"] else "amber" if age_min <= t["amber_min"] else "red"
+
+
+def _ledger_health(now: datetime) -> dict[str, Any]:
+    """issuer: newest issuance (or gap) entry; scorer: last finished scorer run; anchor: last ok anchor."""
+    try:
+        iss = _q("SELECT entry_type, base_time, created_at, canonical FROM ledger_entries WHERE entry_type IN"
+                 " ('issuance', 'gap') ORDER BY seq DESC LIMIT 1")
+        gaps_24h = _q("SELECT count(*) AS n FROM ledger_entries WHERE entry_type = 'gap'"
+                      " AND base_time > now() - interval '24 hours'")[0]["n"]
+        sc = _q("SELECT scorer_run_id, finished_at, scored, rescored FROM scorer_runs WHERE status = 'ok'"
+                " ORDER BY scorer_run_id DESC LIMIT 1")
+        an = _q("SELECT seq, anchored_at, commit_url FROM ledger_anchors WHERE status = 'ok'"
+                " ORDER BY anchor_id DESC LIMIT 1")
+        an_err = _q("SELECT count(*) AS n FROM ledger_anchors WHERE status = 'error'"
+                    " AND anchored_at > now() - interval '24 hours'")[0]["n"]
+    except Exception as e:  # noqa: BLE001 - tables absent before migrations 002/003
+        return {"issuer": {"status": "red", "error": repr(e)}}
+    out: dict[str, Any] = {}
+    if iss:
+        r = iss[0]
+        age = _age_min(r["base_time"], now)
+        d = json.loads(r["canonical"])["data"]
+        out["issuer"] = {"status": _age_status(age, HEALTH["issuer"]), "last_entry_type": r["entry_type"],
+                         "last_base_time": r["base_time"], "last_created_at": r["created_at"],
+                         "lag_min": age, "forecasts": d.get("forecasts"), "runtime_s": d.get("runtime_s"),
+                         "gaps_last_24h": gaps_24h, "thresholds": HEALTH["issuer"]}
+        if r["entry_type"] == "gap" and out["issuer"]["status"] == "green":
+            out["issuer"]["status"] = "amber"
+    else:
+        out["issuer"] = {"status": "red", "note": "no issuance yet", "thresholds": HEALTH["issuer"]}
+    if sc:
+        age = _age_min(sc[0]["finished_at"], now)
+        out["scorer"] = {"status": _age_status(age, HEALTH["scorer"]), "last_run_id": sc[0]["scorer_run_id"],
+                         "last_finished_at": sc[0]["finished_at"], "lag_min": age, "scored": sc[0]["scored"],
+                         "rescored": sc[0]["rescored"], "thresholds": HEALTH["scorer"]}
+    else:
+        out["scorer"] = {"status": "amber", "note": "no scorer run yet", "thresholds": HEALTH["scorer"]}
+    if an:
+        age = _age_min(an[0]["anchored_at"], now)
+        out["anchor"] = {"status": _age_status(age, HEALTH["anchor"]), "last_seq": an[0]["seq"],
+                         "last_anchored_at": an[0]["anchored_at"], "commit_url": an[0]["commit_url"],
+                         "lag_min": age, "errors_last_24h": an_err, "thresholds": HEALTH["anchor"]}
+    else:
+        out["anchor"] = {"status": "amber", "note": "pending: no anchor yet", "thresholds": HEALTH["anchor"]}
+    return out
 
 
 @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
@@ -540,3 +596,39 @@ def station_forecast(station_id: str) -> dict[str, Any]:
                                    for p in pts]}
     return _wrap({"station_id": station_id, "generated_at": datetime.now(UTC), "label": FORECAST_LABEL,
                   "models": models, "official": official, "spec_url": SPEC_URL})
+
+
+
+def _summary() -> dict[str, Any]:
+    rows = _q("SELECT body FROM score_summaries ORDER BY scorer_run_id DESC LIMIT 1")
+    if not rows:
+        raise HTTPException(404, "no scorer run yet: the first horizons settle 4 h after the first issuance")
+    return rows[0]["body"]
+
+
+@app.api_route("/v1/scores/summary", methods=["GET", "HEAD"])
+def scores_summary(source: str | None = Query(None, pattern="^(eccc|usgs)$"), model: str | None = None,
+                   horizon: int | None = Query(None, ge=1, le=48)) -> dict[str, Any]:
+    """Materialised after every scorer run (carries scorer_run_id and its window): by model x horizon x source,
+    CRPS (quantile score), paired CRPSS vs persistence, MAE, interval coverage, Brier/BSS per threshold family with
+    event counts ("too few events to judge" below 30 events). Stale-input forecasts excluded."""
+    b = dict(_summary())
+    b["groups"] = [g for g in b["groups"] if (source is None or g["source"] == source)
+                   and (model is None or g["model"] == model) and (horizon is None or g["h"] == horizon)]
+    return _wrap(b)
+
+
+@app.api_route("/v1/scores/official", methods=["GET", "HEAD"])
+def scores_official(lid: str | None = None) -> dict[str, Any]:
+    """FloodLead baselines vs NOAA's official forecast on matched pairs (base times 00/06/12/18Z, horizons in
+    multiples of 6 h, NOAA's latest issuance fetched before our forecast was created), with NOAA's own lead."""
+    b = _summary()
+    rows = [r for r in b.get("official", []) if lid is None or r["lid"] == lid.upper()]
+    first = _q("SELECT min(base_time) AS t FROM ledger_entries WHERE entry_type = 'forecast'"
+               " AND extract(hour FROM base_time AT TIME ZONE 'UTC')::int % 6 = 0")[0]["t"]
+    note = None if rows else (
+        "No matched pair has settled yet. The first eligible base time is "
+        f"{first.strftime('%Y-%m-%dT%H:%M:%SZ') if first else 'the next 00/06/12/18Z issuance'}; "
+        "its 6 h horizon settles 9 h later (6 h + 3 h).")
+    return _wrap({"scorer_run_id": b["scorer_run_id"], "generated_at": b["generated_at"], "lid": lid,
+                  "pairs": rows, "note": note})
