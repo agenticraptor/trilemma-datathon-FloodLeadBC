@@ -466,6 +466,47 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
 - `19:20` — **AC-7 audit in a safe form.** `scripts/audit_leakage.sql` now reads constant time bounds from the ledger (`\gset`), copies the level rows in that range into a temp table (57,214 rows), and audits against that, with a `statement_timeout`. The checks are unchanged. Result over **5,977 forecasts (7 base times, 20Z–02Z)** → `0 | 0 | 0 | 0` of **47,816** horizons, in **6.7 s** (was 4 min 36 s). Every forecast has `inputs_n > 0`, so 0 count mismatches also shows the temp table held the matching rows. It is re-run at PR time.
 - `19:30` — README "What works now" brought up to date for part 2 (contract-files table updated).
 
+- `20:40` — **Scorer run 13 (03:40:00Z):** 3,415 candidates, **1,706 scored, 9.5 s**. Totals in `forecast_scores`: **5,097 scored**, 23 `no_truth`, 8 stale-input excluded; plus 2,562 `persistence-naive` rows. Settled so far: **h1 and h3 only** (base times 20Z–02Z for h1, 20Z–00Z for h3). The next horizons settle later: h6 of base 20Z (valid 02Z, settled 05Z) is scored at the **05:40Z** run, and h12 at the **11:40Z** run. The first NOAA matched pair (base 00Z, h6, valid 06Z) settles at 09:00Z and is scored at the **09:40Z** run; `/v1/scores/official` says so in its `note`. So AC-8 is **PARTIAL** at PR time: 2 of the 4 required horizons.
+  - `/v1/scores/summary` (scorer run 13): paired CRPS (m, quantile score), CRPSS and n pairs. First-day numbers from 7 base times, not claims:
+
+    | Source | h | Comparison | n pairs | CRPS model / reference | CRPSS |
+    |---|---|---|---|---|---|
+    | ECCC | 1 | persistence-v1 vs naive | 1,659 | 0.0180 / 0.0285 | 0.369 |
+    | ECCC | 1 | trend3h-v1 vs naive | 1,656 | 0.0124 / 0.0244 | 0.491 |
+    | ECCC | 1 | trend3h-v1 vs persistence-v1 | 1,656 | 0.0124 / 0.0139 | 0.107 |
+    | ECCC | 3 | persistence-v1 vs naive | 827 | 0.0355 / 0.0587 | 0.396 |
+    | ECCC | 3 | trend3h-v1 vs naive | 827 | 0.0361 / 0.0587 | 0.385 |
+    | ECCC | 3 | trend3h-v1 vs persistence-v1 | 827 | 0.0361 / 0.0355 | −0.018 |
+    | USGS | 1 | persistence-v1 vs naive | 40 | 0.0037 / 0.0049 | 0.243 |
+    | USGS | 1 | trend3h-v1 vs persistence-v1 | 40 | 0.0040 / 0.0037 | −0.094 |
+    | USGS | 3 | persistence-v1 vs naive | 20 | 0.0066 / 0.0072 | 0.084 |
+    | USGS | 3 | trend3h-v1 vs persistence-v1 | 20 | 0.0066 / 0.0066 | 0.002 |
+
+  - Interval coverage, ECCC (nominal 0.90 / 0.80 / 0.50): persistence-v1 h1 0.884 / 0.796 / 0.590, h3 0.877 / 0.791 / 0.589; trend3h-v1 h1 0.851 / 0.745 / 0.476, h3 0.866 / 0.757 / 0.487. Median-MAE (m), ECCC h1: naive 0.0285, persistence-v1 0.0297, trend3h-v1 0.0222.
+  - **The means rest on a few stations.** Median CRPS is 1–2 mm, against 12–36 mm means. The largest errors are at tidal or regulated ECCC stations (08MH053, 08MH126, 08HB087 and others), and at **08LF027** (Deadman River above Criss Creek). There the level stepped from a flat 0.142 m to 1.589 m at 22:25Z, then to a flat 4.257 m at 23:05Z. This looks like a gauge or datum change, not water. Two persistence-v1 h1 forecasts there (bases 22Z and 23Z, CRPS 4.1 and 2.7 m) have no trend3h-v1 pair. They alone shift the ECCC h1 persistence-v1 mean from 0.0139 m (the subset paired with trend3h-v1) to 0.0180 m. A step-change and tidal flag is needed before any skill number is quoted (open issues).
+- `20:42` — **Disk runway re-estimated from measured growth.** Same query as the 01:35:55Z baseline (`pg_database_size`, ledger and score table sizes, observation chunk sizes, `du -sb` archive, `df`), re-run at 03:42:03Z (2.10 h later):
+
+  | Part | 01:35:55Z | 03:42:03Z | Δ | Per day |
+  |---|---|---|---|---|
+  | Database | 4,790,656,023 | 4,801,223,703 | +10,567,680 | ≈ 121 MB (this window) |
+  | – ledger_entries | 9,674,752 (5,144 entries) | 12,943,360 (6,850) | +3,268,608 for 2 issuances | ≈ 39 MB |
+  | – scores (both tables) | 1,671,168 (2,558 rows) | 4,677,632 (7,682) | +3,006,464 = 587 B/row | ≈ 144 MB at steady state |
+  | – observation chunks | 4,709,515,264 | 4,712,611,840 | +3,096,576 | ≈ 35 MB |
+  | Archive | 110,308,770 | 113,804,646 | +3,495,876 | ≈ 40 MB |
+  | `df` used | 22,134,919,168 | 22,093,078,528 | −41,840,640 | (not used) |
+
+  - Scores at steady state: 10,224 rows/h (852 forecasts + 426 naive, × 8 horizons) × 587 B ≈ 144 MB/day. In this window only h1 and h3 were being scored.
+  - Total ≈ **270 MB/day**. 80 % of the 102.9 GB disk leaves 60.2 GB → **≈ 220 days (mid-May 2027)**. This replaces the Oct 8 estimate (≈ 230 MB/day, ≈ 270 days) in `architecture.md`.
+  - `df` fell in the window, from Docker and WAL churn, so the estimate uses table, chunk and archive sizes instead. A 2-hour window means ±30 % is normal.
+- `20:43` — **Final checks at PR time.**
+  - `scripts/audit_leakage.sql` (safe form, 64,668 temp rows) → `6828 | 0 | 0 | 0 | 0 | 54624`: 0 violations over **6,828 forecasts (8 base times, 20Z–03Z)** and 54,624 horizons, in **6.64 s**.
+  - `ruff check .` → `All checks passed!`.
+  - `pytest -q` (DB tests run against the local test database) → **96 passed, 4 deselected** in 11.1 s.
+  - `scripts/verify_ledger.py --api https://<host>` → `OK entries 6850, head 53103c11…e752, by_type {genesis 1, model_card 3, forecast 6828, issuance 8, official_forecast 10}, anchors_checked 8` (1.9 s).
+  - `--source github` → the same, from 8 files (2.7 s).
+  - Health green, with issuer, scorer and anchor all green.
+  - Base 03:00Z (seq 6850): `created_at` 03:15:00.101Z, `committed_at` 03:16:14.006Z (73.9 s). That makes **8 consecutive base times, 0 gaps**.
+
 ## Measurements
 
 | What | Value | How measured | When |
@@ -484,11 +525,35 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
 | F2 after (one ECCC refresh) | 0 row updates, +0 dead tuples, WAL 15,733,024 B (28.3 min window, more jobs) | same | 20:39–21:07Z |
 | Leakage audit | 852 forecasts, 0 violations, 0 of 6,816 horizons < 30 min | `scripts/audit_leakage.sql` (3 min 11 s) | 20:47Z |
 | AC-6 reproduction | 3/3 forecasts: input_hash and 8/8 medians match from the public API | `scripts/reproduce_forecast.py` (2.3 s) | 20:43Z |
+| Issuance commit lag (`committed_at − created_at`) | 69.4–83.6 s over 6 base times (22Z 69.4, 23Z 77.5, 00Z 77.7, 01Z 77.3, 02Z 83.6, 03Z 73.9); 20Z and 21Z predate the field | `committed_at` in each issuance entry | 22:16–03:16Z |
+| Forecasts per base time | 851–856 (426–429 stations × 2 models), 8 base times 20Z–03Z | ledger | 03:16Z |
+| Anchors | 8 of 8 `ok`; hourly files 394,993–397,541 B | `ledger_anchors` | 20:15–03:30Z |
+| Publication rate (measured, 8 h) | ≈ 396 kB/h → ≈ 285 MB/month on the `ledger` branch | mean of 8 files × 720 | 03:30Z |
+| Scorer runtime | 0.7–9.5 s per run (13 runs); run 13: 3,415 candidates, 1,706 scored, 9.5 s | `scorer_runs` | 03:40Z |
+| Settled scores | 5,097 scored, 23 no_truth, 8 stale excluded; 2,562 naive rows; h1 and h3 only | `forecast_scores`, `/v1/scores/summary` | 03:40Z |
+| Verifier from outside | `--api` 6,850 entries 1.9 s; `--source github` 8 files 2.7 s | `time` | 03:44Z |
+| Leakage audit (final, safe form) | 6,828 forecasts, 0 violations, 0 of 54,624 horizons < 30 min, 6.64 s | `scripts/audit_leakage.sql` | 03:43Z |
+| AC-5 point-for-point | NRKW1 and NKSW1 15:12Z issuances: 40/40 points each, 0 mismatches; 152/152 held points in the ledger | `tools/ac5_compare.py` (scratch) vs `stageflow/forecast` | 02:17Z |
+| Replay independent SQL | 16.4 s; peak db container memory 1.12 GiB | `scripts/replay_check.sql`, `docker stats` every 2 s | 01:55Z |
+| Disk growth (measured, 2.1 h) | ≈ 270 MB/day (archive 40, observations 35, ledger 39, scores 144 at steady state, other 14) → ≈ 220 days to 80 % | sizes at 01:35:55Z vs 03:42:03Z | 03:42Z |
+| DB crash recovery (incident) | OOM kill 01:38:14Z → accepting connections 01:38:16Z (≈ 2 s); 0 committed data lost | db logs, `floodlead ledger verify` | 01:38Z |
 
 ## Acceptance criteria
 
 | AC | Result | Evidence |
 |---|---|---|
+| AC-1 Hourly issuance | **PASS** | 8 consecutive base times, 20Z Oct 8 to 03Z Oct 9, 0 gaps, 0 `gap` entries needed. 851–856 forecasts each (426–429 stations × 2 models). `created_at − base_time` 1.2–15.0 min. 0 entries before base, 0 late, 0 with future inputs. `/v1/ledger/head` → seq 6850, anchored 03:30Z, commit `90126fe5`. Work log `18:17`, `19:17`, `20:43` |
+| AC-2 Chain verifies from outside; tamper tests | **PASS** | `verify_ledger.py --api` → OK 6,850 entries, 8 anchors checked. `--source github` → the same from 8 files. `pytest tests/test_verify_script.py tests/test_ledger.py` → 12 passed (golden vector, tamper detection, the genesis check). Live demo on copies of the published files: 5 of 5 tampers caught; the self-consistent rewrite is caught only by the anchors. Seq 1 must be genesis with a zero prev_hash in all three verifiers (addendum 2 item 5). Work log `17:25`, `20:43` |
+| AC-3 UPDATE/DELETE/TRUNCATE fail | **PASS** (part 1) | Each statement rejected inside `BEGIN … ROLLBACK` on production. Work log `13:44` |
+| AC-4 ≥ 3 anchors match the chain | **PASS** | 8 hourly anchors 20:15Z–03:30Z, all `ok`, all written by the anchor job with `LEDGER_GITHUB_TOKEN`. All match the chain (`anchors_checked 8, anchors_outside_range 0`). Commits `28aefd89`, `debf0dd2`, `0f178823`, `ad595fd4`, `425d36c2`, `1a700584`, `974b615f`, `90126fe5` on the `ledger` branch |
+| AC-5 NOAA issuances in the ledger | **PASS** | 152/152 held points are in the ledger (10 `official_forecast` entries). The latest NRKW1 and NKSW1 issuances (15:12Z) equal `stageflow/forecast` point for point, 40/40 each, 0 mismatches. This needed the D-02.18 fix: our endpoint had cut NRKW1 at +7 days. Work log `18:17–18:21`, `19:17` |
+| AC-6 3 forecasts reproduced from the public API | **PASS** (part 1) | `scripts/reproduce_forecast.py --n 3`: input_hash and 8/8 medians match. Work log `13:41–13:44` |
+| AC-7 Leakage audit | **PASS** | 6,828 forecasts (8 base times): 0 inputs after `created_at`, 0 rows not yet visible, 0 count mismatches, 0 of 54,624 horizons with `valid_at − created_at` < 30 min. 6.64 s. Work log `20:43` |
+| AC-8 Scores | **PARTIAL** | ≥ 5,000 settled scores: **met**, 5,097 at 03:40Z. Paired CRPS, MAE and coverage with n for both models: given by `/v1/scores/summary`, but only at **2 horizons (h1, h3)**. The other horizons have not settled yet: h6 is scored at 05:40Z, h12 at 11:40Z (the 4th horizon), h18 at 17:40Z. NOAA matched pairs: none yet; the first settles at 09:00Z and is scored at 09:40Z Oct 9, as `/v1/scores/official` states. The scorer runs hourly, so this completes without new code. Work log `20:40` |
+| AC-9 Demo path | **PASS** | Screenshots of all 4 pages at 1280 px and 375 px. `scrollWidth` = viewport on every page. 0 page errors, including with `en-US@posix`. Replay = independent SQL on every field. Snapshot mode with `python3 -m http.server -d web 8080` works, with its banner and ages counted from the snapshot. Work log `13:07–13:10`, `15:00–15:08`, `18:55` |
+| AC-10 F1 and F2 | **PASS** | F1: fallback tests (`tests/test_eccc_rollover.py`); live dated-path check; the first live midnight rollover was clean (work log `17:21`). F2: one ECCC refresh went from 554,126 row updates to 0, and WAL from 139.1 MB to 15.7 MB; an identical re-fetch writes 0 rows (work log `14:07`, measurements) |
+| AC-11 ruff and pytest | **PASS** | `ruff check .` → All checks passed. `pytest -q` → 96 passed, 4 deselected (live), DB tests run. `pytest -m live -k nwps` → 1 passed. Work log `20:43`, `18:17–18:21` |
+| AC-12 Decisions, stage doc, contracts, runway | **PASS** | 18 decisions (D-02.1–D-02.18). The stage doc is in 24 of 29 part-2 commits and 5 part-1 commits, spread from Oct 8 19:41Z to the final commit on Oct 9. README, architecture, evaluation, data-contract, ledger-spec and product.yaml are updated (table below). Disk runway re-estimated from measured growth: ≈ 270 MB/day, ≈ 220 days to 80 % (work log `20:42`) |
 
 ## Contract files changed
 
@@ -505,8 +570,20 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
 | `README.md` (part 2) | "What works now" updated for Oct 9: scoring, anchors and publication, verifier, NOAA forecasts in the ledger. Next steps. Statement that scores cover about one day, so no skill is claimed | Facts changed |
 | `docs/ledger-spec.md` (part 2) | `created_at` defined exactly; `inserts_started_at` and `committed_at`; model-card supersession; `official_forecast` parts, with the NRKW1 7-day-cut explanation | Addendum 2 items 4 and 6; D-02.18 |
 | `data-contract.md` (part 2) | NWPS access method: `stageflow/forecast` for official forecasts (the combined endpoint cuts at +7 days) | D-02.18 |
+| `architecture.md` (part 2) | `growth_with_ledger` replaced by the measured rate: ≈ 270 MB/day, ≈ 220 days to 80 % (scores are the largest part) | AC-12, measured |
 | `evaluation.md` (part 2) | `persistence-naive` is the headline baseline; `persistence-v1` described as level + typical change | D-02.17 |
 
 ## Open issues and handoff to next stage
 
-- (filled at end)
+1. **AC-8 completes after the PR.** The h6 scores arrive at the 05:40Z run, the first NOAA matched pair at 09:40Z, and h12 (the 4th horizon) at 11:40Z Oct 9. Check them with `curl https://<host>/v1/scores/summary` and `/v1/scores/official`. No code change is expected.
+2. **No skill claim yet.** Scores cover about 8 hours of base times. The means rest on a few tidal or regulated stations and on one apparent gauge step (08LF027: 0.142 → 1.589 → 4.257 m, flat between steps). Stage 3 needs a step-change flag and a tidal/regulated flag for truth and for training. Report skill per station class, with medians, before quoting any CRPSS.
+3. **CRPS is a 7-quantile score.** It is about 19 % below the exact CRPS for a calibrated normal forecast (D-02.13). The bias is the same for every model, so paired skill is fair, but absolute CRPS values are not comparable with other studies.
+4. **Database memory and ad-hoc queries.** `observations` has 1,150 chunks and the db container has a 2.5 GiB limit. A query without constant time bounds can plan every chunk and be OOM-killed; that happened at 01:38Z (the worker caused it, and no data was lost). Rule: constant bounds or one scan into a temp table, with `statement_timeout`. Stage 3 should consider larger chunks or compressing old chunks, and a lower `work_mem` for ad-hoc roles. At the restart, TimescaleDB logged "background worker limit of 2 exceeded"; `timescaledb.max_background_workers` should be raised when the db is next recreated.
+5. **Scorer runtime grows with the candidate set.** 9.5 s at 3,415 candidates. At steady state (48 h horizon, about 52 base times × 852 forecasts ≈ 44k candidates), linear scaling gives about 2 min (estimate). Measure it again in Stage 3; restrict candidates to forecasts with unscored, settled horizons if needed.
+6. **Disk.** About 270 MB/day, about 220 days to 80 % (measured over 2.1 h). Scores are 144 MB/day of that and are derived data, so compressing or thinning old scores is the first lever.
+7. **No off-machine copy** of the raw archive or the database (snapshots declined; an accepted risk). The ledger itself is published hourly to the `ledger` branch, so the track record survives the VM.
+8. **The `ledger` branch grows by about 285 MB/month** (measured over 8 h). This is under the ~1 GB/month limit, but if it becomes a problem, the alternatives are daily files, or a rolling window plus daily consolidations, published as a decision.
+9. **Anchors are as strong as GitHub's history.** Anyone who can force-push the `ledger` branch could rewrite both the files and the heads. The anchor job never force-pushes. Branch protection on `ledger` (no force-push, no deletion) is a human action (Needs human).
+10. **ECCC `daily/` is not scheduled.** Only `hourly/` is polled. The daily files are not needed for the hourly forecasts.
+11. **Deploys:** from Stage 3 on, only from a branch with an open PR (addendum 2 item 7). Part-2 code first ran in production before PR #4 existed (addendum 2 item 7). Every deploy after PR #4 opened (21:50Z) was from its branch, the last two being `3314532` and `97c4a52`.
+12. **Reboot test.** This is the last step of this stage, after this report. The supervisor checks from outside that health returns to green, that hourly issuance continues, and that any base time missed during the reboot appears as a `gap` entry.

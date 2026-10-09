@@ -82,9 +82,14 @@ data_architecture:
     or revision); published_at = publication time of the payload that set it; the per-station "last seen" is
     payload_coverage (newest payload per station and kind, with its time range), which also guards against older
     payloads overwriting values a newer payload covered.
-  growth_with_ledger (estimate, Oct 8): >-
-    archive ~48 MB/day + observations ~65 MB/day + ledger ~40 MB/day stored (2.85 MB/h canonical text) + scores
-    ~80 MB/day (6,816 horizon scores/h) = ~230 MB/day; 62 GB of headroom to 80 % of the disk => ~270 days.
+  growth_with_ledger (measured Oct 9 01:36-03:42Z, 2.1 h; replaces the Oct 8 estimate of ~230 MB/day, ~270 days): >-
+    archive ~40 MB/day + observations ~35 MB/day (F2: no rewrites) + ledger ~39 MB/day (1.63 MB per hourly
+    issuance stored, ~1.9 kB/entry with indexes) + scores ~144 MB/day (587 B/row measured; at steady state
+    10,224 rows/h = 852 forecasts + 426 naive, x 8 horizons; only h1/h3 had settled when measured) + other DB
+    ~14 MB/day = ~270 MB/day; 60.2 GB of headroom to 80 % of the 102.9 GB disk => ~220 days (mid-May 2027).
+    Scores are the largest part and are derived (recomputable from the ledger and observations), so compressing
+    or thinning old scores is the first lever. Measured from table, chunk and archive sizes, not df (df "used"
+    fell 42 MB in the window from Docker/WAL churn); a 2-hour window, so treat +-30 % as normal.
   complexity_justification: >-
     Single-node Postgres/Timescale handles this volume with headroom; Kafka, Airflow and object storage are
     deliberately avoided. Data refreshes every 15-30 min at the source, so polling is as fresh as push.
