@@ -123,6 +123,12 @@ def load(pool) -> dict[str, Any]:  # type: ignore[no-untyped-def]
             " 'openmeteo-archive', 'openmeteo-histfc', 'openmeteo-prevruns') ORDER BY 1, 2").fetchall()
         for src, key, rid, path in pages:
             data = archive.read(s.archive_dir, path)
+            if src != "ncei":
+                try:
+                    json.loads(data)
+                except ValueError:  # an invalid body recorded as ok by an older downloader: skip and report
+                    counts[f"invalid:{src}"] = counts.get(f"invalid:{src}", 0) + 1
+                    continue
             if src == "eccc-climate":
                 rows, table = list(eccc_climate(json.loads(data), rid)), "rain_hourly"
             elif src == "ncei":

@@ -29,6 +29,18 @@ SOURCES: dict[str, tuple[Callable[[ConnectionPool], list[download.Task]], float,
 }
 
 
+def _json_ok(b: bytes) -> bool:
+    try:
+        json.loads(b)
+    except ValueError:
+        return False
+    return True
+
+
+JSON_SOURCES = {"eccc-peaks", "eccc-daily", "eccc-climate", "snotel", "openmeteo-archive", "openmeteo-histfc",
+                "openmeteo-prevruns"}
+
+
 def main(pool: ConnectionPool, args: argparse.Namespace) -> int:
     if args.hcmd == "load":
         from floodlead.history import nws, parse, rain
@@ -65,6 +77,8 @@ def main(pool: ConnectionPool, args: argparse.Namespace) -> int:
             kw["is_empty"] = empty
         if expand is not None:
             kw["expand"] = expand
+        if src in JSON_SOURCES:
+            kw["is_valid"] = _json_ok
         rep = download.run(pool, src, make(pool), **kw)
         print({k: (str(v) if v is not None and not isinstance(v, int | str) else v) for k, v in asdict(rep).items()})
         ok = ok and rep.errors == 0
