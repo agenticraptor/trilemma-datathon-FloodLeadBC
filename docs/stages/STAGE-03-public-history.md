@@ -451,6 +451,13 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
 
 - `13:30–13:38` — README "Build Session 3 — working in public"; contract files updated (table below).
 
+- `13:31` — Snapshot refreshed: `floodlead export-demo` → 45 files, including `v1_gauges_fraser-valley.json` and `v1_track-record.json`. Health in the snapshot carries feedback **counts only** (`{"counts_only":true,"total":2,…}`).
+  - Snapshot mode checked with `python3 -m http.server -d web 8080` and `scripts/screenshots.cjs http://localhost:8080/`:
+    - 14/14 layout rows OK;
+    - `page errors (all pages): 0; with navigator.language=en-US@posix: 0` (the console shows only the expected `/v1` 404 probes);
+    - the track record renders from the snapshot under the "Snapshot from Fri, Oct 9, 13:30 PDT" banner.
+- `13:31` — F3 check: a plain `psql` session now shows `statement_timeout = 15min` and `idle_in_transaction_session_timeout = 30min` (database defaults from migration 010). `scripts/dbshell` shows `5min` and `8MB`.
+
 ## Measurements
 
 | What | Value | How measured | When |

@@ -1,6 +1,7 @@
 {
- "snapshot_at": "2026-10-08T22:03:14Z",
+ "snapshot_at": "2026-10-09T20:30:33Z",
  "files": [
+  "v1_gauges_fraser-valley.json",
   "v1_health.json",
   "v1_ledger_head.json",
   "v1_official-forecasts_NRKW1.json",
@@ -43,7 +44,8 @@
   "v1_stations_usgs_12211200_observations_param_level_days_7.json",
   "v1_stations_usgs_12213100.json",
   "v1_stations_usgs_12213100_forecast.json",
-  "v1_stations_usgs_12213100_observations_param_level_days_7.json"
+  "v1_stations_usgs_12213100_observations_param_level_days_7.json",
+  "v1_track-record.json"
  ],
  "attribution": [
   "Contains information licensed under the Open Government Licence \u2013 Canada.",
