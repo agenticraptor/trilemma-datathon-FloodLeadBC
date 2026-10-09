@@ -426,6 +426,33 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
   - Fix: forecast rows now come from `stageflow/forecast`.
   - `ruff` clean; `pytest -q` → **95 passed**, 4 deselected; `pytest -m live -k nwps` → 1 passed.
   - Commit `3314532`, pushed to PR #4 (open), then deployed at 01:21Z (`docker compose build -q ingest api && docker compose up -d ingest api`). The ingest container reports `FLOODLEAD_GIT_SHA=3314532…`, and the scheduler restarted with the same 8 jobs.
+- `18:35` — **NWPS run after the D-02.18 deploy:** run 608 (scheduler start, 01:21:19Z) fetched 18 payloads and inserted the **10 missing NRKW1 points** (`points 40, new_rows 10`). Run 615 (01:35Z) inserted 0 new rows, as expected. `official_forecasts` NRKW1 15:12Z: 40 points ending Oct 18 12Z. They go into the ledger at the 02:15Z run.
+- `18:38` — **Incident caused by the worker: PostgreSQL was OOM-killed and restarted.**
+  - **Cause:** the first version of `scripts/replay_check.sql` (for AC-9) used correlated subqueries against the `observations` hypertable (1,150 chunks) with no constant time bounds. The memory cgroup of the db container (limit 2.5 GiB) hit its limit and the kernel killed a backend at 01:38:14Z (`dmesg`: `Memory cgroup out of memory: Killed process … (postgres)`).
+  - **Recovery:** the postmaster terminated all backends and ran crash recovery from WAL (`redo done … elapsed 0.08 s`). It accepted connections again at **01:38:16Z (≈ 2 s)**.
+  - **Data:** no committed data was lost.
+    - `floodlead ledger verify` → `ok True, entries 5144`, same head `2c388b4e…3521`.
+    - The last ingest run (616, ECCC) had committed at 01:37:51Z. No issuance, anchor or migration was running.
+  - **Knock-on:** each pool then handed one dead connection to its next user.
+    - The API returned one 500 at 01:38:34Z.
+    - Four jobs failed once: scorer 01:40, ECCC 01:42 and 01:47, USGS 01:47. Each case lost nothing:
+      - **Scorer:** the restart-time run 10 (01:21Z) had already scored those 853 forecasts, and run 11 had 0 left to score.
+      - **ECCC:** the files roll; at 01:52 they were unchanged since 01:37.
+      - **USGS:** the 01:53 run fetched its rolling window (21 rows).
+  - **Fix (`97c4a52`, deployed 01:53:49Z from PR #4):**
+    - `db.pool()` now passes `check=ConnectionPool.check_connection`.
+    - New test `test_pool_replaces_a_connection_killed_by_a_server_restart` kills a pooled backend: it **fails without the fix and passes with it**.
+    - `pytest -q` → **96 passed**.
+    - After the restart, all 5 start-up runs and scorer run 11 were `ok`.
+  - **Rule from now on:** ad-hoc queries on production touch the hypertable only through constant time bounds, or through one scan into a temp table, and run with a `statement_timeout`. `scripts/replay_check.sql` now copies the two stations' rows (660,124) into a temp table first.
+- `18:55` — **AC-9, replay = independent SQL.** `scripts/replay_check.sql` uses the D-02.4 definitions as one SQL query and shares no code with `replay.py`. Run on production: 16.4 s; peak db container memory 1.12 GiB, sampled every 2 s.
+  ```
+  events_total 20 | events_with_gauge 13 | events_with_overflow 7
+  onset_ft min 146.2 | median 147.56 | max 148.44 ; hours_after_minor min 0.08 | median 4.92 | max 6.42
+  peaks_with_overflow_ft    {146.6,147.26,148.13,148.53,148.85,150.44,150.76}
+  peaks_without_overflow_ft {146.73,146.86,146.93,147.04,147.18,147.3}
+  ```
+  - `/v1/replay/overflow` `.summary` gives **the same values for every field**.
 
 ## Measurements
 
