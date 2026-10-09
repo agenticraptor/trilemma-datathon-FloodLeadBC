@@ -33,6 +33,7 @@ CREATE TABLE nws_vtec (
     forecast_crest_ft real,                        -- from the segment text ("crest near 148.9 feet")
     observed_crest_ft real,                        -- "crested at ... feet"
     observed_stage_ft real,                        -- "the stage was 144.0 feet"
+    segment_head   text,                           -- first ~600 characters of the segment (UGC, areas, headline)
     PRIMARY KEY (product_id, seq)
 );
 CREATE INDEX nws_vtec_point ON nws_vtec (nwsli, issued_at);

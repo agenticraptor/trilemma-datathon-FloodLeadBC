@@ -65,6 +65,7 @@ class Vtec:
     forecast_crest_ft: float | None = None
     observed_crest_ft: float | None = None
     observed_stage_ft: float | None = None
+    segment_head: str | None = None  # the segment's first ~600 characters (UGC, areas, headline)
 
 
 @dataclass
@@ -121,7 +122,8 @@ def parse_product(raw: str) -> Product | None:
                 last = Vtec(k, act, off, ph, sig, int(etn), vtec_time(b), vtec_time(e), segment=si,
                             forecast_crest_ft=float(fc.group(1)) if fc else None,
                             observed_crest_ft=float(oc.group(1)) if oc else None,
-                            observed_stage_ft=float(ob.group(1)) if ob else None)
+                            observed_stage_ft=float(ob.group(1)) if ob else None,
+                            segment_head=flat[:600])
                 p.vtec.append(last)
                 continue
             hm = HVTEC.search(line)
@@ -167,12 +169,12 @@ def load(pool) -> dict[str, int]:  # type: ignore[no-untyped-def]
                         cur.executemany(
                             "INSERT INTO nws_vtec (product_id, seq, segment, issued_at, product_class, action, office,"
                             " phenomena, significance, etn, vtec_begin, vtec_end, nwsli, severity, cause, flood_begin,"
-                            " flood_crest, flood_end, record, forecast_crest_ft, observed_crest_ft, observed_stage_ft)"
-                            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,"
-                            " %s, %s)",
+                            " flood_crest, flood_end, record, forecast_crest_ft, observed_crest_ft, observed_stage_ft,"
+                            " segment_head) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,"
+                            " %s, %s, %s, %s, %s, %s)",
                             [(row[0], i, v.segment, p.issued_at, v.product_class, v.action, v.office, v.phenomena,
                               v.significance, v.etn, v.begin, v.end, v.nwsli, v.severity, v.cause, v.flood_begin,
                               v.flood_crest, v.flood_end, v.record, v.forecast_crest_ft, v.observed_crest_ft,
-                              v.observed_stage_ft) for i, v in enumerate(p.vtec)])
+                              v.observed_stage_ft, v.segment_head) for i, v in enumerate(p.vtec)])
                     n_vtec += len(p.vtec)
     return {"pages": len(pages), "products": n_prod, "vtec": n_vtec, "unparsed": skipped}
