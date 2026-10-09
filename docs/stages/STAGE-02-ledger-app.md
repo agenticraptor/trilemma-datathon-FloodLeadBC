@@ -408,6 +408,24 @@ PR #3: PASS, merged `4efdd81`. Each item, in the supervisor's order:
     - Peace River above Alces is **regulated** (dam releases).
     - These are real changes in level, not data errors. But rise thresholds at tidal stations measure the tide, not flooding, so tidal and regulated stations need a flag before any rise-event skill is reported (open issue).
   - `forecast_scores` 565,248 B for 852 rows; `forecast_scores_naive` 335,872 B for 426 rows. These are small tables with fixed index overhead; the per-row size is re-measured at the end for the disk runway.
+- `18:17` — **AC-1 met at base 01:00Z** (issuance seq 5144: `created_at` 01:15:00.475Z, `committed_at` 01:16:18.886Z, 77.3 s, 856 forecasts). The SQL (per base time: minutes after base, forecasts per model, and forecasts whose `created_at` differs from their issuance's):
+  ```
+  2026-10-08 20:00Z |  1.22 min | persistence-v1 426 | trend3h-v1 426 | 0
+  2026-10-08 21:00Z | 15.01 min | 427 | 426 | 0
+  2026-10-08 22:00Z | 15.01 min | 429 | 428 | 0
+  2026-10-08 23:00Z | 15.02 min | 427 | 426 | 0
+  2026-10-09 00:00Z | 15.03 min | 427 | 427 | 0
+  2026-10-09 01:00Z | 15.01 min | 428 | 428 | 0
+  forecasts with created_at − base_time > 30 min: 0; created_at < base_time: 0; created_at in the future: 0
+  gap entries: 0; hours 20Z–01Z with neither an issuance nor a gap: none
+  ```
+  - `GET /v1/ledger/head` → `seq 5144, entry_hash 2c388b4e…3521`, with anchor `seq 4287 aebed4bf…91de, anchored 00:30:00Z, commit 425d36c2, status ok`.
+  - Base 20:00Z was issued at 20:01Z by the first `floodlead issue` after deploy; every later base time was issued by the scheduler at HH:15.
+- `18:17–18:21` — **AC-5 re-check → bug found and fixed (D-02.18).**
+  - We still held 30 NRKW1 points while `stageflow/forecast` served 40. NWPS runs 592 (00:35Z) and 601 (01:05Z) inserted 0 rows, because `stageflow` itself returned 30.
+  - Fix: forecast rows now come from `stageflow/forecast`.
+  - `ruff` clean; `pytest -q` → **95 passed**, 4 deselected; `pytest -m live -k nwps` → 1 passed.
+  - Commit `3314532`, pushed to PR #4 (open), then deployed at 01:21Z (`docker compose build -q ingest api && docker compose up -d ingest api`). The ingest container reports `FLOODLEAD_GIT_SHA=3314532…`, and the scheduler restarted with the same 8 jobs.
 
 ## Measurements
 
