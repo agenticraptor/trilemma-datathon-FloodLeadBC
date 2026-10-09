@@ -248,6 +248,20 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - `typical_peaks`: 256 kB;
   - `nws_products` 14 MB, `nws_vtec` 9.1 MB.
 
+- **Relay tiers against Abbotsford and the 7-hour rule** (`relay.json`). Abbotsford's times come from the status-quo review: reconstructed, with ranges, PST shown as UTC.
+
+  | | Nov 2021 | Dec 2025 |
+  |---|---|---|
+  | Heads-up: NWS flood watch naming Whatcom (FA.A NEW) | 20:56Z Nov 10 (12:56 PM PST, day); 101.5 h before the onset | 00:10Z Dec 6 (4:10 PM PST Dec 5, day); 120.6 h before the onset |
+  | Prepare: first NRKW1 warning ≥ minor | 19:50Z Nov 14 (11:50 AM PST, **day**); 6.6 h before the onset | 06:17Z Dec 10 (10:17 PM PST Dec 9, **night**); 18.5 h before the onset |
+  | … before Abbotsford's first alert | **12.7 h** (alert ~12:30 AM Nov 15) | **17.7–19.1 h** (alerts ~4:00–5:20 PM Dec 10) |
+  | … before Abbotsford's first order | 29.2–32.2 h | 24.7 h (order ~11 PM Dec 10) |
+  | Move: North Cedarville ≥ minor and rising | 21:30Z Nov 14 (day); 4.9 h before the onset; 11.0 h before the alert | 20:15Z Dec 10 (day); 4.5 h before the onset; 3.8–5.1 h before the alert |
+  | SR 544 onset (our gauge record) / 7-hour-rule arrival | 02:25Z / 09:25Z Nov 15 | 00:45Z / 07:45Z Dec 11 (the review bounds the actual crossing at ~10–20 h after the onset) |
+
+  - The prepare tier fired at night in 2025. Held to the next sunrise (15:51Z Dec 10), it would still have come about 8–9 h before the City's alert.
+  - All of this is relay value, with no model, as addendum 1 requires. It is replayed from archived products, with today's rules applied to the past.
+
   The Sumas USGS–ECCC overlap is only 427 days. The USGS hourly level at Sumas, WA needs at least 18 hours a day to make a daily mean, and its level record is short. As found.
 
 ## Decisions
