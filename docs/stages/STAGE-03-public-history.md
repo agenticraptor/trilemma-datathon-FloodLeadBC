@@ -8,7 +8,7 @@
 | Started | 2026-10-09 12:42 PT (19:42 UTC) |
 | Finished | (fill at end) |
 | Prompt | `docs/build/prompts/STAGE-03-public-history.md` |
-| Status | in progress (part 1) |
+| Status | part 1 ready for QA (PR #5); part 2 in progress (draft PR #6) |
 
 ## Goal
 
@@ -770,7 +770,27 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
     - the track record renders from the snapshot under the "Snapshot from Fri, Oct 9, 13:30 PDT" banner.
 - `13:31` — F3 check: a plain `psql` session now shows `statement_timeout = 15min` and `idle_in_transaction_session_timeout = 30min` (database defaults from migration 010). `scripts/dbshell` shows `5min` and `8MB`.
 
-- `13:47–13:55` — **Addendum 1 received and applied to part 1** (D-03.12): `main` merged into `stage-03-public` (`0b609eb`); README and help-panel corrections; `tests/test_web.py` → 18 passed.
+- `13:47–13:48` — **Addendum 1 received and applied to part 1** (D-03.12): `main` merged into `stage-03-public` (`0b609eb`); README and help-panel corrections; `tests/test_web.py` → 18 passed.
+
+- `14:17` — **AC-4, thresholds in the ledger before first use** (the 21:15Z issuance, the first with the typical-peak code):
+  ```
+  seq   | type       | model          | created_at  | change (trimmed)                                         | supersedes | values | bytes
+  21383 | model_card | persistence-v1 | 21:15:00.59 | typical yearly peak thresholds added or updated (params…) | 1719       | 302    | 22179
+  21384 | model_card | trend3h-v1     | 21:15:00.59 | typical yearly peak thresholds added or updated (params…) | 3          | 302    | 21814
+  forecasts of base 21:00Z: seq 21385–22238 (854), 584 with a typical:peak threshold; issuance seq 22239
+  ```
+
+- `14:30–14:31` — **AC-4, the chain still verifies** after the new cards, from the API and from GitHub alone. Anchor 26 at 21:30:00Z covers seq 22239: commit `e92c8f65`, `ledger/entries/2026/10/09/21.jsonl.gz`, 409,434 B.
+  ```
+  $ python3 scripts/verify_ledger.py --api https://<host>
+  OK {"entries": 22239, "first_seq": 1, "last_seq": 22239, "head_hash": "d2b8921a…7b9f", "by_type": {"genesis": 1, "model_card": 5,
+      "forecast": 22195, "issuance": 26, "official_forecast": 12}, "anchors_checked": 26, "anchors_outside_range": 0, "source": "api"}
+  $ python3 scripts/verify_ledger.py --source github
+  OK {… same entries, head and counts …, "anchors_checked": 26, "source": "github", "files": 26}
+  $ curl -s $H/v1/ledger/21383 | jq -r .canonical | jq '.data.params.typical_peak'
+  persistence-v1 · typical-peak-v1 · period [2005, 2024] · 302 values · eccc:08MH029 {"level_m": 3.397, "n_years": 12, "years": [2013, 2024]}
+  ```
+- `14:32` — Part 1 finished. PR #5 marked ready with the STAGE REPORT.
 
 ## Measurements
 
@@ -786,12 +806,12 @@ Part 1 (PR #5). Part 2's criteria (AC-8 to AC-10) are reported with PR 2.
 | AC-1 Fair CRPS live | **PASS** | Bias table (`pytest -s tests/test_crps.py`, 7 levels): fair +0.0 / +0.0 / −0.2 / +1.2 % against quantile-score −19.3 / −18.2 / −14.2 / −12.9 % (normal, log-normal, under-, over-dispersed); 19 levels ±0.1 %. All stored scores recomputed (scorer run 31: 55,258 rows + 27,641 naive, 38.4 s). `/v1/scores/summary` shows fair `mean_crps_m`, `mean_crps_qs_m`, and per pair `crpss`, `mae_skill`, `paired_crps`, `paired_mae`, `n_pairs`. Pure persistence is in `/v1/scores/official`. Work log `12:51–12:56` |
 | AC-2 Feedback end to end | **PASS** | Submitted from the app on the public URL (`scripts/feedback_e2e.cjs` → `{"http_status":202,"status_text":"Thank you. Your feedback was received.","page_errors":[]}`, screenshots before/after). Read back only with `floodlead feedback list` → item #2 decrypted. Synthetic text only. Issue form `.github/ISSUE_TEMPLATE/feedback.yml` is on the branch; it goes live on GitHub when PR #5 is merged to `main`. Work log `13:27` |
 | AC-3 Fraser Valley list and typical yearly peaks | **PASS** | `/v1/gauges/fraser-valley`: **7 of 7** Fraser Valley gauges with a level, an age and an `ok` typical yearly peak (table at `13:12–13:22`). BC counts: 433 computed, **302 ok, 8 flagged, 1 rejected, 122 insufficient**. Screenshots `fraser-valley-desktop.png`, `fraser-valley-375px.png` |
-| AC-4 Ledger records the thresholds before first use; chain verifies | (pending the 21:15Z issuance) | |
+| AC-4 Ledger records the thresholds before first use; chain verifies | **PASS** | Base 21:00Z issuance (run 21:15Z): new cards **seq 21383** (`persistence-v1`, supersedes 1719) and **seq 21384** (`trend3h-v1`, supersedes 3), each with `params.typical_peak` (302 values, provenance and rules; 22,179 / 21,814 B canonical) and `change: "typical yearly peak thresholds added or updated (params.typical_peak); forecast method and other parameters unchanged"`. The first forecast using them is **seq 21385**; 584 of the 854 forecasts (seq 21385–22238) carry `typical:peak`. The old cards are unchanged. Verifiers: work log `14:31` |
 | AC-5 Track record and help panel, desktop and 375 px | **PASS** | `layout-check.txt`: scrollWidth = viewport on every page, including `#/track-record` and `#/` with the help panel open, at 1280 and 375 px. 0 page errors, 0 with a POSIX locale. Screenshots `track-record-*.png`, `help-open-375px.png`. Work log `13:28` |
 | AC-6 README section; PR merged before 01:00 UTC | **PASS** (README) / supervisor (merge) | README "Build Session 3 — working in public" (`0ae99d6`) |
 | AC-7 F2, F4, F3 | **PASS** | F2: `uptime -s`, `last -x reboot`, `docker ps` (work log `12:44`). F4: background replay refresh every 50 min (D-03.9; timing evidence below). F3: database defaults `statement_timeout 15min`, `idle_in_transaction_session_timeout 30min`; `scripts/dbshell` 5 min / 8 MB (work log `13:31`) |
-| AC-11 ruff and pytest | **PASS** | `ruff check .` → All checks passed; `pytest -q` → 115 passed, 4 deselected, DB tests run |
-| AC-12 Decisions, stage doc, contracts | **PASS** (part 1) | 11 decisions (D-03.1–D-03.11). The stage doc is in 10 of the 11 part-1 commits so far, 19:43–20:32Z. Contract files table below |
+| AC-11 ruff and pytest | **PASS** | `ruff check .` → All checks passed; `pytest -q` → 117 passed, 4 deselected, DB tests run (part-1 branch) |
+| AC-12 Decisions, stage doc, contracts | **PASS** (part 1) | 12 decisions (D-03.1–D-03.12). The stage doc is in 13 of the 15 part-1 commits on top of `main` (counting the commit that records this number; one of the 15 is a merge of `main`), 19:43–21:32Z. Contract files table below |
 
 ## Contract files changed
 
