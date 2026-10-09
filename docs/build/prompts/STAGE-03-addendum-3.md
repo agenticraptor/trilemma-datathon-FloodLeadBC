@@ -81,3 +81,11 @@ Say so on the track-record page. Do not claim a better forecast than NWS unless 
 
 - **SR 544 record start.** The replay gives it as 2015-11-14 09:15Z. The USGS file's first record is 00:15 PST (08:15Z). Check the backfill.
 - **Re-checking the trigger.** The SR 544 gauge has reported continuously since Oct 1, 2026, and the 2026 bridge changes the hydraulics there. Re-check the 5.0 ft trigger after the first overflow of the 2026–27 season. Put this in the protocol and in the alert help text.
+
+## 7. Your relay tiers in PR #6 (added ~22:30 UTC, after reading PR #6 at `6fe4edb`)
+
+You already computed tiers from addendum 1's examples. Keep that work, with these changes:
+- **Keep the old table, marked superseded.** In the stage doc, label it "superseded: addendum 1 examples, kept for the record". Do not delete it.
+- **Count alerts, not minor-stage events.** Your table counts the 13 minor-stage events. A warning that never led to a minor crossing (for example Dec 8, 2015, or Oct 28, 2021) is therefore not counted as a false alarm, although to a farmer it is one. Count every warning event as one alert.
+- **Keep the flood watch as a "Watch" row** in the trust table. Count every NWS flood watch naming Whatcom as one alert, scored the same way.
+- **Report the Everson-overflow areal warnings (`FA.W`) as their own descriptive row.** In 2021 (twice) and 2025 they came after Prepare.
