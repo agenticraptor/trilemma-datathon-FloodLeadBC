@@ -147,6 +147,21 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
     - correction products carry a BBB indicator (`CCA`) on the WMO line, which had been read as the product id;
     - severity is now ranked 3 > 2 > 1 > N/0/U, not compared as text.
 
+- `13:49–13:52` — Part-2 code for addendum 1:
+  - the forecast crest, observed crest and stage from each segment's text (`FC_CREST` skips "a previous crest of"). The 2021 first warning gives **148.9 ft**, as the supervisor found. In 156 NRKW1 segments, 57 say "crest near", 14 "crest of", 14 "crested at" (observed), 6 "previous crest of" (history); 49 have no crest phrase (mostly CAN/EXP);
+  - `src/floodlead/scorecard.py` and migration 013, with tests on a synthetic event.
+- `13:52–13:54` — **Which archived products carry values (addendum item 3.1).** One request each to IEM for Dec 1–15 (or 9–11), 2025:
+
+  | PIL | Products | Use |
+  |---|---|---|
+  | FFASEW | 17 | Flood watches → the "heads-up" relay tier. Added to the downloads |
+  | ESFSEW | 5 | Hydrologic outlooks. Added to the downloads |
+  | RVFSEW, HYDSEW, RVSSEW, RRSSEW | 0 | — |
+  | RVFPTR, RVFSEA, RVFNRK, RVDPTR, RVFSTR | 0 | — |
+  | HYDPTR | 2, no NRKW1 line | — |
+
+  No archived RVF/HYD product with NRKW1 values was found under these PILs. The scorecard's forecast values are therefore the crest and timing stated in the FLW/FLS products: text crests, plus H-VTEC begin, crest and end times. NOAA's 6-hourly forecast series is archived by FloodLead only since Oct 7, 2026 (Stage 1).
+
   The Sumas USGS–ECCC overlap is only 427 days. The USGS hourly level at Sumas, WA needs at least 18 hours a day to make a daily mean, and its level record is short. As found.
 
 ## Decisions

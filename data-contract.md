@@ -175,7 +175,7 @@ Yellow sources are never core dependencies. If their terms do not allow the inte
   license: Public domain (NWS products are US public domain; IEM states "The materials found on this website are in the public domain and may be used freely by anyone for any lawful purpose")
   license_url: https://mesonet.agron.iastate.edu/disclaimer.php
   terms_checked_at: https://mesonet.agron.iastate.edu/disclaimer.php (fetched 2026-10-09)
-  access_method: retrieve.py?pil=FLWSEW|FLSSEW&sdate&edate&fmt=text, one request per product and year since 2004, paced 1 request / 2 s
+  access_method: retrieve.py?pil=FLWSEW|FLSSEW|FFASEW|ESFSEW&sdate&edate&fmt=text (flood warnings, flood statements, flood watches, hydrologic outlooks; the last two added Oct 9 for the relay tiers of addendum 1), one request per product and year since 2004, paced 1 request / 2 s
   commercial_use: true
   redistribution: true
   attribution_required: false   # "Attributing the Iowa Environmental Mesonet of Iowa State University would be appreciated" — we do
