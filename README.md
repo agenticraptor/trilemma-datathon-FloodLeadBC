@@ -5,7 +5,7 @@
 FloodLead BC is a flood lead-time forecaster for BC farmers and riverside households. It turns the federal real-time hydrometric feed into a calibrated probability that a specific gauge will cross a level the user chose ("check pumps", "move cattle", "leave") within the next 6–48 hours. When the risk passes the user's own threshold, an agent calls them, waits for approval, and then texts the people on their action list. Every forecast is written to a public, hash-chained ledger and scored against what the river actually did.
 
 > **Live app:** **https://34-130-109-216.sslip.io/** — Sumas Prairie overflow watch, Fraser Valley gauges, station picker, replay of the 2021 and 2025 overflows, [track record](https://34-130-109-216.sslip.io/#/track-record) · [API docs](https://34-130-109-216.sslip.io/docs) · [health](https://34-130-109-216.sslip.io/v1/health)
-> **Brief:** [Brief (AI-drafted at the author's request)](brief.md)
+> **Brief:** [Brief (AI-drafted at the author's request)](brief.md) · **What farmers have today:** [status-quo review](docs/research/fraser-valley-flood-warning-status-quo.md) (AI-assisted, sourced)
 > **Status:** Build Session 3 — working in public (see [below](#build-session-3--working-in-public)). Datathon Season 2026, Trilemma Foundation × Northeastern University Vancouver.
 > **Not an official warning service.** Always follow EmergencyInfoBC, the BC River Forecast Centre, NWS Seattle and your local authority's orders.
 
@@ -54,6 +54,10 @@ For farmers and riverside households in the Fraser Valley and on the Nooksack/Su
   - **the official NWS flood warnings that were actually issued for North Cedarville**, from the public NWS text archive.
 - **A protocol fixed in advance.** The metrics are level skill against persistence, crossing probabilities, hours of warning and false alarms per season. The alert rule, the uncertainty and the kill criteria are all written down and frozen in `docs/evaluation-protocol.md` before training.
 - **The result is published whatever it shows,** including the floods where FloodLead does worse.
+- **Relay first, model second.** The [status-quo review](docs/research/fraser-valley-flood-warning-status-quo.md) found that the weak link is the last mile from the Everson overflow to the barn, not the upstream river forecast. So:
+  - model-free relay rules (official warnings plus overflow-gauge readings, pushed in farm terms) ship first;
+  - a model has to earn its place on top of them, against the review's bar: a daylight "prepare" call at least 24 h before water reaches the border, and calibrated chances of North Cedarville reaching 148 and 150 ft with no low bias.
+- **A scorecard of the official forecasts** (next): every archived NWS North Cedarville warning's crest forecast against what the river did. No agency publishes one.
 
 ### What changed since Build Session 2
 
@@ -183,7 +187,9 @@ Answers to the [Build Session 1 checklist](https://github.com/TrilemmaFoundation
 - **November 2021:** about 628,000 poultry, ~12,000 hogs and 420 dairy cattle died on and around Sumas Prairie, and about 1,100 farms were under evacuation order or alert ([Castanet](https://www.castanet.net/news/BC/353513/Thousands-of-poultry-pigs-cattle-killed-in-Abbotsford-flooding)).
 - **December 2025:** the Nooksack overflowed into Abbotsford. 165 livestock farms were inside the evacuation area, 66 of them under order, and "farmers have been moving livestock out overnight" ([City of Abbotsford, Dec 11, 2025](https://www.abbotsford.ca/sites/default/files/2025-12/2025-12-11%20-%20Floodwaters%20cross%20into%20Abbotsford%20and%20Evacuation%20Orders%20expanded.pdf)). A Chilliwack River dike also breached ([Global News](https://globalnews.ca/news/11575062/bc-fraser-valley-flooding)).
 
-**The pain is timing, not awareness.** A Sumas Way farm-market owner said that in 2021 they "had little time to prepare", and that in 2025, even with 20+ hours of siren warnings, uncertainty about *when and from where* water would rise made people feel unsafe ([The Cascade](https://ufvcascade.ca/the-2025-floods-effect-on-abbotsfords-farmers/)).
+**The pain is timing, not awareness.** The owner of an Abbotsford farm market (Seasons Farm Market) told The Cascade about 2025: "This time we heard the sirens, but we still had lots of time." The reporter adds that in 2021 they "barely had any time to prepare", and sums up that uncertainty about when and from where the water would rise made people feel unsafe ([The Cascade](https://ufvcascade.ca/the-2025-floods-effect-on-abbotsfords-farmers/)). The only documented flood siren is the City of Sumas, Washington one; none is on record for Abbotsford.
+
+In both floods the weak link was the last mile from the Everson overflow to the barn, not the upstream river forecast. The first official crest forecasts for North Cedarville were about 2 ft low. The upgrade to "major" came after the overflow had begun. No official product gives a calibrated probability or a time for the water to reach the border, and the City's 7-hour rule was off in 2025. See the sourced review [What Sumas Prairie farmers have today](docs/research/fraser-valley-flood-warning-status-quo.md) (AI-assisted, Oct 9, 2026).
 
 **Why this is my problem too.** I live in Vancouver, not on a farm. But when Sumas Prairie floods, my household and family feel it directly:
 
@@ -198,7 +204,13 @@ So every flood on this farmland reaches the eggs, milk and chicken on my family'
 
 **The direct users are farmers, and they are being contacted now.** The person who feels the flood first is the farmer moving animals at night. Starting Oct 7, 2026, I am reaching out directly to farmers affected in 2021 and 2025: a Sumas Prairie farm business evacuated in 2021, and producers through the BC Dairy and BC Poultry associations, which convened a roundtable of affected animal producers in January 2026 ([City of Abbotsford](https://www.abbotsford.ca/node/11732)). Progress and their own words will be logged in [`evidence/user-outreach.md`](evidence/user-outreach.md). Until then, the farmer-side pain rests on public evidence, not first-hand interviews.
 
-**A single prompt or search does not solve it.** A chatbot has no live gauge feed and no calibrated error history for a specific gauge. Official tools give basin labels (RFC advisories), raw levels (Wateroffice) or evacuation orders after the fact. None says "your level, in X hours, with Y% confidence" and none acts on it. Whether Google Flood Hub covers these gauges is still being checked.
+**A single prompt or search does not solve it.** A chatbot has no live gauge feed and no calibrated error history for a specific gauge. Official tools give:
+- basin-level advisories (BC River Forecast Centre);
+- deterministic station forecasts: the RFC's COFFEE 5-day and CLEVER 10-day forecasts, in daily steps, for Sumas River near Huntingdon and Chilliwack River at Vedder Crossing (COFFEE runs only during rain events), and NWS's 6-hourly forecasts for the Nooksack at North Cedarville;
+- raw levels (Wateroffice, USGS);
+- evacuation alerts and orders (in 2021 after the water arrived; in 2025 about 12–18 hours before it).
+
+None gives a calibrated probability or says "your level, in X hours, with Y% confidence", and none acts on it. Whether Google Flood Hub covers these gauges is still being checked.
 
 **Scope is a microproduct.** First version: ~7 Fraser Valley gauges, one threshold per user, one alert-and-approve flow, one public ledger.
 
@@ -249,7 +261,7 @@ Full table: [`evidence/station_summary.csv`](evidence/station_summary.csv).
 | | |
 |---|---|
 | **Target user** | Livestock and crop farmers on BC floodplains (first: Fraser Valley — Sumas Prairie, Chilliwack/Vedder, Nicomekl), plus riverside households and campgrounds. |
-| **Problem** | Official River Forecast Centre (RFC) products are basin-level labels (High Streamflow Advisory → Flood Watch → Flood Warning). They don't say *when* a given gauge will reach the level at which *this* person needs 6 hours to move animals. Outside freshet season, RFC's CLEVER model updates once or twice a week. People watch raw gauge charts and guess. |
+| **Problem** | Official River Forecast Centre (RFC) advisories are basin-level labels (High Streamflow Advisory → Flood Watch → Flood Warning). The RFC also publishes deterministic station forecasts in daily steps for Sumas at Huntingdon and Chilliwack at Vedder: COFFEE (5-day, only during rain events) and CLEVER (10-day, updated once or twice a week outside freshet season). None gives a calibrated probability or says *when* a given gauge will reach the level at which *this* person needs 6 hours to move animals. People watch raw gauge charts and guess. |
 | **Why it matters** | In the November 2021 Sumas Prairie floods, about 628,000 poultry, ~12,000 hogs and 420 dairy cattle died, and about 1,100 farms were under evacuation order or alert. Moving animals takes hours; every extra hour of reliable warning is trailers that leave in time. |
 | **Data inputs** | ECCC/Water Survey of Canada real-time water level and discharge (5-minute data, ~2,100 stations), ECCC daily historical hydrometric records, ECCC HRDPS precipitation forecasts. RFC advisories used only as a comparison baseline. |
 | **Output utility** | Per gauge and per user threshold: P(crossing within 6/12/24/48 h), P10/P50/P90 peak level, median hours-to-crossing. Voice + SMS alert, approval step, then contact fan-out. |
