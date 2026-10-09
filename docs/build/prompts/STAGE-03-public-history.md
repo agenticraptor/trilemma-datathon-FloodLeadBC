@@ -55,6 +55,17 @@ Carried into this stage:
 - **F4 — Replay cold start.** `/v1/replay/overflow` costs ~9 s when its 1 h cache expires (one supervisor page load took 16.5 s). Refresh it in the background before it expires, so no visitor pays that.
 - **F5 — Correction.** NOAA does not append points to an issuance; our old endpoint cut it at +7 days (D-02.18). The supervisor fixed PLAN.md. Nothing for you to do.
 
+## Owner's direction (Oct 9) and how to spend your time
+
+The owner: "Our main source of convincing is showing real predictability value: superior early-warning accuracy and capability compared with anything available today to the farmers in BC. We have to make sure not to fool ourselves." So keep part 1 lean: it is the minimum for Build Session 3. The model work is what matters.
+
+**Start part 2's long downloads in the background at the very beginning**, as one-off compose services (`restart: "no"`, paced, resumable), so they run while you build part 1:
+- ECCC daily history and annual peaks;
+- the approved rainfall archives;
+- the NWS warning archive.
+
+Record each one's start time, rate and finish time. The supervisor is writing an honest analysis of what farmers have today; it will reach you as an addendum before you write the evaluation protocol (part 2, item 7).
+
 ## Part 1 — Working in public (PR 1, before Build Session 3)
 
 Priorities, in order. If time runs out, ship 1–5 and report the rest as PARTIAL.
@@ -109,7 +120,7 @@ The goal is leakage-safe datasets that let Stage 4 train and walk-forward test a
    - Find out and record **from which date as-issued forecasts exist** for our basins. That date decides which floods can be replayed with forecast rainfall (fair) and which only with observed rainfall (an "oracle" upper bound that `evaluation.md` requires to be labelled).
    - Measure each source's publication latency (when an hour's value becomes available).
    - Basin averages: define each basin's polygon or point set, and save it with its source.
-3. **The official NWS flood warnings that were actually issued.** NWS text products are US public domain. The Iowa Environmental Mesonet (Iowa State University) keeps a free public archive of them. **This source needs the human's approval:** use it only if the relay message that delivered this prompt says "IEM approved"; otherwise skip it and record that. If approved, add its usage-rights record first.
+3. **The official NWS flood warnings that were actually issued.** NWS text products are US public domain. The Iowa Environmental Mesonet (Iowa State University) keeps a free public archive of them. **Approved by the human on Oct 9.** Add its usage-rights record first.
    - **Access:** `https://mesonet.agron.iastate.edu/cgi-bin/afos/retrieve.py?pil=FLWSEW&sdate=…&edate=…&fmt=text` (also `FLSSEW`).
    - **Parse:** each product's issuance time, its P-VTEC (action, event number) and the H-VTEC for `NRKW1` (also `NKSW1`, `NREW1`, `NOEW1`): severity, and forecast flood begin, crest and end times.
    - **Build:** an "official warning timeline" for every event in the history.
