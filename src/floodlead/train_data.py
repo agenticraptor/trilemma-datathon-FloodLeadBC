@@ -82,3 +82,31 @@ def check_training_rows(rs: Iterable[dict[str, str]]) -> int:
             raise HeldOutRowError(f"WY{wy} ({split_of(wy)}) row in a training/calibration set")
         n += 1
     return n
+
+
+def final_training_rows(path: Path, fold: str) -> Iterator[dict[str, str]]:
+    """F5 (Stage 4): rows for training one final model of amendment 1 (A2), and only those. `fold` is a key of
+    `final_run_folds()`: 'heldout_wy2022' allows WY2005-2021; 'heldout_wy2026' and 'live' allow WY2005-2025, which
+    includes WY2022, as a live system would have had the 2021 flood by Dec 2025. WY2026 and WY >= 2027 are never
+    allowed. Only the final-run command may call this; development code uses `development_rows()`."""
+    folds = final_run_folds()
+    if fold not in folds:
+        raise HeldOutRowError(f"unknown final-run fold {fold!r}; expected one of {sorted(folds)}")
+    allowed = set(folds[fold])
+    assert not allowed & ({2026} | set(range(LIVE_FROM_WY, LIVE_FROM_WY + 100))), "A2 never trains on WY2026+"
+    for r in rows(path):
+        wy = int(r["wy"])
+        if wy in allowed:
+            yield r
+
+
+def check_final_rows(rs: Iterable[dict[str, str]], fold: str) -> int:
+    """Guard for a final-run fit: raise on the first row outside the fold's A2 training years."""
+    allowed = set(final_run_folds()[fold])
+    n = 0
+    for r in rs:
+        wy = int(r["wy"])
+        if wy not in allowed:
+            raise HeldOutRowError(f"WY{wy} row in the final-run fit for {fold}")
+        n += 1
+    return n

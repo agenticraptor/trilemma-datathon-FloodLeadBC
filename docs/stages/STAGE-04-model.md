@@ -99,11 +99,31 @@ The relay (trust table) and the official scorecard already stand on their own; t
 - **Impact:** about 4 readings per site per year (≈ 0.01 % of rows). The frozen datasets (pinned sha256) are **not** rebuilt. A row whose target hour falls in such a gap has an empty target; features use the latest reading within 2 h.
 - **Fix later (Stage 5):** a bulk re-fetch with the margin, about 7 continuous sites × 22 years ≈ 154 NWIS requests. The pinned datasets stay as they are.
 
+### D-04.3 — F2–F5: scorecard corrections, README wording, and the final-run reader (Oct 10, 02:45–02:52 UTC)
+
+- **F2.** The "after the crest" bin now carries `crest_time_mae_h = null` and `crest_time_note` ("not a forecast: issued after the observed crest"). The page shows "—" with the note.
+- **F3.** `scorecard.forecast_conditioned()`, in `/v1/official-scorecard` (`summary.<point>.forecast_conditioned`), the page ("Sorted by what was forecast") and the README. It uses OLS with a t-based slope interval: a t quantile from the regularised incomplete beta, checked at 2.0555 for 26 df and 2.306 for 8 df.
+  - **It reproduces the supervisor's QA numbers exactly:**
+    - n = 28 warnings with both crests;
+    - observed = 15.15 + 0.895 × the first forecast;
+    - slope 95 % CI 0.35–1.44;
+    - residual SD 1.19 ft (the supervisor's "typical miss");
+    - first forecast ≥ 148 ft: 10 warnings, **8 lower, 2 higher** (2021 +1.86 ft, 2025 +2.04 ft); error mean −0.63 ft, range −3.10 to +2.04 ft.
+  - The long-lead sentence sits under the lead table.
+  - Production scorecard rebuilt: build 3, which includes the F1 records.
+- **F4.** README: "13–19 %" in place of "about 19 %". The "about 2 ft low" sentence now adds that, sorted by forecast, the first crest was higher than the outcome in 8 of 10 moderate-or-worse forecasts.
+- **F5.** `train_data.final_training_rows(path, fold)` and `check_final_rows()` allow exactly `final_run_folds()[fold]`. Tests:
+  - WY2026 and WY ≥ 2027 are refused in every fold;
+  - WY2022 is refused in `heldout_wy2022`, and allowed in `heldout_wy2026` and `live`;
+  - a static test allows callers only in `train_data.py` and the final-run module, `model_final.py`.
+
 ## Work log
 
 - `19:36` — `git checkout main && git pull` → `8c04afb`; branch `stage-04-model`. The Stage 3 part-2 worktree was removed (its branch is merged). Read the prompt and the inputs above.
 
 - `19:38–19:41` — Draft PR #7 opened. F1 (D-04.1, D-04.2): cause found in the archived payload; margin fetch and test; production re-fetch (9 → 13 rows); trust table unchanged; the Jan 1 gap measured.
+
+- `19:45–19:52` — F2–F5 (D-04.3). Production scorecard build 3 and web deployed from PR #7 (`.deployed-commit` `fb4c77d`).
 
 ## Measurements
 
