@@ -59,6 +59,35 @@ For farmers and riverside households in the Fraser Valley and on the Nooksack/Su
   - a model has to earn its place on top of them, against the review's bar: a daylight "prepare" call at least 24 h before water reaches the border, and calibrated chances of North Cedarville reaching 148 and 150 ft with no low bias.
 - **A scorecard of the official forecasts:** every archived NWS North Cedarville warning's crest forecast against what the river did (below). No agency publishes one.
 
+### Can a farmer trust the alerts? 11 years of official warnings, sorted by what a farmer would do
+
+**How it was computed:**
+- **Code and file:** `floodlead history build trust` (run `trust-2026-10-10T02:02:28Z`; file [`docs/data/trust-v2.json`](docs/data/trust-v2.json), every alert listed).
+- **Inputs:** the NWS warning archive (Iowa Environmental Mesonet) and the USGS overflow gauge at SR 544, Everson.
+- **Period:** from Nov 14, 2015, when that gauge began, to Oct 10, 2026. That is 10.9 years with 7 overflows. 4 of them were large (≥ 5 ft at SR 544): Feb 2020, Nov 14 and Nov 28, 2021, and Dec 2025.
+- **Checked:** the supervisor's independent count matches it alert by alert.
+
+| Alert, and what the farmer does | Alerts | Followed by an overflow at Everson | Followed by a large overflow | Overflows missed | Timing |
+|---|---|---|---|---|---|
+| **Heads-up:** any NWS flood warning for the Nooksack at North Cedarville. Check fuel, trailers and contacts | 18 | 7 (39 %; 95 % CI 17–64 %) | 4 (22 %) | 0 | 2.2–18.5 h before the overflow began |
+| **Prepare:** an NWS forecast of moderate flooding or worse. Book trucks and a receiving farm; move young stock | 8 | 6 (75 %; 35–97 %) | 4 (50 %; 16–84 %) | 1 small (Mar 2026) | 4.0, 6.6, 13.3 and 18.5 h before the 4 large ones began |
+| **Move now:** the SR 544 overflow gauge reads ≥ 5.0 ft. Move milking herds and poultry | 4 | 4 | 4 (95 % CI 40–100 %) | the 3 small ones, by design | 0.8–3.5 h *after* the overflow began |
+
+- **False alarms:**
+  - Prepare fired twice with no overflow at all (Dec 2015, Nov 2018), about once every 5 years.
+  - Heads-up fired 11 times with no overflow, about once a year. That is why it asks for nothing costly.
+- **Against the City of Abbotsford (2 floods only):**
+  - **Prepare** came 12.7 h before the City's first alert in 2021, in daylight, and 17.7–19.1 h before it in 2025, at night.
+  - **Move now** came 4.5 h before the City's first alert in 2021, but 2.9–4.2 h after it in 2025.
+- **Read it with care:**
+  - **These are the official warnings' own hit rates.** FloodLead adds delivery to a farmer's phone, farm terms, the odds on every alert and a public record. It does not claim a better forecast.
+  - **Descriptive and in-sample.** The Prepare tier and the 5.0 ft level were chosen on Oct 9, after seeing these years, including 2021 and 2025.
+    - The 4.0 ft variant (the NWS minor stage at SR 544) was not chosen from the data.
+    - It fired 7 times, every one followed by an overflow, and 4 of them large.
+  - **Small numbers.** There are only 4 large overflows, so every interval is wide.
+  - **The bridge.** The SR 544 culvert is being replaced by a bridge in 2026, which may change the gauge's readings. The 5.0 ft level will be re-checked after the next overflow.
+  - **A wider "Watch" tier** (NWS flood watches naming Whatcom, days ahead) fired 47 times; 8 were followed by an overflow.
+
 ### How accurate were the official forecasts? (NWS North Cedarville warnings, 2006–2026)
 
 FloodLead-computed from the public archives: NWS Seattle FLW/FLS products via the Iowa Environmental Mesonet, against the USGS gauge record. Live page: [#/official-scorecard](https://34-130-109-216.sslip.io/#/official-scorecard) · API: `/v1/official-scorecard` (scorecard built Oct 9, 2026).
