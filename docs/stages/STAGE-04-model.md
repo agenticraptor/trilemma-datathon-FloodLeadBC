@@ -285,6 +285,16 @@ The relay (trust table) and the official scorecard already stand on their own; t
   - prepare **(0.5, 2)**: of the rules meeting FAR ≤ 0.5, the longest median warning;
   - move **(0.5, 1)**.
   - Both rest on 3 validation events each, so the intervals are very wide, and are shown.
+- **The development events, one by one.** "Relay v1 move" is the North Cedarville minor-stage crossing.
+
+| Event | Model prepare (h before ≥ 148 ft) | Model move (h before onset) | Relay v1 move (h before onset) | Max P(≥ 148 ft within 24 h) in the 48 h before |
+|---|---|---|---|---|
+| 2015-11-18 | none | 4.75 | 6.00 | 0.59 |
+| 2017-11-23 | 17:00Z, 1.25 h **after** the crossing (a false alarm under §4) | 3.42 | 6.42 | 0.34 |
+| 2020-02-01 | 3.25 | 6.92 | 5.17 | 0.94 |
+| 2009-01-07, 2010-12-12 | training-only years: no out-of-sample prediction | | | |
+
+- **The move tier's one false alarm** (2015-11-13 23:00Z) came 9 h before the 2015-11-14 overflow, whose start the gauge did not record because its record began during it (excluded per D-04.8). It is counted as a false alarm, conservatively.
 - **Plain reading:**
   - Level forecasts beat persistence clearly at every horizon.
   - Probabilities are well calibrated on the rare high levels that development has (≤ 148.85 ft).
