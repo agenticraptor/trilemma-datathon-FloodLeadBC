@@ -58,6 +58,10 @@ def main(argv: list[str] | None = None) -> int:
     bu.add_argument("--api", choices=["auto", "ogc", "nwis"], default="auto",
                     help="auto: OGC API v1 when USGS_API_KEY is set, else legacy NWIS IV (no key needed)")
     bsub.add_parser("nwps", help="NWPS gauge metadata, flood categories and current forecasts")
+    bw = bsub.add_parser("usgs-window", help="forced NWIS IV re-fetch of one site and window (with a 1-day margin)")
+    bw.add_argument("--site", required=True)
+    bw.add_argument("--start", required=True, help="ISO time (UTC)")
+    bw.add_argument("--end", required=True, help="ISO time (UTC)")
     h = sub.add_parser("history", help="Stage 3 history: paced, resumable downloads into the raw archive")
     hsub = h.add_subparsers(dest="hcmd", required=True)
     hd = hsub.add_parser("download", help="download one or more sources, in order (skips finished tasks)")
@@ -199,6 +203,10 @@ def main(argv: list[str] | None = None) -> int:
             usgs.backfill(pool, sites, since, until, chunk_months=args.chunk_months, api=args.api)
         elif args.what == "nwps":
             nwps.ingest_live(pool, job="backfill-nwps")
+        elif args.what == "usgs-window":
+            a = datetime.fromisoformat(args.start).replace(tzinfo=UTC)
+            b = datetime.fromisoformat(args.end).replace(tzinfo=UTC)
+            print(usgs.refetch_window(pool, args.site, a, b))
         return 0
     return 1
 
