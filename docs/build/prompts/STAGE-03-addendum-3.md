@@ -14,7 +14,7 @@ Apply this after addenda 1 and 2. It needs no new data sources and costs $0.
 
 ## 1. Freeze these tiers
 
-They replace the examples in addendum 1, item 2. Write them into `docs/evaluation-protocol.md` before any evaluation run. Keep addendum 1's review bar (item 4) unchanged.
+They replace the examples in addendum 1, item 2. You froze the protocol at `45367d1` before this addendum reached you, so add the tiers to `docs/evaluation-protocol.md` as a dated amendment ("relay v2"; see [the protocol review](STAGE-03-protocol-review.md), A4), before any model is trained. Keep addendum 1's review bar (item 4) unchanged.
 
 | Tier | Trigger | What the farmer does |
 |---|---|---|
@@ -25,7 +25,8 @@ They replace the examples in addendum 1, item 2. Write them into `docs/evaluatio
 - **Move now is provisional.** The supervisor chose 5.0 ft after looking at the 2015–2026 record. It separates the four overflows in the years officials cite as reaching Canada (2020, 2021, 2025) from three small ones, which peaked at 4.06–4.91 ft.
   - Label it "chosen after seeing the data" everywhere.
   - Also report the 4.0 ft variant. That is the NWS minor stage for the gauge, and it was not chosen from the data.
-- **Model variant (Stage 4).** Score "Prepare-M": the model's probability of overflow onset within 24 h crossing a threshold. Fix that threshold from the training years only. Report it beside the NWS-based Prepare. It replaces Prepare only if it wins under the protocol.
+- **Model variant (Stage 4).** "Prepare-M" is the protocol's model prepare tier (§5: North Cedarville ≥ 148 ft within 24 h, with (p\*, k) chosen on the validation years only). Report it beside the NWS-based Prepare. It replaces Prepare only if it wins under the protocol.
+- **In-sample.** The supervisor chose the Prepare tier and the 5.0 ft level after seeing every year, including the held-out ones. Relay v2 numbers are descriptive and are never presented as held-out results.
 - **Night.** Flag each trigger as day or night. Move now always pushes. Whether Prepare pushes at night is the farmer's choice (Stage 7).
 - **Gauge missing.** If SR 544 is not reporting, the alert says so. Never infer a Move-now signal.
 
