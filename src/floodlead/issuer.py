@@ -20,7 +20,7 @@ import psycopg
 from psycopg_pool import ConnectionPool
 
 from floodlead import baselines as bl
-from floodlead import ledger, log
+from floodlead import ledger, log, typical_peaks
 
 L = log.get(__name__)
 
@@ -61,9 +61,11 @@ def params_hash(obj: Any) -> str:
     return hashlib.sha256(ledger.canonical_json(obj).encode()).hexdigest()
 
 
-def card_data(model: str) -> dict[str, Any]:
+def card_data(model: str, typical: dict[str, Any] | None = None) -> dict[str, Any]:
     params = {"model": model, **bl.PARAMS, "stale_lag_min": STALE_LAG_MIN, "rises_m": list(RISES_M),
               "live_window_h": 3, "min_library": MIN_LIBRARY}
+    if typical is not None:  # thresholds and provenance fixed in the card before first use (D-03.8)
+        params["typical_peak"] = typical
     return {"model": model, "method": MODEL_CARDS[model]["method"], "params": params,
             "params_hash": params_hash(params), "code_commit": ledger.code_commit()}
 
@@ -80,7 +82,8 @@ def _rows(conn: psycopg.Connection, sid: str, t0: datetime, t1: datetime, create
         (sid, t0, t1, created_at, created_at)).fetchall()
 
 
-def _thresholds(official: dict[str, Any], y_d: float) -> tuple[dict[str, float], list[dict[str, Any]]]:
+def _thresholds(official: dict[str, Any], y_d: float, typical: dict[str, Any] | None = None
+                ) -> tuple[dict[str, float], list[dict[str, Any]]]:
     thr: dict[str, float] = {}
     meta: list[dict[str, Any]] = []
     for name in ("action", "minor", "moderate", "major"):
@@ -91,6 +94,12 @@ def _thresholds(official: dict[str, Any], y_d: float) -> tuple[dict[str, float],
             meta.append({"key": key, "kind": "official", "level_m": ledger.r4(c["stage_m"]),
                          "level_ft": c.get("stage_ft"), "label": f"NWS {name} flood stage",
                          "source": f"NOAA NWS NWPS {official.get('lid')}"})
+    if typical is not None:
+        thr["typical:peak"] = float(typical["level_m"])
+        meta.append({"key": "typical:peak", "kind": "typical", "level_m": ledger.r4(typical["level_m"]),
+                     "label": "Typical yearly peak (reached in about half of years): FloodLead-derived from ECCC "
+                              "records, not an official flood level",
+                     "source": f"{typical['method']} in the model card params (typical_peak)"})
     for r in RISES_M:
         key = f"rise:+{r}"
         thr[key] = y_d + r
@@ -100,7 +109,8 @@ def _thresholds(official: dict[str, Any], y_d: float) -> tuple[dict[str, float],
 
 
 def forecast_station(conn: psycopg.Connection, sid: str, data_as_of: datetime, base: datetime, created_at: datetime,
-                     official: dict[str, Any], skipped: dict[str, int]) -> list[ledger.Pending]:
+                     official: dict[str, Any], skipped: dict[str, int], typical: dict[str, Any] | None = None
+                     ) -> list[ledger.Pending]:
     src = sid.split(":", 1)[0]
     step = STEP[src]
     start = data_as_of - TRAILING
@@ -138,7 +148,7 @@ def forecast_station(conn: psycopg.Connection, sid: str, data_as_of: datetime, b
                 continue
             gy = bl.to_grid(yr, step, start=s0, end=s1)
             seasonal.append((gy, np.arange(window_pts, len(gy.y), 3 * hourly)))
-    thr, thr_meta = _thresholds(official, y_d)
+    thr, thr_meta = _thresholds(official, y_d, typical)
     stale = (created_at - data_as_of) > timedelta(minutes=STALE_LAG_MIN[src])
     out: list[ledger.Pending] = []
     for model in bl.MODELS:
@@ -249,9 +259,13 @@ def run(pool: ConnectionPool, now: datetime | None = None, dry_run: bool = False
             skipped["no level observation in the last 3 h"] = max(0, n_level - len(stations_live))
             official = {sid: thr for sid, thr in conn.execute(
                 "SELECT station_id, official_thresholds FROM stations WHERE official_thresholds <> '{}'::jsonb")}
+            tp_block = typical_peaks.card_block(conn)
+            tp_values = (tp_block or {}).get("values", {})
             for sid, data_as_of in stations_live:
+                tpv = tp_values.get(sid)
                 try:
-                    pend += forecast_station(conn, sid, data_as_of, base, created_at, official.get(sid, {}), skipped)
+                    pend += forecast_station(conn, sid, data_as_of, base, created_at, official.get(sid, {}), skipped,
+                                             {**tpv, "method": tp_block["method"]} if tpv and tp_block else None)
                 except Exception as e:  # noqa: BLE001 - one station never stops the run
                     k = f"error: {type(e).__name__}"
                     skipped[k] = skipped.get(k, 0) + 1
@@ -276,15 +290,21 @@ def run(pool: ConnectionPool, now: datetime | None = None, dry_run: bool = False
             head: list[ledger.Pending] = []
             # Model cards: a new card whenever a model's parameters change (or on first use).
             for model in bl.MODELS:
-                card = card_data(model)
+                card = card_data(model, typical_peaks.card_block(conn))
                 last = conn.execute("SELECT seq, canonical FROM ledger_entries WHERE entry_type = 'model_card'"
                                     " AND model = %s ORDER BY seq DESC LIMIT 1", (model,)).fetchone()
                 prev = json.loads(last[1])["data"] if last else None
                 if prev is None or prev["params_hash"] != card["params_hash"] or prev["method"] != card["method"]:
                     if prev is not None:
                         card["supersedes_seq"] = last[0]
-                        card["change"] = ("parameters changed" if prev["params_hash"] != card["params_hash"] else
-                                          "method description corrected; parameters and outputs unchanged")
+                        p_old = {k: v for k, v in prev["params"].items() if k != "typical_peak"}
+                        p_new = {k: v for k, v in card["params"].items() if k != "typical_peak"}
+                        card["change"] = (
+                            "typical yearly peak thresholds added or updated (params.typical_peak); forecast method "
+                            "and other parameters unchanged" if p_old == p_new and prev["params_hash"] !=
+                            card["params_hash"] else
+                            "parameters changed" if prev["params_hash"] != card["params_hash"] else
+                            "method description corrected; parameters and outputs unchanged")
                     head.append(ledger.Pending("model_card", card, created_at, model=model))
             # Gaps: every base time after the last issuance/gap that has neither.
             last_base = conn.execute("SELECT max(base_time) FROM ledger_entries WHERE entry_type IN"

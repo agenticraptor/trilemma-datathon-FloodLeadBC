@@ -100,7 +100,8 @@ data_architecture:
 | Component | Tech | Notes |
 |---|---|---|
 | Ingestor | Python 3.12, `httpx`, `psycopg` 3 (`src/floodlead/`) | Polls ECCC/USGS/NWPS, archives each raw payload (gzip, sha256, 0444) and upserts rows into Timescale |
-| Backfill | `floodlead backfill eccc-30d / usgs / nwps` | Datamart 30-day files; USGS 15-min history since 2004 (paced, resumable); HYDAT history in Stage 3 |
+| Backfill | `floodlead backfill eccc-30d / usgs / nwps` | Datamart 30-day files; USGS 15-min history since 2004 (paced, resumable) |
+| History (Stage 3) | `floodlead history download <source…>` (`src/floodlead/history/`), one-off `backfill` containers | Paced, resumable downloads into the raw archive with a manifest (`history_downloads`): ECCC annual peaks, daily means and hourly climate; IEM NWS warnings; NCEI KBLI; SNOTEL; Open-Meteo. `floodlead history load peaks|daily` parses them into new tables; `floodlead history typical-peaks` computes the typical yearly peak per BC gauge |
 | HRDPS subsetter | `xarray` + `cfgrib` | Basin-mean precipitation per run |
 | Feature builder | SQL + pandas/polars | Lags, slopes, upstream travel-time lags, antecedent flow, forecast precip |
 | Models | LightGBM quantile + isotonic calibration; discrete-time hazard for time-to-crossing | CPU only |
@@ -108,11 +109,12 @@ data_architecture:
 | Ledger | `ledger_entries` (migration 002); `entry_hash = sha256(prev_hash + "\n" + canonical)`; DB trigger re-checks every insert; advisory-locked appends | Hourly anchor: new entries + head committed to `ledger/` on the `ledger` branch ([spec](docs/ledger-spec.md)) |
 | Issuer | `src/floodlead/issuer.py`, `baselines.py` (numpy) | Hourly at HH:15; empirical error-path baselines; gaps instead of backdating |
 | Anchor | `src/floodlead/anchor.py` (GitHub Git Data API, fine-grained token) | Hourly at HH:30; one commit per anchor; never `main`, never force |
-| Scorer | `src/floodlead/scorer.py`: quantile-score CRPS, MAE, coverage, PIT, Brier; paired skill; NOAA matched pairs | Hourly at HH:40; derived table `forecast_scores`, summary in `score_summaries` |
+| Scorer | `src/floodlead/scorer.py`: fair CRPS (`crps.py`, CDF rebuilt from the quantiles; quantile score kept as `crps_qs`), MAE, coverage, PIT, Brier; paired CRPSS and MAE skill vs persistence-v1 and pure persistence; NOAA matched pairs | Hourly at HH:40; derived table `forecast_scores`, summary in `score_summaries`; `floodlead score --recompute-crps` |
+| Feedback (Stage 3) | `src/floodlead/feedback.py`, `POST /v1/feedback` | Anonymous; free text Fernet-encrypted (`FEEDBACK_KEY`); append-only table; per-client-IP limits in memory; read only with `floodlead feedback list` |
 | Agent | Explicit state machine | `detect → compose → call_user → await_approval → notify_contacts → escalate` |
 | Messaging | Voice + SMS provider with Canadian numbers | Webhooks for keypress and replies |
 | Public API | FastAPI + uvicorn behind Caddy | `/v1/health`, stations, observations, official forecasts (Stage 1) |
-| Web | Static `web/` (vanilla JS, uPlot 1.6.32 vendored), served by Caddy under `default-src 'self'` | Overflow watch, replay, station picker, personal level (device only), ledger panel; snapshot mode from `floodlead export-demo` |
+| Web | Static `web/` (vanilla JS, uPlot 1.6.32 vendored), deployed by `scripts/deploy_web.sh` to `/srv/floodlead/web` and served by Caddy under `default-src 'self'` | Overflow watch, Fraser Valley gauges, replay, station picker, personal level (device only), ledger panel, track record, "How to read this", feedback box; snapshot mode from `floodlead export-demo` |
 | Observability | Prometheus + Grafana; structured JSON logs | Feed lag, ingest rate, model latency, alert outcomes |
 
 ## Core schema
@@ -156,6 +158,14 @@ forecast_scores(seq, h, station_id, source, model, base_time, valid_at, stale_in
                 noaa jsonb, scored_at, scorer_run_id)     -- derived; PK (seq, h); rewritten on truth revision
 score_summaries(scorer_run_id PK, generated_at, body jsonb)
 payload_coverage(station_id, kind, published_at, ts_min, ts_max, raw_object_id, last_seen_at)  -- PK (station_id, kind)
+-- Stage 3 (migrations 006-010):
+forecast_scores.crps_qs, forecast_scores_naive.crps_qs                -- the old quantile score, kept as a secondary column
+history_downloads(source, key, url, status, http_status, bytes, raw_object_id, fetched_at, elapsed_s, error)
+eccc_annual_peaks(station_number, year, data_type, peak_code, peak_at, value, symbol, raw_object_id)
+eccc_daily(station_number, date, level, discharge, level_symbol, discharge_symbol, raw_object_id)  -- 7.8 M rows
+typical_peaks(method, station_id, status, value_m, n_years, first_year, last_year, reason, checks jsonb, computed_at)
+feedback(feedback_id, received_at, route, station_id, useful, text_enc bytea, text_chars, key_id, app_version)
+                                                                       -- append-only; no IP, name, email or phone
 ```
 
 The Stage 1 sketch below of `forecast`/`score` is superseded by these: a forecast is a `forecast` ledger entry whose `canonical` JSON carries `q`, `qmax` and `p_exceed` per horizon (see the spec).
@@ -194,7 +204,10 @@ Live since Stage 1 (read-only; OpenAPI at `/docs`; every response carries `attri
 | GET | `/v1/replay/overflow`, `/v1/replay/overflow/{event_id}/series` | Every North Cedarville minor-stage event and the Sumas Prairie overflow onset, computed from stored data |
 | GET | `/v1/stations/{id}/forecast` | Latest FloodLead baseline forecast per model (seq, hash, q, qmax, p_exceed) + NOAA's latest issuance, unmodified |
 | GET | `/v1/ledger?after_seq=&limit=`, `/v1/ledger/head`, `/v1/ledger/{seq}` | Ledger entries with canonical text and hashes; head with the latest anchor |
-| GET | `/v1/scores/summary?source=&model=&horizon=`, `/v1/scores/official?lid=` | Materialised scorer output with its run ID |
+| GET | `/v1/scores/summary?source=&model=&horizon=`, `/v1/scores/official?lid=` | Materialised scorer output with its run ID (fair CRPS, `mean_crps_qs_m`, CRPSS and MAE skill; pure persistence included) |
+| GET | `/v1/gauges/fraser-valley` | Fraser Valley gauges: latest level, data age, typical yearly peak (FloodLead-derived, not official) and the distance below it |
+| GET | `/v1/track-record` | Forecasts issued, chain head and anchor, skill against pure persistence per horizon with n, and generated plain-language statements |
+| POST | `/v1/feedback` | Anonymous feedback (≤ 1,000 characters, encrypted at rest, never echoed); 202, or 400/413/429 |
 
 Planned:
 
@@ -210,4 +223,6 @@ Planned:
 - Docker Compose (`compose.yaml`; scheduler jobs in `ingest`: ECCC every 5 min, USGS 15 min, NWPS 30 min, `ledger-issue` HH:15, `ledger-anchor` HH:30, `scorer` HH:40, station metadata daily): `db` (timescale/timescaledb:2.30.2-pg16, ≤ 2.5 GiB, loopback-only port), `ingest` (≤ 1 GiB), `api` (≤ 512 MiB), `caddy` (caddy:2.11.7-alpine, ≤ 256 MiB, ports 80/443), all `restart: unless-stopped`; one-off `backfill` containers (`restart: "no"`).
 - No managed Postgres and no object storage: Postgres data (named volume) and the raw archive (`/srv/floodlead/archive`) live on the boot disk. **There is no off-machine copy of either** (disk snapshots declined by the owner on Oct 8; accepted risk). The live track record survives a disk loss because the ledger entries and chain heads are published hourly to the `ledger` branch.
 - Personal data (from Stage 7) stays in Canada on this VM, encrypted at rest.
-- Secrets only in `.env` on the VM (gitignored). GitHub Actions for tests in Stage 8.
+- Secrets only in `.env` on the VM (gitignored), including `FEEDBACK_KEY` from Stage 3. GitHub Actions for tests in Stage 8.
+- Database guard rails (Stage 3, F3): `statement_timeout = 15min` and `idle_in_transaction_session_timeout = 30min` as database defaults; ad-hoc work through `scripts/dbshell` (5 min, `work_mem` 8 MB); history in separate tables, never in the `observations` hypertable.
+- The static app is deployed explicitly (`scripts/deploy_web.sh`, `rsync --delete` into `/srv/floodlead/web`), never served from the git working tree (Stage 3, D-03.11).

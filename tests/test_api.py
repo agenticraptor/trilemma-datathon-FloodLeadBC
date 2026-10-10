@@ -200,3 +200,50 @@ def test_replay_endpoint_shape_on_empty_history(lclient: TestClient) -> None:
     assert r["events"] == [] and r["summary"]["events_total"] == 0 and len(r["caveats"]) >= 3
     assert r["gauges"]["cedarville"]["stages_ft"]["minor"] == 146.5
     assert lclient.get("/v1/replay/overflow/2021-11-14/series").status_code == 404
+
+
+def test_fraser_valley_contract(client: TestClient) -> None:
+    b = client.get("/v1/gauges/fraser-valley").json()
+    assert "not an official flood level" in b["label"] and b["attribution"]
+    ids = [g["station_id"] for g in b["gauges"]]
+    assert {"eccc:08MH029", "eccc:08MH001", "eccc:08MH103", "eccc:08MF005", "eccc:08MH024", "eccc:08MH155",
+            "eccc:08MF062"} <= set(ids)
+    g = {x["station_id"]: x for x in b["gauges"]}
+    assert g["eccc:08MH024"]["tidal"] is True and "tide" in g["eccc:08MH024"]["note"]
+    for x in b["gauges"]:
+        assert set(x) >= {"short_name", "latest", "typical_peak", "typical_peak_note", "tidal", "note"}
+        assert (x["typical_peak"] is None) != (x["typical_peak_note"] is None)
+
+
+def test_track_record_contract(client: TestClient, conn: psycopg.Connection) -> None:
+    assert client.get("/v1/track-record").status_code == 404  # no scorer run yet
+    body = {"scorer_run_id": 1, "generated_at": "2026-10-09T20:40:00Z",
+            "window": {"first_base_time": "2026-10-08T20:00:00Z", "last_valid_at": "2026-10-09T17:00:00Z"},
+            "rules": {"crps": "fair"}, "official": [{"lid": "NRKW1", "model": "persistence-naive", "h": 6, "n": 3}],
+            "groups": [{"model": "persistence-v1", "h": 1, "source": "eccc", "n": 500, "stations": 400, "days": 2,
+                        "skill_vs": {"persistence-naive": {"n_pairs": 500, "crpss": 0.2, "mae_skill": -0.02,
+                                                           "paired_crps": {"persistence-v1": 0.02,
+                                                                           "persistence-naive": 0.025},
+                                                           "paired_mae": {"persistence-v1": 0.0255,
+                                                                          "persistence-naive": 0.025}}}},
+                       {"model": "persistence-naive", "h": 1, "source": "eccc", "n": 500, "stations": 400,
+                        "days": 2, "skill_vs": {}}]}
+    conn.execute("INSERT INTO scorer_runs (scorer_run_id) VALUES (1)")
+    conn.execute("INSERT INTO score_summaries (scorer_run_id, generated_at, body) VALUES (1, now(), %s)",
+                 (json.dumps(body),))
+    try:
+        from floodlead import api
+
+        api._cache.pop("track-record", None)
+        b = client.get("/v1/track-record").json()
+        assert b["scorer_run_id"] == 1 and b["noaa_matched_pairs"] == 3
+        assert b["skill_vs_persistence"] == [{"source": "eccc", "model": "persistence-v1", "h": 1, "n_pairs": 500,
+                                              "stations": 400, "days": 2, "crps_model_m": 0.02,
+                                              "crps_naive_m": 0.025, "crpss": 0.2, "mae_model_m": 0.0255,
+                                              "mae_naive_m": 0.025, "mae_skill": -0.02}]
+        st = " ".join(b["statements"])
+        assert "Neither baseline has a lower median error" in st and "spread" in st and "quiet rivers" in st
+        assert set(b["verify"]) == {"api", "github", "spec_url"} and "forecasts" in b and "ledger" in b
+    finally:
+        conn.execute("DELETE FROM score_summaries")
+        conn.execute("DELETE FROM scorer_runs")

@@ -58,7 +58,23 @@ def main(argv: list[str] | None = None) -> int:
     bu.add_argument("--api", choices=["auto", "ogc", "nwis"], default="auto",
                     help="auto: OGC API v1 when USGS_API_KEY is set, else legacy NWIS IV (no key needed)")
     bsub.add_parser("nwps", help="NWPS gauge metadata, flood categories and current forecasts")
-    sub.add_parser("score", help="score settled forecast horizons now and refresh the summary")
+    h = sub.add_parser("history", help="Stage 3 history: paced, resumable downloads into the raw archive")
+    hsub = h.add_subparsers(dest="hcmd", required=True)
+    hd = hsub.add_parser("download", help="download one or more sources, in order (skips finished tasks)")
+    hd.add_argument("sources", nargs="+")
+    hd.add_argument("--pace", type=float, default=None, help="seconds between requests (default per source)")
+    hd.add_argument("--limit", type=int, default=None, help="stop after this many requests per source")
+    hsub.add_parser("status", help="tasks done, empty and failed per source")
+    hl = hsub.add_parser("load", help="parse archived downloads into the history tables")
+    hl.add_argument("what", choices=["peaks", "daily"])
+    hsub.add_parser("typical-peaks", help="compute the typical yearly peak per BC station (with datum checks)")
+    fb = sub.add_parser("feedback", help="read the in-app feedback (decrypted only here, on the VM)")
+    fbs = fb.add_subparsers(dest="fcmd", required=True)
+    fbl = fbs.add_parser("list", help="print every feedback item, oldest first")
+    fbl.add_argument("--since", default=None, help="ISO date/time (UTC), e.g. 2026-10-09T20:00")
+    sc = sub.add_parser("score", help="score settled forecast horizons now and refresh the summary")
+    sc.add_argument("--recompute-crps", action="store_true",
+                    help="recompute crps (fair) and crps_qs for every stored score, then refresh the summary")
     iss = sub.add_parser("issue", help="run the hourly issuance now (live only; no backdating)")
     iss.add_argument("--dry-run", action="store_true", help="compute forecasts but write nothing")
     lg = sub.add_parser("ledger", help="ledger tools")
@@ -113,6 +129,9 @@ def main(argv: list[str] | None = None) -> int:
 
         from floodlead import scorer
 
+        if args.recompute_crps:
+            print(json.dumps(scorer.recompute_crps(pool), indent=1, default=str))
+            return 0
         print(json.dumps(scorer.run(pool), indent=1, default=str))
         return 0
     if args.cmd == "issue":
@@ -148,6 +167,23 @@ def main(argv: list[str] | None = None) -> int:
         jobs = {j.name: j for j in _jobs(pool)}
         jobs[args.job].fn()
         return 0
+    if args.cmd == "feedback":
+        from floodlead import feedback
+
+        since = datetime.fromisoformat(args.since).replace(tzinfo=UTC) if args.since else None
+        with pool.connection() as conn:
+            items = feedback.read_all(conn, get_settings().feedback_key, since)
+        for it in items:
+            useful = {True: "yes", False: "no", None: "-"}[it["useful"]]
+            text = it["text"].encode("unicode_escape").decode("ascii")  # no terminal control sequences
+            print(f"#{it['id']} {it['received_at']:%Y-%m-%d %H:%MZ} useful={useful} route={it['route']}"
+                  f" station={it['station_id'] or '-'} v={it['app_version'] or '-'}\n    {text}")
+        print(f"{len(items)} item(s)")
+        return 0
+    if args.cmd == "history":
+        from floodlead.history import cli as hcli
+
+        return hcli.main(pool, args)
     if args.cmd == "backfill":
         from floodlead.sources import eccc, nwps, usgs
 

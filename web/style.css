@@ -34,7 +34,7 @@ body {
   overflow-x: hidden;
 }
 a { color: var(--link); }
-a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid #f0b400; outline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid #f0b400; outline-offset: 2px; }
 h1, h2, h3 { line-height: 1.25; margin: 0 0 .4em; }
 h1 { font-size: 1.6rem; }
 h2 { font-size: 1.2rem; }
@@ -69,6 +69,16 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
 .nav a:hover { background: rgba(255,255,255,.1); }
 .nav a.active { background: rgba(255,255,255,.18); color: #fff; }
 
+/* "How to read this" help panel (static <details> under the header, on every page) */
+.help-row { margin-top: 12px; }
+.help { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
+.help > summary { cursor: pointer; padding: 8px 14px; font-weight: 600; color: var(--link); }
+.help[open] > summary { border-bottom: 1px solid var(--line); }
+.help-body { display: grid; grid-template-columns: 1fr; gap: 0 24px; padding: 12px 14px 4px; font-size: .93rem; }
+.help-body h3 { margin: .2em 0 .25em; }
+.help-body .help-foot { grid-column: 1 / -1; color: var(--ink); }
+@media (min-width: 760px) { .help-body { grid-template-columns: 1fr 1fr; } }
+
 main { padding-top: 18px; padding-bottom: 24px; display: block; }
 main:focus { outline: none; }
 .loading { color: var(--muted); padding: 24px 0; }
@@ -76,6 +86,8 @@ main:focus { outline: none; }
 /* Hero */
 .hero { margin-bottom: 16px; }
 .hero .problem { font-size: 1.08rem; max-width: 60em; }
+.hero .jump { font-size: .92rem; color: var(--muted); }
+.hero .jump button.link-btn { font-size: .92rem; padding: 0; }
 .kicker { text-transform: uppercase; letter-spacing: .06em; font-size: .75rem; color: var(--muted); font-weight: 700; margin-bottom: 2px; }
 
 /* Cards & grid */
@@ -161,6 +173,8 @@ main:focus { outline: none; }
 .tag-fl { background: var(--fl-soft); color: #3d5a54; }
 .tag-emp { background: #f3e8f0; color: #6e1446; }
 .tag-official { background: #fdeedd; color: #7a3f00; }
+.tag-check { background: var(--warn-bg); color: var(--warn-ink); }
+.tag-tidal { background: #e3f1f3; color: #0b5560; }
 .model-explain { font-size: .88rem; color: var(--muted); border-left: 3px solid var(--fl); padding-left: 8px; margin-top: 8px; }
 
 /* Tables */
@@ -194,7 +208,9 @@ button, .btn {
   border-radius: 6px; padding: 6px 12px; cursor: pointer;
 }
 button:hover { background: var(--soft); }
-button[aria-selected="true"], button.on { background: #1d3557; border-color: #1d3557; color: #fff; }
+button[aria-selected="true"], button[aria-pressed="true"], button.on, button.primary { background: #1d3557; border-color: #1d3557; color: #fff; }
+button.primary:hover { background: #274a75; }
+button:disabled, button:disabled:hover { opacity: .5; cursor: not-allowed; }
 button.link-btn { border: 0; background: none; color: var(--link); padding: 0 4px; text-decoration: underline; font-size: .85rem; }
 button.small { padding: 2px 8px; font-size: .8rem; }
 
@@ -231,6 +247,42 @@ input[type="search"] { width: 100%; max-width: 32em; }
 .station-list .id { color: var(--muted); font-size: .85rem; }
 .station-list .lvl { text-align: right; font-variant-numeric: tabular-nums; font-size: .9rem; }
 .count-line { color: var(--muted); font-size: .9rem; margin-top: 8px; }
+
+/* Fraser Valley gauges (home page) */
+.gauge-list { list-style: none; padding: 0; margin: 8px 0 10px; }
+.gauge-list > li { border-bottom: 1px solid var(--line); padding: 10px 2px; }
+.gauge-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: start; }
+.gauge-head > span { min-width: 0; overflow-wrap: anywhere; }
+.gauge-head .name { font-weight: 600; }
+.gauge-head .id { color: var(--muted); font-size: .85rem; }
+.gauge-head .lvl { text-align: right; font-variant-numeric: tabular-nums; max-width: 11em; }
+.gauge-pos { margin: 4px 0 0; }
+.gauge-note { margin: 4px 0 0; font-size: .88rem; color: var(--muted); }
+
+/* Track record */
+.statements-card { border-left: 5px solid #1d3557; }
+.statements p { font-size: 1.08rem; font-weight: 600; max-width: 60em; }
+.table-caption { font-size: .88rem; color: var(--muted); margin: 0 0 4px; }
+td.p.neg { color: #8a1c1c; }
+table.skill th { white-space: normal; min-width: 4.5em; vertical-align: bottom; }
+table.skill th.long { min-width: 8.5em; }
+table.skill td:first-child { white-space: nowrap; }
+.table-scroll + h3 { margin-top: 18px; }
+.cmd-row { margin: 0 0 10px; }
+.cmd-label { margin: 0 0 2px; font-size: .88rem; color: var(--muted); }
+.cmd-line { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.cmd { display: block; flex: 1 1 auto; min-width: 0; background: var(--soft); border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* "Was this useful?" feedback box (last card on every page) */
+.feedback textarea {
+  display: block; width: 100%; max-width: 40em; min-height: 4.5em; resize: vertical;
+  font: inherit; padding: 8px 10px; border: 1px solid #b8c2cc; border-radius: 6px; background: #fff; color: var(--ink);
+}
+.fb-privacy { font-size: .9rem; margin-bottom: 6px; }
+.fb-count { font-size: .82rem; color: var(--muted); margin: 2px 0 8px; font-variant-numeric: tabular-nums; }
+.fb-status { margin: 0; }
+.fb-status.ok { color: var(--ok); font-weight: 600; }
+.fb-github { margin: 12px 0 0; font-size: .9rem; }
 
 /* Replay: peaks with / without an overflow */
 .peaks { margin: 6px 0 14px; padding: 10px 12px; background: var(--soft); border-radius: 8px; }

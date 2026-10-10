@@ -117,7 +117,10 @@ services:
       PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME:?PUBLIC_HOSTNAME must be set in .env}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./web:/srv/web:ro
+      # The static app is deployed into a stable directory by scripts/deploy_web.sh (rsync --delete keeps the
+      # directory inode). Bind-mounting ./web broke on Oct 9: a git checkout replaced the directory and Caddy kept
+      # serving the deleted, empty one (D-03.11).
+      - ${WEB_DIR:-/srv/floodlead/web}:/srv/web:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

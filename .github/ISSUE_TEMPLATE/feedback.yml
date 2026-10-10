@@ -1,0 +1,40 @@
+name: Feedback on FloodLead BC
+description: Tell us what was useful, confusing or missing. This is public, so please do not include personal information.
+title: "Feedback: "
+labels: ["feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for trying FloodLead BC. This issue is **public**: please do not include your phone number, address or other personal information.
+        FloodLead BC is **not an official warning service**. For emergencies follow EmergencyInfoBC, the BC River Forecast Centre, NOAA/NWS and your local authority.
+  - type: dropdown
+    id: useful
+    attributes:
+      label: Was it useful?
+      options:
+        - "Yes"
+        - "No"
+        - "Not sure"
+    validations:
+      required: true
+  - type: input
+    id: page
+    attributes:
+      label: Which page or gauge?
+      description: For example "home page", "track record", or a gauge name such as "Sumas River near Huntingdon".
+  - type: textarea
+    id: what
+    attributes:
+      label: What worked, what did not, what is missing?
+    validations:
+      required: true
+  - type: dropdown
+    id: who
+    attributes:
+      label: Which best describes you? (optional)
+      options:
+        - Farmer or landowner in the Fraser Valley or Nooksack area
+        - Emergency or municipal staff
+        - Hydrologist or researcher
+        - Other

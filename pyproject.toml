@@ -12,6 +12,7 @@ dependencies = [
     "pydantic-settings>=2.6",
     "uvicorn>=0.32",
     "numpy>=2.1",
+    "cryptography>=43",
 ]
 
 [project.scripts]

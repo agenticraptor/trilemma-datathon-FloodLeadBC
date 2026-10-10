@@ -34,6 +34,14 @@
     'Credit: U.S. Geological Survey.',
     'Official forecasts and flood categories: NOAA National Weather Service (not affiliated with or endorsed by NOAA/NWS).',
   ];
+  const APP_VERSION = 'stage-03';
+  const FEEDBACK_MAX = 1000;
+  const FEEDBACK_OFFLINE = 'Feedback cannot be sent from the offline snapshot.';
+  const GITHUB_FEEDBACK_URL = 'https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC/issues/new?template=feedback.yml';
+  const REPO_URL = 'https://github.com/agenticraptor/trilemma-datathon-FloodLeadBC';
+  const TYPICAL_PEAK_LABEL = 'Typical yearly peak (reached in about half of years): FloodLead-derived from ECCC records, not an official flood level';
+  const SOURCE_NAMES = { eccc: 'ECCC BC gauges', usgs: 'USGS Nooksack/Sumas gauges' };
+  const STATION_ID_RE = /^[A-Za-z0-9:._-]{1,64}$/;
 
   // ---------------------------------------------------------------------------------------------
   // Snapshot file naming. The backend's `floodlead export-demo` must use the same rule.
@@ -288,6 +296,16 @@
     return `${Math.round(p * 100)} %`;
   }
   function pClass(p) { return isNum(p) ? (p >= 0.5 ? 'p hi' : p >= 0.1 ? 'p mid' : 'p') : 'p'; }
+  const nfInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+  function fmtInt(v) { return isNum(v) ? nfInt.format(v) : '—'; }
+  /** Skill score as a signed percent: 0.203 -> "+20.3 %", -0.022 -> "−2.2 %" (U+2212 minus). */
+  function fmtSkill(v) {
+    if (!isNum(v)) return '—';
+    const r = Math.round(v * 1000) / 10;
+    if (r === 0) return '0.0 %';
+    return `${r > 0 ? '+' : '−'}${Math.abs(r).toFixed(1)} %`;
+  }
+  function stationHref(id) { return `#/station/${encodeURIComponent(id).replace(/%3A/gi, ':')}`; }
   function shortHash(hx) { return typeof hx === 'string' && hx.length > 16 ? `${hx.slice(0, 10)}…${hx.slice(-6)}` : (hx || '—'); }
   const SMALL_WORDS = new Set(['at', 'of', 'the', 'near', 'above', 'below', 'and', 'in', 'on', 'to']);
   const UPPER_WORDS = new Set(['WA', 'BC', 'USA', 'SR', 'NF', 'MF', 'SF', 'II', 'D/S', 'U/S']);
@@ -620,8 +638,8 @@
   // ---------------------------------------------------------------------------------------------
   // Shared components
   // ---------------------------------------------------------------------------------------------
-  function copyButton(text) {
-    const btn = h('button', { type: 'button', class: 'small', 'aria-label': 'Copy full hash' }, 'copy');
+  function copyButton(text, label) {
+    const btn = h('button', { type: 'button', class: 'small', 'aria-label': label || 'Copy full hash' }, 'copy');
     btn.addEventListener('click', () => {
       const done = (ok) => { btn.textContent = ok ? 'copied' : text; setTimeout(() => { btn.textContent = 'copy'; }, ok ? 1500 : 15000); };
       try {
@@ -716,6 +734,93 @@
     return wrap;
   }
 
+  /** "Was this useful?" box, the last card on every page. The typed text is only read from the
+   *  textarea and sent; it is never rendered anywhere. Server messages are shown as text only. */
+  function feedbackBox(stationId) {
+    let useful = null;
+    let sending = false;
+    const yes = h('button', { type: 'button', 'aria-pressed': 'false' }, 'Yes');
+    const no = h('button', { type: 'button', 'aria-pressed': 'false' }, 'No');
+    const text = h('textarea', { id: 'fb-text', rows: '3', maxlength: String(FEEDBACK_MAX), autocomplete: 'off', 'aria-describedby': 'fb-privacy fb-count' });
+    const count = h('p', { id: 'fb-count', class: 'fb-count' });
+    const send = h('button', { type: 'submit', class: 'primary' }, 'Send feedback');
+    const status = h('p', { class: 'fb-status', role: 'status', 'aria-live': 'polite' });
+    const sync = () => {
+      yes.setAttribute('aria-pressed', useful === true ? 'true' : 'false');
+      no.setAttribute('aria-pressed', useful === false ? 'true' : 'false');
+      fill(count, `${fmtInt(text.value.length)} / ${fmtInt(FEEDBACK_MAX)} characters`);
+      send.disabled = sending || (useful === null && !text.value.trim());
+    };
+    const setStatus = (msg, cls) => { status.className = `fb-status${cls ? ` ${cls}` : ''}`; fill(status, msg || ''); };
+    yes.addEventListener('click', () => { useful = useful === true ? null : true; setStatus(''); sync(); });
+    no.addEventListener('click', () => { useful = useful === false ? null : false; setStatus(''); sync(); });
+    text.addEventListener('input', sync);
+    const form = h('form', { class: 'feedback-form', novalidate: true },
+      h('div', { class: 'tabs', role: 'group', 'aria-label': 'Was this page useful?' }, yes, no),
+      h('label', { for: 'fb-text' }, 'Anything to add? (optional)'),
+      h('p', { id: 'fb-privacy', class: 'fb-privacy' }, 'Please do not include your name, phone number, address or other personal information.'),
+      text, count,
+      h('div', { class: 'input-row' }, send, status));
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const body = { route: location.hash || '#/', station_id: stationId || null, useful, text: text.value.trim().slice(0, FEEDBACK_MAX), app_version: APP_VERSION };
+      if (sending || (body.useful === null && !body.text)) return;
+      sending = true;
+      sync();
+      setStatus('Sending…');
+      let r;
+      try { r = await postFeedback(body); } catch (err) { r = { ok: false, message: FEEDBACK_OFFLINE }; }
+      sending = false;
+      if (r.ok) { useful = null; text.value = ''; }
+      setStatus(r.message, r.ok ? 'ok' : 'error');
+      sync();
+    });
+    sync();
+    return h('section', { class: 'card feedback' },
+      h('h2', null, 'Was this useful?'),
+      form,
+      h('p', { class: 'fb-github' }, h('a', { href: GITHUB_FEEDBACK_URL, rel: 'noopener', target: '_blank' }, 'Prefer GitHub? Open an issue'),
+        h('span', { class: 'muted' }, ' (GitHub issues are public; use it if you would like a reply)')));
+  }
+
+  /** POST /v1/feedback; returns {ok, message}. No request is made when this page is running on snapshot data. */
+  async function postFeedback(payload) {
+    if (state.apiDown) return { ok: false, message: FEEDBACK_OFFLINE };
+    const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), API_TIMEOUT_MS) : null;
+    let res;
+    try {
+      res = await fetch('/v1/feedback', {
+        method: 'POST', cache: 'no-store', body: JSON.stringify(payload), signal: ctrl ? ctrl.signal : undefined,
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      });
+    } catch (e) {
+      return { ok: false, message: FEEDBACK_OFFLINE };
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    const isJson = (res.headers.get('content-type') || '').toLowerCase().includes('json');
+    let body = null;
+    if (isJson) { try { body = await res.json(); } catch (e) { body = null; } }
+    if (res.status === 202 || (res.ok && body && body.status === 'received')) return { ok: true, message: 'Thank you. Your feedback was received.' };
+    if (res.status === 429) return { ok: false, message: 'Too many submissions from this connection. Please try again later.' };
+    if (res.status === 400 || res.status === 413 || res.status === 422) {
+      return { ok: false, message: detailText(body) || (res.status === 413 ? 'Your feedback is too long.' : 'This feedback could not be accepted.') };
+    }
+    // A non-JSON answer other than a gateway error means there is no API behind this origin (a plain static server).
+    if (!isJson && ![502, 503, 504].includes(res.status)) return { ok: false, message: FEEDBACK_OFFLINE };
+    if (res.status === 404 || res.status === 405) return { ok: false, message: 'Feedback is not available on this server yet. Please open a GitHub issue instead.' };
+    return { ok: false, message: `Feedback could not be sent right now (HTTP ${res.status}). Please try again later.` };
+  }
+  /** The `detail` of an error body as plain text (a string, or FastAPI's list of {msg}). */
+  function detailText(body) {
+    const d = body && body.detail;
+    let s = '';
+    if (typeof d === 'string') s = d;
+    else if (Array.isArray(d)) s = d.map((x) => (x && typeof x.msg === 'string' ? x.msg : '')).filter(Boolean).join('; ');
+    return s.length > 300 ? `${s.slice(0, 300)}…` : s;
+  }
+
   // ---------------------------------------------------------------------------------------------
   // Screen 1: Sumas Prairie overflow watch
   // ---------------------------------------------------------------------------------------------
@@ -724,10 +829,18 @@
     document.title = 'FloodLead BC: Sumas Prairie overflow watch';
     const w = { seq, personalFt: loadPersonal(), chart: null, fc: null, station: null, model: null, onPersonal: [] };
 
+    const fraserCard = card('Fraser Valley gauges', null);
+    fraserCard.id = 'fraser-valley';
+    fraserCard.setAttribute('tabindex', '-1');
+    const jumpToFraser = () => {
+      try { fraserCard.scrollIntoView({ block: 'start' }); fraserCard.focus({ preventScroll: true }); } catch (e) { /* not available */ }
+    };
+
     const hero = h('div', { class: 'hero' },
       h('p', { class: 'kicker' }, 'Nooksack River → Sumas Prairie'),
       h('h1', null, 'Sumas Prairie overflow watch'),
-      h('p', { class: 'problem' }, 'An atmospheric river is coming. Will the Nooksack spill over toward Sumas Prairie (it did in Nov 2021 and Dec 2025), and how many hours would we have?'));
+      h('p', { class: 'problem' }, 'An atmospheric river is coming. Will the Nooksack spill over toward Sumas Prairie (it did in Nov 2021 and Dec 2025), and how many hours would we have?'),
+      h('p', { class: 'jump' }, 'In BC? ', h('button', { type: 'button', class: 'link-btn', onclick: jumpToFraser }, 'Jump to the Fraser Valley gauges ↓')));
 
     const nowCard = card('Now at North Cedarville', null);
     const chartCard = card('North Cedarville: last 7 days and forecasts', 'Stage in feet (gauge datum) with the official NWS flood stages; metres on the right axis on wider screens (1 ft = 0.3048 m).');
@@ -736,7 +849,8 @@
     const replayCard = card('Replay: how many hours did the gauge give?', 'The same gauges in past floods: when North Cedarville crossed minor flood stage, and when water first appeared at the Overflow gauge on SR 544.');
     const ledgerCard = card('Forecast ledger', 'Every FloodLead forecast is written to an append-only, hash-chained ledger when it is issued, before the outcome is known.');
 
-    fill(main, hero, nowCard, chartCard, chancesCard, personalCard, replayCard, ledgerCard);
+    // The demo path first; the Fraser Valley list follows the overflow-watch cards; feedback last.
+    fill(main, hero, nowCard, chartCard, chancesCard, personalCard, replayCard, ledgerCard, fraserCard, feedbackBox(null));
 
     const pStation = api(`/v1/stations/${CEDARVILLE}`);
     const pOverflow = api(`/v1/stations/${OVERFLOW}`);
@@ -745,6 +859,13 @@
     const pFc = api(`/v1/stations/${CEDARVILLE}/forecast`);
     const pReplay = api('/v1/replay/overflow');
     const pLedger = api('/v1/ledger/head');
+    const pFraser = api('/v1/gauges/fraser-valley');
+
+    section(fraserCard, seq, async () => {
+      const data = await pFraser;
+      if (isStale(seq)) return;
+      fill(fraserCard.body, fraserBlock(data));
+    });
 
     section(nowCard, seq, async () => {
       const [st, ovf] = await Promise.all([pStation, pOverflow]);
@@ -1257,6 +1378,56 @@
       h('p', null, head.spec_url ? extLink(head.spec_url, 'How the ledger works and how to verify it (ledger spec)') : null));
   }
 
+  /** "Fraser Valley gauges" (GET /v1/gauges/fraser-valley): latest level, data age and the position
+   *  against each gauge's typical yearly peak, in the API's order. */
+  function fraserBlock(data) {
+    const gauges = data && Array.isArray(data.gauges) ? data.gauges.filter(Boolean) : null;
+    if (!gauges) return placeholder('The Fraser Valley gauge list is not available right now. Use All stations to find a gauge.');
+    if (!gauges.length) return placeholder('No Fraser Valley gauges in the list yet. Use All stations to find a gauge.');
+    const snap = snapOf(data);
+    return h('div', null,
+      h('p', { class: 'card-sub' }, typeof data.label === 'string' && data.label ? data.label : TYPICAL_PEAK_LABEL),
+      h('ul', { class: 'gauge-list' }, gauges.map((g) => gaugeRow(g, snap))),
+      h('p', { class: 'muted' }, 'Levels are ECCC provisional real-time data in metres above each gauge’s own reference point, so levels cannot be compared between gauges. Open a gauge for its 7-day chart and FloodLead forecast, or ',
+        h('a', { href: '#/stations' }, 'search all stations'), '.'));
+  }
+
+  function gaugeRow(g, snap) {
+    const id = typeof g.station_id === 'string' ? g.station_id : '';
+    const name = (typeof g.short_name === 'string' && g.short_name) || titleCase(g.name) || id || 'Unnamed gauge';
+    const lt = g.latest && isNum(g.latest.level_m) ? g.latest : null;
+    const tp = g.typical_peak && isNum(g.typical_peak.value_m) ? g.typical_peak : null;
+    let age = null;
+    if (lt && toDate(lt.ts)) age = ageSpan(lt.ts, snap);
+    else if (lt && isNum(lt.age_min)) age = `${fmtDuration(lt.age_min)} old`;
+
+    let pos;
+    if (tp) {
+      const below = isNum(tp.below_m) ? tp.below_m : (lt ? tp.value_m - lt.level_m : null);
+      const years = isNum(tp.first_year) && isNum(tp.last_year) ? `, ${tp.first_year}–${tp.last_year}` : '';
+      const basis = isNum(tp.n_years) ? `median of ${tp.n_years} yearly peaks${years}` : 'FloodLead-derived';
+      const flagged = tp.status && tp.status !== 'ok';
+      pos = [
+        h('p', { class: 'gauge-pos' },
+          isNum(below) ? h('strong', { class: 'num' }, below < 0 ? `${fmt(-below, 2)} m above typical yearly peak` : `${fmt(below, 2)} m below typical yearly peak`) : h('span', { class: 'muted' }, 'Position unknown (no recent level)'),
+          h('span', { class: 'muted num' }, ` · typical yearly peak ${fmt(tp.value_m, 2)} m (${basis})`)),
+        flagged ? h('p', { class: 'gauge-note' }, h('span', { class: 'tag tag-check' }, 'check'), ' ', String(tp.flag || `status: ${tp.status}`)) : null,
+      ];
+    } else {
+      pos = h('p', { class: 'gauge-note' }, 'No typical yearly peak', typeof g.typical_peak_note === 'string' && g.typical_peak_note ? ` (${g.typical_peak_note})` : '', '.');
+    }
+    const note = typeof g.note === 'string' && g.note ? g.note : (g.tidal ? 'Tidal gauge: the level rises and falls with the tide.' : '');
+    return h('li', null,
+      h('div', { class: 'gauge-head' },
+        h('span', null,
+          STATION_ID_RE.test(id) ? h('a', { class: 'name', href: stationHref(id) }, name) : h('span', { class: 'name' }, name),
+          g.tidal ? [' ', h('span', { class: 'tag tag-tidal' }, 'tidal')] : null,
+          h('br'), h('span', { class: 'id' }, id)),
+        h('span', { class: 'lvl' }, lt ? `${fmt(lt.level_m, 2)} m` : h('span', { class: 'muted' }, 'no recent data'), age ? [h('br'), h('small', { class: 'muted' }, age)] : null)),
+      pos,
+      note ? h('p', { class: 'gauge-note' }, note) : null);
+  }
+
   // ---------------------------------------------------------------------------------------------
   // Screen 2: station picker
   // ---------------------------------------------------------------------------------------------
@@ -1281,7 +1452,7 @@
     fill(main,
       h('div', { class: 'hero' }, h('h1', null, 'All stations'),
         h('p', null, 'Every river gauge FloodLead archives: Water Survey of Canada (ECCC) real-time gauges across BC and USGS gauges on the Nooksack and Sumas. Levels are provisional real-time data.')),
-      c);
+      c, feedbackBox(null));
     section(c, seq, async () => {
       const data = await api('/v1/stations?limit=2000');
       if (isStale(seq)) return;
@@ -1294,7 +1465,7 @@
         fill(count, `${hits.length} of ${stations.length} stations`);
         fill(list, hits.map((s) => {
           const lv = latestOf(s);
-          return h('li', null, h('a', { href: `#/station/${encodeURIComponent(s.station_id).replace(/%3A/gi, ':')}` },
+          return h('li', null, h('a', { href: stationHref(s.station_id) },
             h('span', null, h('span', { class: 'name' }, titleCase(s.name) || s.station_id), h('br'),
               h('span', { class: 'id' }, `${s.station_id} · ${s.region || ''}${s.has_official_thresholds ? ' · NWS flood stages' : ''}`)),
             h('span', { class: 'lvl' }, levelText(s, lv), lv ? h('br') : null, lv ? h('small', { class: 'muted' }, ageSpan(lv.ts, snapOf(data))) : null)));
@@ -1311,8 +1482,8 @@
   // ---------------------------------------------------------------------------------------------
   function renderStation(id, seq) {
     const main = document.getElementById('app');
-    if (!/^[A-Za-z0-9:._-]{1,64}$/.test(id)) {
-      fill(main, h('h1', null, 'Unknown station'), h('p', null, h('a', { href: '#/stations' }, 'Back to all stations')));
+    if (!STATION_ID_RE.test(id)) {
+      fill(main, h('h1', null, 'Unknown station'), h('p', null, h('a', { href: '#/stations' }, 'Back to all stations')), feedbackBox(null));
       return;
     }
     document.title = `FloodLead BC: ${id}`;
@@ -1320,7 +1491,7 @@
     const nowCard = card('Latest level', null);
     const chartCard = card('Last 7 days', null);
     const fcCard = card('FloodLead baseline forecast', null);
-    fill(main, title, nowCard, chartCard, fcCard);
+    fill(main, title, nowCard, chartCard, fcCard, feedbackBox(id));
 
     const pSt = api(`/v1/stations/${id}`);
     const pObs = api(`/v1/stations/${id}/observations?param=level&days=7`);
@@ -1400,6 +1571,132 @@
   }
 
   // ---------------------------------------------------------------------------------------------
+  // Screen 4: track record (GET /v1/track-record, one scorer run)
+  // ---------------------------------------------------------------------------------------------
+  function renderTrackRecord(seq) {
+    const main = document.getElementById('app');
+    document.title = 'FloodLead BC: track record';
+    const sayCard = card('What the track record says', null);
+    sayCard.classList.add('statements-card');
+    const issuedCard = card('Forecasts issued and the public ledger', null);
+    const skillCard = card('Skill against pure persistence', 'Pure persistence: the level now, held flat for every horizon. A forecast is only useful if it beats it.');
+    fill(main,
+      h('div', { class: 'hero' }, h('h1', null, 'Track record'),
+        h('p', null, 'How FloodLead’s live baseline forecasts have scored so far, and how to check that none of them was changed after the outcome was known.')),
+      sayCard, issuedCard, skillCard, feedbackBox(null));
+    const pTr = api('/v1/track-record');
+    const missing = 'The track record is not available right now. It is recomputed after every scorer run.';
+
+    section(sayCard, seq, async () => {
+      const tr = await pTr;
+      if (isStale(seq)) return;
+      if (!tr) { fill(sayCard.body, placeholder(missing)); return; }
+      const statements = Array.isArray(tr.statements) ? tr.statements.filter((s) => typeof s === 'string' && s) : [];
+      const win = tr.window || {};
+      fill(sayCard.body,
+        statements.length ? h('div', { class: 'statements' }, statements.map((s) => h('p', null, s))) : placeholder('No summary statements in this scorer run.'),
+        h('p', { class: 'meta' }, `Scorer run ${isNum(tr.scorer_run_id) ? tr.scorer_run_id : '—'}`,
+          tr.generated_at ? h('span', null, ', computed ', timeLine(tr.generated_at, false, snapOf(tr))) : null, '.'),
+        win.first_base_time || win.last_valid_at ? h('p', { class: 'meta' },
+          `Window: forecasts issued from ${fmtPacific(win.first_base_time)}, outcomes observed up to ${fmtPacific(win.last_valid_at)}.`,
+          isNum(win.official_crossings) ? ` Official flood-stage crossings in this window: ${fmtInt(win.official_crossings)}.` : '',
+          isNum(win.typical_peak_crossings) ? ` Typical-yearly-peak crossings: ${fmtInt(win.typical_peak_crossings)}.` : '') : null);
+    });
+
+    section(issuedCard, seq, async () => {
+      const tr = await pTr;
+      if (isStale(seq)) return;
+      if (!tr) { fill(issuedCard.body, placeholder(missing)); return; }
+      fill(issuedCard.body, issuedBlock(tr));
+    });
+
+    section(skillCard, seq, async () => {
+      const tr = await pTr;
+      if (isStale(seq)) return;
+      if (!tr) { fill(skillCard.body, placeholder(missing)); return; }
+      fill(skillCard.body, skillBlock(tr));
+    });
+  }
+
+  function issuedBlock(tr) {
+    const f = tr.forecasts || {};
+    const lg = tr.ledger || {};
+    const a = lg.anchor;
+    const v = tr.verify || {};
+    const snap = snapOf(tr);
+    let anchor;
+    if (a) {
+      anchor = h('span', null, h('span', { class: `dot ${a.status || ''}` }), `${a.status || 'unknown'}`,
+        isNum(a.seq) ? ` · seq ${fmtInt(a.seq)}` : '',
+        a.anchored_at ? h('span', null, ' · anchored ', timeLine(a.anchored_at, false, snap)) : '',
+        typeof a.commit_url === 'string' && /^https:\/\//.test(a.commit_url) ? h('span', null, ' · ', extLink(a.commit_url, 'commit on GitHub')) : '');
+    } else {
+      anchor = h('span', { class: 'muted' }, 'not anchored yet');
+    }
+    const cmd = (label, text) => (typeof text === 'string' && text
+      ? h('div', { class: 'cmd-row' }, h('p', { class: 'cmd-label' }, label), h('div', { class: 'cmd-line' }, h('code', { class: 'cmd' }, text), copyButton(text, `Copy command: ${label}`)))
+      : null);
+    return h('div', null,
+      h('dl', { class: 'kv' },
+        h('dt', null, 'Forecasts issued'), h('dd', { class: 'num' }, fmtInt(f.issued), isNum(f.issuances) ? ` in ${fmtInt(f.issuances)} hourly issuances` : ''),
+        h('dt', null, 'Since'), h('dd', null, f.first_base_time ? fmtPacific(f.first_base_time) : '—', f.last_base_time ? h('span', { class: 'muted' }, ` · latest ${fmtPacific(f.last_base_time)}`) : null),
+        h('dt', null, 'Gaps'), h('dd', { class: 'num' }, isNum(f.gaps) ? `${fmtInt(f.gaps)} missed hourly issuance${f.gaps === 1 ? '' : 's'}` : '—'),
+        h('dt', null, 'Chain head'), h('dd', null, isNum(lg.head_seq) ? `seq ${fmtInt(lg.head_seq)} · ` : '', hashView(lg.head_hash)),
+        h('dt', null, 'Latest anchor'), h('dd', null, anchor)),
+      h('h3', null, 'Verify it yourself'),
+      h('p', null, 'Each command checks every entry’s hash and the links between them. Run it from a clone of the ', extLink(REPO_URL, 'source code'), '.'),
+      cmd('Against the live API', v.api),
+      cmd('From GitHub alone (no FloodLead server needed)', v.github),
+      typeof v.spec_url === 'string' && /^https:\/\//.test(v.spec_url) ? h('p', null, extLink(v.spec_url, 'How the ledger works (ledger specification)')) : null);
+  }
+
+  function skillBlock(tr) {
+    const rows = Array.isArray(tr.skill_vs_persistence) ? tr.skill_vs_persistence.filter(Boolean) : [];
+    const run = isNum(tr.scorer_run_id) ? tr.scorer_run_id : '—';
+    const parts = [];
+    if (!rows.length) {
+      parts.push(placeholder('No scored forecast–outcome pairs yet. Each horizon is scored a few hours after the forecast is issued.'));
+    } else {
+      const sources = Array.from(new Set(rows.map((r) => String(r.source || 'other'))))
+        .sort((x, y) => (x === 'eccc' ? -1 : y === 'eccc' ? 1 : x.localeCompare(y, 'en-CA')));
+      for (const src of sources) {
+        const list = rows.filter((r) => String(r.source || 'other') === src)
+          .sort((x, y) => String(x.model).localeCompare(String(y.model), 'en-CA') || ((isNum(x.h) ? x.h : 0) - (isNum(y.h) ? y.h : 0)));
+        const skillTd = (v) => h('td', { class: `p${isNum(v) && v < 0 ? ' neg' : ''}` }, fmtSkill(v));
+        const head = h('tr', null,
+          h('th', null, 'Model'), h('th', { class: 'p' }, 'Horizon'), h('th', { class: 'p' }, 'n pairs'), h('th', { class: 'p' }, 'Stations'), h('th', { class: 'p' }, 'Days'),
+          h('th', { class: 'p long' }, 'Fair CRPS, model (m)'), h('th', { class: 'p long' }, 'Fair CRPS, pure persistence (m)'), h('th', { class: 'p' }, 'CRPSS'),
+          h('th', { class: 'p long' }, 'MAE of the median, model (m)'), h('th', { class: 'p long' }, 'MAE, pure persistence (m)'), h('th', { class: 'p' }, 'MAE skill'));
+        const body = list.map((r) => h('tr', null,
+          h('td', null, h('code', null, String(r.model || '—'))),
+          h('td', { class: 'p' }, isNum(r.h) ? `${r.h} h` : '—'),
+          h('td', { class: 'p' }, fmtInt(r.n_pairs)),
+          h('td', { class: 'p' }, fmtInt(r.stations)),
+          h('td', { class: 'p' }, isNum(r.days) ? fmt(r.days, Number.isInteger(r.days) ? 0 : 1) : '—'),
+          h('td', { class: 'p' }, fmt(r.crps_model_m, 4)),
+          h('td', { class: 'p' }, fmt(r.crps_naive_m, 4)),
+          skillTd(r.crpss),
+          h('td', { class: 'p' }, fmt(r.mae_model_m, 4)),
+          h('td', { class: 'p' }, fmt(r.mae_naive_m, 4)),
+          skillTd(r.mae_skill)));
+        parts.push(
+          h('h3', null, SOURCE_NAMES[src] || src),
+          h('p', { class: 'table-caption' }, `Scorer run ${run}. Skill below zero means worse than pure persistence (the level now, held flat).`),
+          tableBox(h('table', { class: 'skill' }, h('thead', null, head), h('tbody', null, body))));
+      }
+      parts.push(
+        h('p', { class: 'model-explain' }, MODEL_EXPLAIN),
+        h('p', { class: 'muted' }, 'Fair CRPS: the average error of the whole forecast distribution, in metres (lower is better). MAE of the median: the average distance between the middle forecast and what happened. CRPSS and MAE skill = 1 − model ÷ pure persistence, on the same forecast–outcome pairs; n pairs, stations and days say how much data each row rests on.'));
+    }
+    parts.push(
+      h('h3', null, 'Against NOAA’s official forecasts'),
+      h('p', null, 'Matched forecast–outcome pairs (FloodLead and NOAA NWS for the same Nooksack gauge, base time and horizon): ',
+        h('strong', { class: 'num' }, fmtInt(tr.noaa_matched_pairs)), ` (scorer run ${run}). Details: `,
+        h('a', { href: '/v1/scores/official' }, '/v1/scores/official'), ' (JSON).'));
+    return h('div', null, parts);
+  }
+
+  // ---------------------------------------------------------------------------------------------
   // Footer: data feed status
   // ---------------------------------------------------------------------------------------------
   async function renderHealth() {
@@ -1435,6 +1732,10 @@
       } else if (hash.startsWith('#/stations')) {
         name = 'stations';
         renderStations(seq);
+      } else if (hash.startsWith('#/track-record')) {
+        name = 'track';
+        renderTrackRecord(seq);
+        try { window.scrollTo(0, 0); } catch (e) { /* not available */ }
       } else {
         renderWatch(seq);
       }

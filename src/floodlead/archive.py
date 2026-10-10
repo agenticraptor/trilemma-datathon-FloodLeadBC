@@ -113,3 +113,9 @@ def store(
         assert row is not None
         return RawRef(row[0], sha, False, rel)
     return RawRef(row[0], sha, True, rel)
+
+
+def read(archive_dir: Path, rel: str) -> bytes:
+    """The original payload of an archived file."""
+    with gzip.open(archive_dir / rel, "rb") as fh:
+        return fh.read()
