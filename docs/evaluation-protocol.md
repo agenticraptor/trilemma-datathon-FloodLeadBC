@@ -172,4 +172,47 @@ Water years: held out are WY2022 (Oct 2021–Sep 2022) and WY2026 (Oct 2025–Se
 
 ## Amendments
 
-(none)
+### Amendment 1 — 2026-10-10 (supervisor review A1–A3, A5, A7, A8)
+
+Added after the supervisor's review of the frozen text (`docs/build/prompts/STAGE-03-protocol-review.md`). No model had been trained. The frozen text above is unchanged; where this amendment differs from it, this amendment applies.
+
+**A1. Training never sees held-out or live rows.**
+- **Development years** are WY2005–WY2025 except WY2022.
+  - Every training fold, every calibration fit and every choice of (p\*, k) uses development years only.
+  - In walk-forward, validation year k is trained on development years before k. For k ≥ 2023 this **excludes WY2022**; the frozen §2 wording "WY2005…WY(k−1)" would have included it.
+- **Held out:** WY2022, WY2026, and **WY2027 onward as the live period**.
+  - Correction to §11: the live period from Oct 1, 2026 belongs to WY2027, not WY2026.
+- **The frozen files are not rebuilt; their sha256 values stand.** They flag only WY2022 and WY2026 as `holdout`, so the 167 hourly rows of Oct 1–7, 2026 (WY2027) carry `holdout = false`. Every Stage 4 read therefore goes through `src/floodlead/train_data.py`:
+  - it selects rows by water year;
+  - it raises `HeldOutRowError` when a held-out or live year is requested, or reaches a training or calibration set;
+  - it raises on a development row flagged `holdout`.
+  - `tests/test_train_data.py` checks that it rejects WY2022, WY2026 and WY ≥ 2027.
+  - On the frozen honest file it reads 175,320 development rows, 8,760 in each held-out year, and 167 live rows.
+
+**A2. How the final run is trained**, fixed now as if the system had been live:
+- WY2022 is scored by a model trained on WY2005–WY2021.
+- WY2026 is scored by a model trained on WY2005–WY2025, **including WY2022**: a live system would have had the 2021 flood by December 2025.
+- The live period (WY2027) is scored by the WY2026 model.
+- Features, hyperparameters, the calibration method and (p\*, k) are frozen from the walk-forward folds. Nothing is chosen on WY2022 or WY2026. The folds are `train_data.final_run_folds()`.
+
+**A3. T5 is crossing-probability skill; T6 is added for level skill.**
+- **T5**, renamed "crossing-probability skill": Brier skill score ≥ 0.10 against persistence at 12 h, and ECE ≤ 0.05 per horizon (evaluation.md's kill criteria). It is a Brier score, not level skill.
+- **T6, level skill (new):** fair CRPSS > 0 **and** median-MAE skill > 0 against pure persistence at 6, 12 and 24 h, overall and on rising limbs (§4's definition). This is evaluation.md's headline test: "A model that does not beat it on both fair CRPS and median MAE has no skill to claim."
+- Both are reported as met or not met, with their bootstrap intervals (§8).
+
+**A5. The model's tiers stay as frozen in §5.**
+- Addendum 3's "Prepare-M" **is** §5's prepare tier: North Cedarville ≥ 148 ft within 24 h, with (p\*, k) chosen on validation years only.
+- The model's move tier stays at overflow onset within 12 h.
+- **No new model target is added.**
+- Prepare-M is reported beside relay v2's NWS-based Prepare (amendment 2). It replaces it only if it wins under this protocol.
+
+**A7. Two more validity limits**, added to §10:
+- **SR 544's onset definition changed.**
+  - The gauge has reported continuously since Oct 1, 2026, reading about 3.53 ft when no water flows. A live onset is therefore the first reading ≥ 3.6 ft.
+  - Before that, the gauge reported only while water flowed, and the historical onset is the first record.
+  - The two definitions differ, so live onset timing is compared with history only with this stated.
+- **Relay v2 is in-sample** (amendment 2).
+
+**A8. Wording.**
+- **T3, "no systematic low bias":** the 95 % bootstrap interval of (mean forecast probability − observed frequency) must not lie entirely below 0.
+- **T1:** the comparison with the City of Abbotsford's alert exists for **2 events only** (Nov 2021, Dec 2025). Every report of T1 says so.

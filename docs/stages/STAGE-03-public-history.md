@@ -630,6 +630,20 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
 - **Cost:** PR #6's diff shows part 1 until #5 merges, then `main` is merged in.
 - **Slip:** one `git commit -a` swept a frontend draft into a parser-fix commit (`638d6d3`). It is recorded, not rewritten.
 
+### D-03.20 — Protocol amendment 1 (review A1–A3, A5, A7, A8) and the Stage 4 loader that enforces A1 (Oct 10, 02:0x UTC)
+
+- **Context:** the supervisor reviewed the frozen protocol (sound; eight amendments). It was frozen before addenda 2 and 3 arrived, so they enter it as dated amendments, and the frozen text is never edited.
+- **Choice:** amendment 1, appended under `## Amendments`. The diff touches only the "(none)" line below that heading.
+  - **A1:** development years are WY2005–WY2025 except WY2022; WY2027 onward is the live period.
+    - `src/floodlead/train_data.py` enforces this, because the frozen files flag the 167 Oct 1–7, 2026 rows `holdout = false` and must not be rebuilt.
+    - `tests/test_train_data.py`: 4 tests, including rejection of WY2022, WY2026 and WY ≥ 2027.
+  - **A2:** final-run folds (`final_run_folds()`).
+  - **A3:** T5 renamed crossing-probability skill; T6 level skill added.
+  - **A5:** the model's tiers are unchanged; Prepare-M = §5.
+  - **A7:** the SR 544 onset definition differs before and after Oct 1, 2026; relay v2 is in-sample.
+  - **A8:** T3's bias wording; T1 rests on 2 events.
+- **sha256 of `docs/evaluation-protocol.md` after amendment 1: `45fd36a3f87852b2eb6ae7ac0a913877512c98eaf614b326aacf44bc208d8214`** (frozen version `ecdefe0b…abad`).
+
 ## Work log
 
 - `12:42` — `git checkout main && git pull` → `bd3d092`. Branch `stage-03-public`. Read the prompt and the inputs above.
