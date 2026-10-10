@@ -38,7 +38,7 @@ def load_dev(path: Path) -> pd.DataFrame:
     if (df["holdout"] == 1.0).any():
         raise train_data.HeldOutRowError("a development-year row is flagged holdout")
     df = model.targets(df)
-    return df.reset_index(drop=True)
+    return df.reset_index(drop=True).copy()
 
 
 def check_fold(train: pd.DataFrame, k: int) -> list[int]:
@@ -107,3 +107,18 @@ def load_preds(path: Path) -> tuple[pd.DataFrame, dict[str, np.ndarray]]:
     z = np.load(path)
     idx = pd.DataFrame({"issue_time": z["issue_time"], "wy": z["wy"]})
     return idx, {k: z[k].astype(float) for k in z.files if k not in ("issue_time", "wy")}
+
+
+def merge_preds(paths: list[Path], out: Path) -> list[str]:
+    """One candidate's predictions from several runs (e.g. selection targets + the remaining targets), checked to
+    cover the same rows in the same order."""
+    base = np.load(paths[0])
+    arrays = {k: base[k] for k in base.files}
+    for p in paths[1:]:
+        z = np.load(p)
+        if not (np.array_equal(z["issue_time"], arrays["issue_time"]) and np.array_equal(z["wy"], arrays["wy"])):
+            raise ValueError(f"{p} covers different rows")
+        arrays.update({k: z[k] for k in z.files if k not in ("issue_time", "wy")})
+    out.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(out, **arrays)
+    return sorted(k for k in arrays if k not in ("issue_time", "wy"))

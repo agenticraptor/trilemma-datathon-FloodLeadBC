@@ -427,26 +427,30 @@ def development_report(datasets: Path, pred_dirs: list[Path], inputs_path: Path,
     events = inputs["validation_events"]
     frames: dict[str, pd.DataFrame] = {}
     cands = []
-    for d in pred_dirs:
+    files: dict[str, Path] = {}
+    for d in pred_dirs:  # one file per candidate: the one with the most targets (a merged copy supersedes)
         for f in sorted(d.glob("preds-*.npz")):
             cid = f.stem.removeprefix("preds-")
-            name = "nooksack_hourly_oracle_v1.csv.gz" if "_oracle_" in cid else "nooksack_hourly_honest_v1.csv.gz"
-            if name not in frames:
-                frames[name] = model_dev.load_dev(datasets / name)
-            idx, preds = model_dev.load_preds(f)
-            sc = score(frames[name], idx, preds, inputs, events)
-            sc["candidate"] = cid
-            sc["source"] = str(f)
-            val, jp = joined(frames[name], idx, preds)
-            if "m_24" in jp:
-                p = model.crossing_prob(jp["m_24"], val["nc_lvl"].to_numpy(dtype=float), THRESH["moderate"])
-                sc["isotonic_check_148ft_24h"] = isotonic_loyo(p, val["y_moderate_24h"].to_numpy(dtype=float),
-                                                               val["wy"].to_numpy(dtype=int))
-                b = sc["crossing"].get("moderate_148ft_within_24h", {})
-                sc["tiebreak_brier_148ft_24h"] = b.get("brier")
-            sc["T_table"] = t_table(sc)
-            sc["events"] = event_table(val, jp, sc, inputs, catalogue, relay)
-            cands.append(sc)
+            if cid not in files or len(np.load(f).files) > len(np.load(files[cid]).files):
+                files[cid] = f
+    for cid, f in sorted(files.items()):
+        name = "nooksack_hourly_oracle_v1.csv.gz" if "_oracle_" in cid else "nooksack_hourly_honest_v1.csv.gz"
+        if name not in frames:
+            frames[name] = model_dev.load_dev(datasets / name)
+        idx, preds = model_dev.load_preds(f)
+        sc = score(frames[name], idx, preds, inputs, events)
+        sc["candidate"] = cid
+        sc["source"] = str(f)
+        val, jp = joined(frames[name], idx, preds)
+        if "m_24" in jp:
+            p = model.crossing_prob(jp["m_24"], val["nc_lvl"].to_numpy(dtype=float), THRESH["moderate"])
+            sc["isotonic_check_148ft_24h"] = isotonic_loyo(p, val["y_moderate_24h"].to_numpy(dtype=float),
+                                                           val["wy"].to_numpy(dtype=int))
+            b = sc["crossing"].get("moderate_148ft_within_24h", {})
+            sc["tiebreak_brier_148ft_24h"] = b.get("brier")
+        sc["T_table"] = t_table(sc)
+        sc["events"] = event_table(val, jp, sc, inputs, catalogue, relay)
+        cands.append(sc)
     ranked = sorted((c for c in cands if c["headline_fair_crps_6_12_24"] is not None and "_GR_" in c["candidate"]),
                     key=lambda c: c["headline_fair_crps_6_12_24"])
     return {"label": "development (walk-forward), used to choose the model; not the result",

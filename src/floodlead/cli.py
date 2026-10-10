@@ -114,6 +114,9 @@ def main(argv: list[str] | None = None) -> int:
     ms.add_argument("--relay", default="docs/data/relay-v1.json")
     ms.add_argument("--chosen", default=None)
     ms.add_argument("--out", required=True)
+    mg = mds.add_parser("merge-preds", help="merge one candidate's prediction files (same rows) into one")
+    mg.add_argument("--out", required=True)
+    mg.add_argument("paths", nargs="+")
     ft = mds.add_parser("final-train", help="train the A2 final models (final_training_rows) into a new run dir")
     ft.add_argument("--datasets", default="/datasets")
     ft.add_argument("--out", required=True)
@@ -163,6 +166,11 @@ def main(argv: list[str] | None = None) -> int:
         Path(args.out).write_text(json.dumps(rep, indent=1, default=float))
         for r in rep["ranking_G+R"]:
             print(json.dumps(r))
+        return 0
+    if args.cmd == "model" and args.model_cmd == "merge-preds":
+        from floodlead import model_dev
+
+        print(model_dev.merge_preds([Path(p) for p in args.paths], Path(args.out)))
         return 0
     if args.cmd == "model" and args.model_cmd == "final-train":
         from floodlead import model_final
