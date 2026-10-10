@@ -133,6 +133,68 @@ The relay (trust table) and the official scorecard already stand on their own; t
 - **Why:** every choice that could be tuned towards the held-out answer is fixed now, while no model has been fitted.
 - **sha256 of the protocol after amendment 4: `fd6ecb6eee0ec0ee2fb3103ce73287b00f159d7634286347acdefffefcb103ab`.**
 
+### D-04.5 — F6: VACUUM (ANALYZE) of the rain tables (Oct 10, 02:44:46–02:45:01 UTC)
+
+- **Ran:** `VACUUM (ANALYZE) rain_hourly` and `VACUUM (ANALYZE) openmeteo_hourly` (never FULL).
+
+| Table | Total size before → after | Dead tuples before → after |
+|---|---|---|
+| `rain_hourly` | 394,485,760 B → 394,485,760 B | 150,397 → 0 |
+| `openmeteo_hourly` | 552,804,352 B → 552,804,352 B | 6,895 → 6,869 |
+
+- Plain VACUUM marks the dead space reusable without returning it to the OS, so the sizes did not change.
+- **Deviation:** the prompt said to run it outside HH:10–HH:45. It started at 02:44:46, **14 s inside that window**, because I misread the clock. No production job was running: the 02:40 scorer had finished at 02:40:14, and the next issuance was 03:15. The 03:15 issuance was checked afterwards (work log).
+
+### D-04.6 — Dependencies: LightGBM, scikit-learn and pandas; libgomp1 in the image (Oct 10, 02:46–02:55 UTC)
+
+- **Added** `lightgbm>=4.5` (4.7.0), `scikit-learn>=1.5` (1.9.1) and `pandas>=2.2` (3.0.6) to `pyproject.toml` and `uv.lock`, in the commit that first uses them (`8bee4d4`).
+- **LightGBM needs the OpenMP runtime.** The Dockerfile now installs `libgomp1`, and it is also installed on the host for tests.
+  - The host install hung on an interactive `needrestart` dialog ("pending kernel upgrade 7.0.0-1013 → 1014"). The dialog was closed; the package was already installed.
+  - **The VM was not rebooted** (it is production). A reboot to load the new kernel is the human's call.
+
+### D-04.7 — Compute plan from measured fit times (Oct 10, 03:00–03:16 UTC)
+
+- **Measured** in a capped container (1 CPU, 3 GB), for one target and one fold (WY2005–2020 → 2021), 7 levels:
+
+| Fit | Rows | Time |
+|---|---|---|
+| LightGBM, quiet-row subsample | 33,605 | 30.8 s |
+| LightGBM, all rows | 111,696 | 69.7 s |
+| Linear QR, HiGHS dual simplex (sklearn's default) | 30,000 | **571.5 s** |
+| Linear QR, HiGHS interior point (`highs-ipm`) | 30,000 | 16.3 s per quantile |
+
+  Peak RSS was 917 MB, mostly the loaded dataset.
+- **Choices:**
+  1. **Linear QR uses `highs-ipm`.** It solves the same linear program, and keeps the pre-registered 30,000 rows.
+  2. **Selection runs only the criterion's targets** (`d_6`, `d_12`, `d_24`, `m_24`; amendment 4, item 6) for every family and subsample candidate. Only the winner is refitted on all 11 targets.
+  3. **Ablations (G, oracle) fit the 6 metric targets** (`d_6`, `d_12`, `d_24`, `m_12`, `m_24`, `m_48`). The 1/3/18/36/48 h levels are needed only for issuing, not for T1–T6.
+  4. **G+R+F runs only the folds that validate WY2024 and WY2025.** In earlier folds its forecast-rain columns are all empty, so it equals G+R there.
+  5. **Two capped containers in parallel**, each `--cpus 1.0 --memory 3g --cpu-shares 128`. The low CPU weight lets the issuer and scorer win any contention. The track record is checked after each hour of training.
+- **Why:** with every candidate on every target, the budget would run past the 15:00 checkpoint. None of these choices touches a held-out row, and every candidate is still reported.
+
+### D-04.8 — Development inputs pinned (`docs/data/stage4-inputs-v1.json`, Oct 10, 03:12 UTC)
+
+- **Onset levels L_j:** the replay's North Cedarville level at each development SR 544 onset:
+  - 2015-11-18 06:45Z: 147.92 ft;
+  - 2017-11-23 19:25Z: 147.60 ft;
+  - 2020-02-01 16:55Z: 148.44 ft;
+  - median **147.92 ft**.
+  - The 2015-11-14 record is the gauge's first record, not an onset it saw begin, so it is excluded, as in the trust table.
+- **Validation events:** 3 at ≥ 148 ft (2015-11-18, 2017-11-23, 2020-02-01) and the 3 onsets above. The 2009 and 2010 ≥ 148 ft events lie in training-only years, so they have no out-of-sample prediction and are listed as such.
+- **Written down before any result:** the held-out onsets in the replay sit at 146.2–147.6 ft, below every development L_j. The default overflow model will therefore tend to be late or low on held-out data. That is the pre-registered model; it is not tuned.
+
+### D-04.9 — Scoring definitions, fixed before any development result (Oct 10, 03:25 UTC)
+
+- **Outcomes** are the frozen dataset's `y_minor/moderate/major_{H}h` and `y_overflow_{H}h`, not re-derived.
+- **Overflow within 6 h** uses the 6-h level quantiles. Amendment 4 has no 6-h window target, and on a rising river the 6-h level is the 6-h maximum. Rows with water already flowing are excluded, because their target is undefined.
+- **Alerts (§4, §5):**
+  - a hit is an alert issued before the crossing and at most 48 h before it;
+  - an alert re-arms only after the probability drops below p\*;
+  - (p\*, k) is chosen per §5 on pooled validation predictions; ties go to the lower FAR, then the higher p\*.
+- **NWS-derived comparator:** scored on all rows (0 when no warning is in force) and, for T3, on the rows with a North Cedarville warning in force (§10).
+- **T6 "met"** uses the point skill (> 0 on both scores), with the year-bootstrap interval shown beside it.
+- **Isotonic calibration:** if the leave-one-validation-year-out check on ≥ 148 ft within 24 h lowers the Brier score, isotonic maps are fitted on the pooled validation predictions for the **148 ft** probabilities at 12, 24 and 48 h. Otherwise everything stays raw. The 150-ft probabilities always stay raw: development has 0 events there, so an isotonic map would set them to 0. Overflow probabilities stay raw.
+
 ## Work log
 
 - `19:36` — `git checkout main && git pull` → `8c04afb`; branch `stage-04-model`. The Stage 3 part-2 worktree was removed (its branch is merged). Read the prompt and the inputs above.
@@ -140,6 +202,14 @@ The relay (trust table) and the official scorecard already stand on their own; t
 - `19:38–19:41` — Draft PR #7 opened. F1 (D-04.1, D-04.2): cause found in the archived payload; margin fetch and test; production re-fetch (9 → 13 rows); trust table unchanged; the Jan 1 gap measured.
 
 - `19:38–19:43` — F2–F5 (D-04.3). Production scorecard build 3 and web deployed from PR #7 (`.deployed-commit` `fb4c77d`).
+
+- `19:44–19:45` — Amendment 4 committed (`216907f`, 02:44:38Z) before any model code existed. F6 (D-04.5).
+
+- `19:45–20:16` — Dependencies (D-04.6), model core and tests (`8bee4d4`), timing probes (D-04.7), inputs pinned (D-04.8), development fit command and loader tests (`e57eb5d`).
+  - `docker run --cpus 1.0 --memory 3g --cpu-shares 128 … floodlead model dev-fit --targets d_6,d_12,d_24,m_24 --candidate lgb:G+R:sub --candidate lgb:G+R:full` and the same with `linear:G+R:sub` and `linear:G+R:full`;
+  - launched 03:16:37Z into `/srv/floodlead/models/dev-20261010T0316/`.
+
+- `20:16–20:25` — Scoring module and tests (`3d99776`); D-04.9 written before any development result.
 
 ## Measurements
 
