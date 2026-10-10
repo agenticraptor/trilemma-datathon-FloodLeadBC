@@ -338,6 +338,13 @@ The relay (trust table) and the official scorecard already stand on their own; t
 
 - `23:58–00:02` — The completion run finished at 06:58:49Z. Merged predictions → `chosen/preds-lgb_GR_full.npz` (11 targets). Scored (D-04.13). **Primary final models started at 06:59Z:** `model final-train --family lgb --only GR_heldout_wy2022,GR_heldout_wy2026` → `/srv/floodlead/models/final-20261010T0659/`, image `floodlead-app:s4` (`df5134c`).
 
+- `00:02–00:55` — **Primary final models** (`final-20261010T0659`), through `final_training_rows()`:
+  - `GR_heldout_wy2022.pkl`: WY2005–2021 (17 years), 149,016 rows, 1,493 s, 953 MB; sha256 `d3468c05…`.
+  - `GR_heldout_wy2026.pkl`: WY2005–2025 (21 years, **including WY2022**), 184,080 rows, 1,751 s, 1,441 MB; sha256 `ab42dbd1…`.
+  - Ablation final models started at 07:54:42Z (`s4-final-abl`).
+  - Ablation development: G+R+F (2 folds) and G (9 folds) are done; oracle is running.
+  - Track record at 07:54Z: 36 issuances, 0 gaps.
+
 ## Measurements
 
 | What | Value | How measured | When |
@@ -353,6 +360,10 @@ The relay (trust table) and the official scorecard already stand on their own; t
 | Issuance runtime while training | 101.6 s (03:15, start of training); 98.5 s (04:15, two fitting containers) | ingest log | 03:16Z, 04:16Z |
 | LightGBM-full fold time, 4 targets, two containers in parallel | 326–490 s | fit log | 04:01–04:59Z |
 | `model dev-score`, 3 candidates (1 CPU) | about 2 min | wall clock | 04:59–05:01Z |
+| Final model fit, 11 targets, WY2005–2021 / WY2005–2025 | 1,493 s / 1,751 s; peak 953 / 1,441 MB | artifacts.jsonl | 07:24Z / 07:54Z |
+| Final artifact size | about 47 MB per 11-target pickle | `ls -l` | 07:24Z |
+| LightGBM-full fold, 7 targets (completion run) | 536–890 s | fit log | 05:12–06:58Z |
+| LightGBM-full fold, 6 targets (ablation G) | 324–614 s | fit log | 06:25–07:35Z |
 
 ## Acceptance criteria
 
