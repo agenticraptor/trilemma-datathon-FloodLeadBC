@@ -170,9 +170,12 @@ def build(conn: psycopg.Connection, now: datetime | None = None) -> dict[str, An
                       "label": f"{ph}.A ETN {etn} ({yr})"})
     fav: dict[tuple, list[tuple]] = {}
     for iss, end, etn in conn.execute(
-            "SELECT issued_at, vtec_end, etn FROM nws_vtec WHERE phenomena = 'FA' AND significance = 'W'"
-            " AND segment_head ILIKE '%%Everson%%' AND segment_head ILIKE '%%overflow%%' AND issued_at >= %s"
-            " ORDER BY issued_at", (record_start,)).fetchall():
+            # The overflow wording can sit past the stored 600-character segment head (the 10:26 AM PST Dec 10,
+            # 2025 product did), so match the product text, in a Whatcom (WAC073) segment.
+            "SELECT v.issued_at, v.vtec_end, v.etn FROM nws_vtec v JOIN nws_products p USING (product_id)"
+            " WHERE v.phenomena = 'FA' AND v.significance = 'W' AND p.text ILIKE '%%Everson%%'"
+            " AND p.text ILIKE '%%overflow%%' AND (v.segment_head ILIKE '%%WAC073%%' OR v.segment_head ILIKE"
+            " '%%Whatcom%%') AND v.issued_at >= %s ORDER BY v.issued_at", (record_start,)).fetchall():
         fav.setdefault((etn, iss.year), []).append((iss, end))
     fa = []
     for (etn, yr), prods in fav.items():
