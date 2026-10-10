@@ -630,7 +630,7 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
 - **Cost:** PR #6's diff shows part 1 until #5 merges, then `main` is merged in.
 - **Slip:** one `git commit -a` swept a frontend draft into a parser-fix commit (`638d6d3`). It is recorded, not rewritten.
 
-### D-03.20 — Protocol amendment 1 (review A1–A3, A5, A7, A8) and the Stage 4 loader that enforces A1 (Oct 10, 02:0x UTC)
+### D-03.20 — Protocol amendment 1 (review A1–A3, A5, A7, A8) and the Stage 4 loader that enforces A1 (Oct 10, 01:57 UTC)
 
 - **Context:** the supervisor reviewed the frozen protocol (sound; eight amendments). It was frozen before addenda 2 and 3 arrived, so they enter it as dated amendments, and the frozen text is never edited.
 - **Choice:** amendment 1, appended under `## Amendments`. The diff touches only the "(none)" line below that heading.
@@ -643,6 +643,23 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - **A7:** the SR 544 onset definition differs before and after Oct 1, 2026; relay v2 is in-sample.
   - **A8:** T3's bias wording; T1 rests on 2 events.
 - **sha256 of `docs/evaluation-protocol.md` after amendment 1: `45fd36a3f87852b2eb6ae7ac0a913877512c98eaf614b326aacf44bc208d8214`** (frozen version `ecdefe0b…abad`).
+
+### D-03.21 — Protocol amendment 2: relay v2, counted by alert, with its counting rules fixed before computing (Oct 10, 01:58 UTC)
+
+- **Context:** addendum 3 sets tiers by action cost and asks for a trust table; review A4 asks for them as a second relay comparator, labelled in-sample.
+- **Choice:** amendment 2 adds:
+  - the tiers: Watch, Heads-up, Prepare, Move now at 5.0 ft with the 4.0 ft variant, and the Everson FA.W row as descriptive;
+  - **the counting rules, written before any number was computed:**
+    - the record period starts at the first SR 544 record;
+    - overflow episodes are SR 544 records grouped by gaps of more than 48 h;
+    - an alert's window is its event − 12 h to + 24 h;
+    - leads are listed per alert;
+    - misses are counted;
+    - precision carries a Clopper–Pearson interval;
+  - the labels: in-sample; 5.0 ft chosen after seeing the data; never held-out results.
+  - Relay v1 stays as built.
+- **Episode rule, written after one look at the SR 544 episode list** (8 episodes; the first is 2 h, 3.84 ft, at the start of the record, in an event warned 13 h before the gauge existed): an episode whose warning began before the record start is excluded. Disclosed here, so the reader can judge it.
+- **sha256 of the protocol after amendment 2: `39355efe22a0d6b0e0c2898c4693ea1db6d6b08be85bfeb662240d545bb2cbe4`.**
 
 ## Work log
 

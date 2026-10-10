@@ -216,3 +216,62 @@ Added after the supervisor's review of the frozen text (`docs/build/prompts/STAG
 **A8. Wording.**
 - **T3, "no systematic low bias":** the 95 % bootstrap interval of (mean forecast probability − observed frequency) must not lie entirely below 0.
 - **T1:** the comparison with the City of Abbotsford's alert exists for **2 events only** (Nov 2021, Dec 2025). Every report of T1 says so.
+
+### Amendment 2 — 2026-10-10 (relay v2; supervisor addendum 3 and review A4)
+
+A second relay comparator, counted **by alert**, added before any model is trained. Relay v1 (§3 item 5, frozen at `45367d1` and pinned as `relay-v1.json`) stays as built.
+
+**Relay v2 is descriptive and in-sample.**
+- On Oct 9 the supervisor chose its Prepare tier and its 5.0 ft Move-now level after seeing every year, including the held-out ones.
+- Its numbers are **never presented as held-out results**.
+- The 5.0 ft level is labelled "chosen after seeing the data" everywhere. The 4.0 ft variant (the NWS minor stage at SR 544) was not chosen from the data, and is always reported beside it.
+
+**Tiers** (addendum 3, section 1):
+
+| Tier | One alert is | What the farmer does |
+|---|---|---|
+| Watch | each NWS flood watch event (FFASEW; VTEC FA.A or FL.A; one per phenomena, ETN and year) whose segment names Whatcom, at its NEW product | nothing costly |
+| Heads-up | each NWS North Cedarville river flood warning event (FL.W, H-VTEC `NRKW1`; one per ETN and water year), at its NEW product | check fuel, trailers and contacts |
+| Prepare | in each such event, the first product with H-VTEC severity ≥ 2 (moderate or worse forecast); at most one per event | line up trucks and a receiving farm; move young stock and equipment |
+| Move now (provisional) | the first SR 544 reading ≥ 5.0 ft in an overflow episode (variant: ≥ 4.0 ft) | move milking herds and poultry |
+| Everson overflow warning (descriptive row) | each areal flood warning event (FA.W) whose segment names Everson and overflow, at its NEW product | — |
+
+**Counting rules** (fixed here, before the numbers are computed):
+- **Record period:** from the first SR 544 record in our gauge history (2015-11-14 09:15Z; the USGS file starts at 08:15Z, under check per addendum 3 §6) to the build time.
+  - Alerts issued before the record start are not counted.
+  - An overflow episode whose warning event began before the record start is not counted. This is the 2015-11-14 episode, part of ETN 55, issued 2015-11-13 20:00Z.
+- **Overflow episode:**
+  - SR 544 records before 2026-10-01, or readings ≥ 3.6 ft from then on, grouped by gaps of more than 48 h;
+  - onset = the first record, peak = the maximum;
+  - **large** = peak ≥ 5.0 ft.
+- **Window and outcomes:**
+  - An alert's window runs from its event's first product − 12 h to its event's end + 24 h. The event's end is the latest VTEC end time among its products, or its last product if none has one.
+  - An alert is **followed by an overflow** if an overflow onset lies in that window. **Large** means that overflow is large.
+  - **Lead** = onset − alert time, listed per alert. A negative lead means the alert came after the onset.
+  - Move-now alerts are scored against their own episode: always an overflow, by construction. Their lead is negative: the reading comes after the onset.
+- **Missed overflow:** an overflow episode with no alert of that tier whose window contains its onset.
+- **Precision:** followed / alerts, with an exact Clopper–Pearson 95 % interval.
+- **Day or night:** at Abbotsford (`floodlead.sun`).
+  - Move now always pushes.
+  - Whether Prepare pushes at night is the farmer's choice (Stage 7).
+- **Gauge missing:** if SR 544 is not reporting, the alert says so. A Move-now signal is never inferred.
+- **2021 and 2025:** each tier's time against Abbotsford's first alert and first order, with the review's ranges. These are 2 events only (amendment 1, A8).
+
+**The trust table** is a code output with a run ID (`floodlead history build trust`). It has one row per tier:
+- alerts, and alerts per year;
+- followed by any overflow, and by a large one;
+- precision with its 95 % interval;
+- overflows missed;
+- the lead for each alert;
+- the 2021 and 2025 comparisons.
+
+**Every alert is listed with its outcome.** No rate is shown without its list, and alert wording takes its numbers from this table, never hard-coded (addendum 3, section 4).
+
+**What relay v2 does not claim** (addendum 3, section 5):
+- Its precision is the official warnings' precision.
+- FloodLead adds delivery to the farmer's phone, farm terms and tiers, the odds on every alert, and a public record.
+- A better forecast than NWS is claimed only if this protocol shows one.
+
+**Re-check:** the 5.0 ft Move-now level is re-checked after the first overflow of the 2026–27 season, because the 2026 SR 544 bridge changes the hydraulics. This is stated here and in the alert help text (Stage 7).
+
+**Reproducibility:** the supervisor's independent count (addendum 3, section 2) is reproduced by the code. Any difference is reported with both counts and the reason; neither is adjusted to match.
