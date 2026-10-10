@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 
 from floodlead import db, log
 from floodlead.config import get_settings
@@ -36,6 +37,12 @@ def _jobs(pool):  # type: ignore[no-untyped-def]
         Job("eccc-stations", 86400, 9 * 3600 + 600, lambda: eccc.refresh_stations(pool)),
         Job("usgs-stations", 86400, 9 * 3600 + 900, lambda: usgs.refresh_stations(pool)),
     ]
+
+
+def model_targets() -> tuple[str, ...]:
+    from floodlead.model import TARGETS
+
+    return TARGETS
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -91,11 +98,26 @@ def main(argv: list[str] | None = None) -> int:
     lv.add_argument("--from-seq", type=int, default=1)
     ex = sub.add_parser("export-demo", help="write the app's snapshot JSON (web/data/snapshot/) from the live DB")
     ex.add_argument("--out", default="web/data/snapshot")
+    md = sub.add_parser("model", help="Stage 4 model (run only in a capped one-off container)")
+    mds = md.add_subparsers(dest="model_cmd", required=True)
+    mf = mds.add_parser("dev-fit", help="walk-forward fits on development years; saves validation predictions")
+    mf.add_argument("--datasets", default="/datasets")
+    mf.add_argument("--out", required=True)
+    mf.add_argument("--candidate", action="append", required=True, help="family:group:sub|full, e.g. lgb:G+R:sub")
+    mf.add_argument("--targets", default=",".join(model_targets()), help="comma-separated, e.g. d_6,d_12,d_24,m_24")
+    mf.add_argument("--folds", default="", help="validation water years to run (default: all)")
     a = sub.add_parser("api", help="serve the read-only API")
     a.add_argument("--host", default="0.0.0.0")
     a.add_argument("--port", type=int, default=8000)
     args = ap.parse_args(argv)
 
+    if args.cmd == "model" and args.model_cmd == "dev-fit":
+        from floodlead import model_dev
+
+        folds = [int(x) for x in args.folds.split(",") if x]
+        model_dev.fit_candidates(Path(args.datasets), Path(args.out), args.candidate, tuple(args.targets.split(",")),
+                                 folds or None)
+        return 0
     if args.cmd == "migrate":
         print(db.migrate())
         return 0

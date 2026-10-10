@@ -79,8 +79,9 @@ class Fitted:
     fit_seconds: float = 0.0
 
 
-def fit(train: pd.DataFrame, family: str, group: str, sub: bool, train_years: list[int]) -> Fitted:
-    """Fit every target at FIT_LEVELS. `train` must hold only rows of `train_years` (checked by the caller)."""
+def fit(train: pd.DataFrame, family: str, group: str, sub: bool, train_years: list[int],
+        targets: tuple[str, ...] = TARGETS) -> Fitted:
+    """Fit each of `targets` at FIT_LEVELS. `train` must hold only rows of `train_years` (checked by the caller)."""
     feats = LINEAR_FEATURES if family == "linear" else GROUPS[group]
     fm = Fitted(family, group, list(feats), sub, sorted(train_years))
     t0 = time.monotonic()
@@ -90,17 +91,18 @@ def fit(train: pd.DataFrame, family: str, group: str, sub: bool, train_years: li
         from sklearn.linear_model import QuantileRegressor
 
         fm.fill = {c: float(np.nanmedian(data[c])) if np.isfinite(data[c]).any() else 0.0 for c in feats}
-        for tgt in TARGETS:
+        for tgt in targets:
             d = data[np.isfinite(data[tgt].to_numpy(dtype=float))]
             if len(d) > LINEAR_MAX_ROWS:
                 d = d.sample(LINEAR_MAX_ROWS, random_state=SEED)
             x = d[feats].fillna(fm.fill).to_numpy(dtype=float)
             y = d[tgt].to_numpy(dtype=float)
-            fm.models[tgt] = [QuantileRegressor(quantile=q, alpha=0.0, solver="highs").fit(x, y) for q in FIT_LEVELS]
+            fm.models[tgt] = [QuantileRegressor(quantile=q, alpha=0.0, solver="highs-ipm").fit(x, y)
+                              for q in FIT_LEVELS]
     else:
         import lightgbm as lgb
 
-        for tgt in TARGETS:
+        for tgt in targets:
             d = data[np.isfinite(data[tgt].to_numpy(dtype=float))]
             x = d[feats].to_numpy(dtype=float)
             y = d[tgt].to_numpy(dtype=float)

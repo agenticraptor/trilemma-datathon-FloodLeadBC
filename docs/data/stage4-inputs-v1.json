@@ -1,0 +1,103 @@
+{
+ "what": "Stage 4 development inputs, read from frozen sources before any fit",
+ "sources": {
+  "catalogue": {
+   "file": "docs/data/catalogue-v1.json",
+   "sha256": "0cbc83dbef5ac66a54bb17b3daef2a7184b8591cc1ce5314d5f803c09722bca9"
+  },
+  "onset_levels": "the overflow replay's cedarville_ft_at_onset (src/floodlead/replay.py), /v1/replay/overflow, read 2026-10-10 03:12Z"
+ },
+ "development_overflow_onsets": [
+  {
+   "event_id": "2015-11-18",
+   "wy": 2016,
+   "onset": "2015-11-18T06:45:00Z",
+   "cedarville_ft_at_onset": 147.92
+  },
+  {
+   "event_id": "2017-11-23",
+   "wy": 2018,
+   "onset": "2017-11-23T19:25:00Z",
+   "cedarville_ft_at_onset": 147.6
+  },
+  {
+   "event_id": "2020-02-01",
+   "wy": 2020,
+   "onset": "2020-02-01T16:55:00Z",
+   "cedarville_ft_at_onset": 148.44
+  }
+ ],
+ "excluded_overflow_records": [
+  {
+   "event_id": "2015-11-13",
+   "onset": "2015-11-14T09:15:00Z",
+   "why": "first SR 544 record (gauge record start), not an onset the gauge could see begin"
+  }
+ ],
+ "onset_levels_ft": [
+  147.92,
+  147.6,
+  148.44
+ ],
+ "development_events_ge_148ft": [
+  {
+   "event_id": "2009-01-07",
+   "wy": 2009,
+   "moderate_first": "2009-01-07T14:45:00Z",
+   "crest_ft": 148.68,
+   "validation_year": false
+  },
+  {
+   "event_id": "2010-12-12",
+   "wy": 2011,
+   "moderate_first": "2010-12-13T00:45:00Z",
+   "crest_ft": 148.07,
+   "validation_year": false
+  },
+  {
+   "event_id": "2015-11-18",
+   "wy": 2016,
+   "moderate_first": "2015-11-18T03:15:00Z",
+   "crest_ft": 148.53,
+   "validation_year": true
+  },
+  {
+   "event_id": "2017-11-23",
+   "wy": 2018,
+   "moderate_first": "2017-11-23T15:45:00Z",
+   "crest_ft": 148.13,
+   "validation_year": true
+  },
+  {
+   "event_id": "2020-02-01",
+   "wy": 2020,
+   "moderate_first": "2020-02-01T15:15:00Z",
+   "crest_ft": 148.85,
+   "validation_year": true
+  }
+ ],
+ "validation_events": {
+  "ge_148ft": [
+   "2015-11-18T03:15:00Z",
+   "2017-11-23T15:45:00Z",
+   "2020-02-01T15:15:00Z"
+  ],
+  "overflow_onset": [
+   "2015-11-18T06:45:00Z",
+   "2017-11-23T19:25:00Z",
+   "2020-02-01T16:55:00Z"
+  ],
+  "minor": [
+   "2015-11-13T19:45:00Z",
+   "2015-11-18T00:45:00Z",
+   "2016-01-28T19:30:00Z",
+   "2017-11-23T13:00:00Z",
+   "2018-11-02T15:30:00Z",
+   "2018-11-27T14:00:00Z",
+   "2020-02-01T11:45:00Z",
+   "2022-11-05T05:45:00Z",
+   "2023-12-05T18:15:00Z",
+   "2024-01-28T16:30:00Z"
+  ]
+ }
+}
