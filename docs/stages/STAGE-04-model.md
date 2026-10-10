@@ -345,6 +345,18 @@ The relay (trust table) and the official scorecard already stand on their own; t
   - Ablation development: G+R+F (2 folds) and G (9 folds) are done; oracle is running.
   - Track record at 07:54Z: 36 issuances, 0 gaps.
 
+- `00:55–02:13` — **All 7 final artifacts** are in `/srv/floodlead/models/final-20261010T0659/`. Each was trained through `final_training_rows()` with image `floodlead-app:s4` (`df5134c`), and each sha256 was re-checked against `artifacts.jsonl`:
+
+| Artifact | Variant | Training WY | Targets | Rows | Fit | Peak RSS | sha256 |
+|---|---|---|---|---|---|---|---|
+| `GR_heldout_wy2022.pkl` | G+R | 2005–2021 (17 years) | 11 | 149,016 | 1493 s | 953 MB | `d3468c052b8b7fc5…` |
+| `GR_heldout_wy2026.pkl` | G+R | 2005–2025 (21 years, incl. 2022) | 11 | 184,080 | 1751 s | 1441 MB | `ab42dbd1d877a8c2…` |
+| `G_heldout_wy2022.pkl` | G | 2005–2021 (17 years) | 6 | 149,016 | 758 s | 953 MB | `510e5ddfb5abcc7b…` |
+| `oracle_heldout_wy2022.pkl` | oracle | 2005–2021 (17 years) | 6 | 149,016 | 854 s | 1522 MB | `c23b9e17268fe143…` |
+| `G_heldout_wy2026.pkl` | G | 2005–2025 (21 years, incl. 2022) | 6 | 184,080 | 692 s | 1522 MB | `846e2986d33f7926…` |
+| `oracle_heldout_wy2026.pkl` | oracle | 2005–2025 (21 years, incl. 2022) | 6 | 184,080 | 1088 s | 1762 MB | `b4a4be8bca65c782…` |
+| `GRF_heldout_wy2026.pkl` | G+R+F | 2005–2025 (21 years, incl. 2022) | 6 | 184,080 | 962 s | 1762 MB | `fb94ac0d61eac0d2…` |
+
 ## Measurements
 
 | What | Value | How measured | When |
