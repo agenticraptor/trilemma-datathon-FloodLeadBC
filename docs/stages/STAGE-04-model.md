@@ -238,6 +238,27 @@ The relay (trust table) and the official scorecard already stand on their own; t
   - Its sha256 goes into a ledger `model_card` (`floodlead-nooksack-v1`). That card is appended once (`model ledger-card` refuses a second) and anchored at the next HH:30.
 - **The final run** (written while waiting for the go, never run before it) refuses to start if any dataset or artifact hash differs from the manifest.
 
+### D-04.12 — The model chosen on validation: LightGBM quantiles on all rows (`lgb_GR_full`) (Oct 10, 05:50 UTC)
+
+- **The rule** (amendment 4, item 6, fixed before any fit): the lowest pooled validation fair CRPS, averaged over 6/12/24 h, among the G+R candidates; within 1 %, the lower Brier for ≥ 148 ft within 24 h.
+- **The four candidates.** All fitted on the same 9 walk-forward folds, WY2016–2025 minus 2022; 78,912 validation rows. Output: `/srv/floodlead/models/dev-20261010T0316/selection.json`.
+
+| Candidate | Fair CRPS, 6/12/24 h mean (ft) | Brier, ≥ 148 ft within 24 h |
+|---|---|---|
+| **`lgb_GR_full`**, LightGBM, all rows | **0.08977** | **0.00088** |
+| `lgb_GR_sub`, LightGBM, quiet rows subsampled | 0.09017 | 0.00089 |
+| `linear_GR_full`, linear QR, 30k rows | 0.11707 | 0.00096 |
+| `linear_GR_sub`, linear QR, 30k rows from the subsample | 0.12780 | 0.00093 |
+
+- **Chosen: `lgb_GR_full`.**
+  - It has the lowest CRPS. LightGBM-sub is within 1 % (+0.4 %), so the tie-break applies, and `lgb_GR_full` also has the lower Brier.
+  - **The quiet-row subsample is not kept:** it did not win, per amendment 4.
+  - The linear family lost by 30–42 % in CRPS. Its 24 h median-MAE skill was near zero: 0.02 (−0.02 to 0.06) for linear-sub.
+- **Consequences:**
+  - LightGBM-full's remaining targets (started speculatively at 05:03) are now the real completion run.
+  - The ablations G, oracle and G+R+F use LightGBM-full; they started at 05:50Z.
+  - The final models are trained with LightGBM-full.
+
 ## Work log
 
 - `19:36` — `git checkout main && git pull` → `8c04afb`; branch `stage-04-model`. The Stage 3 part-2 worktree was removed (its branch is merged). Read the prompt and the inputs above.
@@ -269,6 +290,8 @@ The relay (trust table) and the official scorecard already stand on their own; t
     - `lgb_GR_sub` 0.09017 (0.00089);
     - `linear_GR_sub` 0.1278 (0.00093).
   - **05:03Z:** started LightGBM-full's remaining targets (`d_1`, `d_3`, `d_18`, `d_36`, `d_48`, `m_12`, `m_48`) in the free container (`s4-complete`, image `floodlead-app:s4` at `df5134c`). This is **speculative**: the choice is final only once linear-full is scored. If linear-full won, this run would be reported as an extra run, and the winner would be completed instead.
+
+- `22:47–22:50` — linear-full finished at 05:47:56Z and was scored; the choice is LightGBM-full (D-04.12). Ablations started at 05:50Z (`s4-abl`): G+R+F on folds 2024–2025, then G and oracle on all folds, each with 6 metric targets. Track record at 05:33Z: 34 issuances, 0 gaps.
 
 ## Measurements
 
