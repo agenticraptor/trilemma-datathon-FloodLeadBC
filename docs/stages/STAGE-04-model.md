@@ -8,7 +8,7 @@
 | Started | 2026-10-09 19:36 PT (2026-10-10 02:36 UTC) |
 | Finished | (fill at end) |
 | Prompt | `docs/build/prompts/STAGE-04-model.md`; the contract is `docs/evaluation-protocol.md`, the frozen text plus amendments 1–3 (4 added in this stage) |
-| Status | in progress |
+| Status | checkpoint reached 2026-10-10 09:31 UTC; waiting for the supervisor's go before the final run |
 
 ## Goal
 
@@ -333,6 +333,23 @@ The relay (trust table) and the official scorecard already stand on their own; t
     - calibration: **not used** (D-04.13);
     - all 7 artifacts with sha256 and training years.
 
+### D-04.15 — The model card in the public ledger: seq 32517, anchored 09:30:01Z (Oct 10, 09:23–09:31 UTC)
+
+- **Command:** `floodlead model ledger-card --manifest docs/data/stage4-final-manifest-v1.json`, in a one-off container with image `floodlead-app:s4` (`df5134c`).
+- **Entry:**
+  - **seq 32517**, `model_card`, model `floodlead-nooksack-v1`;
+  - created 2026-10-10T09:23:40.573Z;
+  - entry hash `970c70990e803bbe1da87b5b9173135b1bc7d62831fd20ac0b063beba457b927`.
+  - `params`: `manifest_sha256` = `1127595c…f39f4c`, `protocol_sha256` = `fd6ecb6e…03ab`, `code_commit_trained` = `df5134c…`, `status` = "fixed before any held-out row is scored; not issued live until Stage 5".
+  - `params_hash` `099fe8ef…2534`.
+- **Anchor:**
+  - 2026-10-10T09:30:01.99Z, ledger-branch commit `fa255a4f3515b53b78bc9fee1a35b2ddb82c98e1`, `ledger/entries/2026/10/10/09.jsonl.gz`. The anchor head was seq 32517.
+  - Checked with `git show origin/ledger:…/09.jsonl.gz | zcat`: the entry is present, with the same hash.
+- **The checkpoint is complete.** No held-out or live row has been scored by any Stage 4 model.
+  - The development code loads development years only (`load_dev`).
+  - The final run has not been executed; it needs `--supervisor-go`.
+  - Training read held-out years only as A2 allows: WY2022 in the WY2026 models, by design.
+
 ## Work log
 
 - `19:36` — `git checkout main && git pull` → `8c04afb`; branch `stage-04-model`. The Stage 3 part-2 worktree was removed (its branch is merged). Read the prompt and the inputs above.
@@ -389,6 +406,8 @@ The relay (trust table) and the official scorecard already stand on their own; t
 | `GRF_heldout_wy2026.pkl` | G+R+F | 2005–2025 (21 years, incl. 2022) | 6 | 184,080 | 962 s | 1762 MB | `fb94ac0d61eac0d2…` |
 
 - `02:13–02:24` — The oracle ablation's development finished at 09:19Z. Full development report built (2 min 38 s, 1 CPU). Manifest built with the training image and copied into `docs/data/`; host paths are recorded.
+
+- `02:23–02:31` — Model card appended (seq 32517) and anchored at 09:30:01Z (D-04.15). Track record at 09:30Z: 38 issuances, 0 gaps. **STOP:** waiting for the supervisor's go. R1 is done (D-04.10) and F6 is done (D-04.5).
 
 ## Measurements
 
