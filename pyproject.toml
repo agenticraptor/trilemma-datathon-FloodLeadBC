@@ -13,6 +13,9 @@ dependencies = [
     "uvicorn>=0.32",
     "numpy>=2.1",
     "cryptography>=43",
+    "lightgbm>=4.5",
+    "scikit-learn>=1.5",
+    "pandas>=2.2",
 ]
 
 [project.scripts]

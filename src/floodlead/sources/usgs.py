@@ -410,14 +410,19 @@ def fetch_nwis_window(
     end: datetime,
     skip: list[tuple[datetime, datetime]],
     pacer: Pacer | None = None,
+    request_margin: timedelta = timedelta(0),
 ) -> int:
     """One NWIS IV request for [start, end); rows inside `skip` intervals (already loaded from the OGC API)
-    are dropped so the two APIs never write the same key."""
+    are dropped so the two APIs never write the same key.
+
+    `request_margin` asks NWIS for data from `start - margin` and still keeps only [start, end). NWIS IV answered a
+    winter (PST) `startDT=...Z` one hour late (2015-11-14T08:15Z returned data from 09:15Z; Stage 4, D-04.2), so
+    re-fetches use a margin."""
     if pacer is not None:
         pacer.wait()
     f = http.fetch(c, NWIS_IV_URL, params={
         "format": "json", "sites": site, "parameterCd": ",".join(PARAMS), "siteStatus": "all",
-        "startDT": f"{start:%Y-%m-%dT%H:%MZ}", "endDT": f"{end:%Y-%m-%dT%H:%MZ}",
+        "startDT": f"{start - request_margin:%Y-%m-%dT%H:%MZ}", "endDT": f"{end:%Y-%m-%dT%H:%MZ}",
     })
     run.items_fetched += 1
     name = f"nwis-iv_{site}_{start:%Y%m%dT%H%M}_{end:%Y%m%dT%H%M}"
@@ -586,3 +591,19 @@ def backfill(
                                                                   rows=run.rows.inserted))
             run.details["rate_limited_events"] = rate_limited["count"]
             return run.run_id
+
+
+def refetch_window(pool: ConnectionPool, site: str, start: datetime, end: datetime) -> dict[str, Any]:
+    """Forced NWIS IV re-fetch of [start, end) for one site, ignoring recorded backfill chunks, with a 1-day request
+    margin. Upserts: identical rows write nothing (Stage 2 F2), missing rows are inserted."""
+    sid = f"usgs:{site}"
+    with pool.connection() as conn, http.client() as c:
+        conn.autocommit = True
+        q = ("SELECT count(*) FROM observations WHERE station_id = %s AND ts >= %s AND ts < %s")
+        before = conn.execute(q, (sid, start, end)).fetchone()[0]
+        with store.Run(conn, SOURCE, "refetch-usgs-window") as run:
+            n = fetch_nwis_window(c, conn, run, site, start, end, [], None, request_margin=timedelta(days=1))
+            run.details = {"site": site, "start": start.isoformat(), "end": end.isoformat(), "rows_in_window": n}
+        after = conn.execute(q, (sid, start, end)).fetchone()[0]
+    return {"site": site, "window": [start.isoformat(), end.isoformat()], "rows_before": before,
+            "rows_in_payload": n, "rows_after": after}

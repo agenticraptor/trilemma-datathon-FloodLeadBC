@@ -1858,14 +1858,35 @@
           isNum(b.crest_bias_ft) && Number(Math.abs(b.crest_bias_ft).toFixed(2)) !== 0 ? h('small', { class: 'muted' }, h('br'), b.crest_bias_ft < 0 ? 'too low' : 'too high') : null),
         h('td', { class: 'p' }, fmt(b.crest_mae_ft, 2)),
         h('td', { class: 'p' }, fmtShare(b.category_right_share)),
-        h('td', { class: 'p' }, fmt(b.crest_time_mae_h, 1))));
+        h('td', { class: 'p' }, isNum(b.crest_time_mae_h) ? fmt(b.crest_time_mae_h, 1) : '—',
+          typeof b.crest_time_note === 'string' && b.crest_time_note ? h('small', { class: 'muted' }, h('br'), b.crest_time_note) : null)));
       parts.push(
         h('p', { class: 'table-caption' }, SC_CAPTION),
         tableBox(h('table', { class: 'skill sc-lead' }, h('thead', null, head), h('tbody', null, rows))),
-        scFirstWarningLine(s));
+        typeof s.lead_table_note === 'string' && s.lead_table_note ? h('p', { class: 'muted' }, s.lead_table_note) : null,
+        scFirstWarningLine(s),
+        scForecastConditioned(s));
     }
     parts.push(h('p', { class: 'muted' }, 'Products: every warning and follow-up statement with a forecast crest in its text. Events (n): the warnings those products belong to. Category right: the forecast crest and the observed crest fall in the same NWS flood category. Crest timing error: hours between the forecast and the observed crest time, either way.'));
     return h('div', { class: 'sc-leads' }, parts);
+  }
+
+  /** F3 (Stage 4): the same warnings sorted by what was forecast, not by what happened. */
+  function scForecastConditioned(s) {
+    const f = s && s.forecast_conditioned;
+    if (!f || !isNum(f.n) || !isNum(f.slope)) return null;
+    const ci = Array.isArray(f.slope_ci95) && f.slope_ci95.length === 2 ? `${fmt(f.slope_ci95[0], 2)}–${fmt(f.slope_ci95[1], 2)}` : '—';
+    const hi = f.first_forecast_at_or_above || {};
+    const items = [
+      h('li', null, `Observed crest = ${fmt(f.intercept_ft, 1)} + ${fmt(f.slope, 2)} × the first forecast crest (95 % interval on the slope ${ci}); typical miss ${fmt(f.residual_sd_ft, 2)} ft either way (residual SD), n = ${fmtInt(f.n)} warnings with both crests.`)];
+    if (isNum(hi.n) && hi.n > 0) {
+      const rng = Array.isArray(hi.error_range_ft) && hi.error_range_ft.length === 2 ? `${fmtSigned(hi.error_range_ft[0], 2)} to ${fmtSigned(hi.error_range_ft[1], 2)} ft` : '—';
+      items.push(h('li', null, `When the first forecast was ${fmt(hi.threshold_ft, 0)} ft or more (${fmtInt(hi.n)} warnings), the river came in lower ${fmtInt(hi.came_in_lower)} times and higher ${fmtInt(hi.came_in_higher)} times (observed minus forecast: mean ${fmtSigned(hi.error_mean_ft, 2)} ft, range ${rng}).`));
+    }
+    return h('div', { class: 'sc-fc' },
+      h('h4', null, 'Sorted by what was forecast'),
+      h('ul', null, items),
+      typeof f.note === 'string' ? h('p', { class: 'muted' }, f.note) : null);
   }
 
   function scFirstWarningLine(s) {

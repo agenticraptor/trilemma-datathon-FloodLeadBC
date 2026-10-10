@@ -21,6 +21,7 @@ point (stations.official_thresholds); NWS stages can change over the years, whic
 from __future__ import annotations
 
 import json
+import math
 import statistics
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -130,17 +131,110 @@ def summarise(events: list[dict[str, Any]]) -> dict[str, Any]:
         errs = [r["crest_error_ft"] for r in rs]
         cat = [r["category_right"] for r in rs if "category_right" in r]
         te = [r["crest_time_error_h"] for r in rs if "crest_time_error_h" in r]
+        after = lab == "after the crest"
         bins.append({"lead": lab, "n_products": len(rs), "n_events": len(ev_in_bin[lab]),
                      "crest_bias_ft": round(statistics.fmean(errs), 2),
                      "crest_mae_ft": round(statistics.fmean(abs(x) for x in errs), 2),
                      "category_right_share": round(sum(cat) / len(cat), 3) if cat else None,
-                     "crest_time_mae_h": round(statistics.fmean(abs(x) for x in te), 1) if te else None})
+                     # F2: products issued after the crest are not crest forecasts; their timing error is meaningless
+                     "crest_time_mae_h": None if after else (round(statistics.fmean(abs(x) for x in te), 1)
+                                                            if te else None),
+                     "crest_time_note": "not a forecast: issued after the observed crest" if after else None})
     leads = [e["first_warning_lead_before_minor_h"] for e in events if e["first_warning_lead_before_minor_h"]
              is not None]
-    return {"n_events": len(events), "lead_bins": bins,
+    return {"n_events": len(events), "lead_bins": bins, "forecast_conditioned": forecast_conditioned(events),
+            "lead_table_note": LONG_LEAD_NOTE,
             "first_warning_lead_before_minor_h": {
                 "n": len(leads), "median": statistics.median(leads) if leads else None,
                 "min": min(leads) if leads else None, "max": max(leads) if leads else None}}
+
+
+LONG_LEAD_NOTE = ("Warnings issued 24–48 h before the crest exist mainly for the largest floods, so this bin's low "
+                  "bias partly reflects which floods had long warnings.")
+
+
+def _betacf(a: float, b: float, x: float) -> float:
+    """Continued fraction for the regularised incomplete beta (Numerical Recipes)."""
+    qab, qap, qam = a + b, a + 1.0, a - 1.0
+    c, d = 1.0, 1.0 - qab * x / qap
+    d = 1.0 / (d if abs(d) > 1e-300 else 1e-300)
+    h = d
+    for m in range(1, 300):
+        m2 = 2 * m
+        aa = m * (b - m) * x / ((qam + m2) * (a + m2))
+        d = 1.0 + aa * d
+        d = 1.0 / (d if abs(d) > 1e-300 else 1e-300)
+        c = 1.0 + aa / c if abs(1.0 + aa / c) > 1e-300 else 1e-300
+        h *= d * c
+        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2))
+        d = 1.0 + aa * d
+        d = 1.0 / (d if abs(d) > 1e-300 else 1e-300)
+        c = 1.0 + aa / c if abs(1.0 + aa / c) > 1e-300 else 1e-300
+        de = d * c
+        h *= de
+        if abs(de - 1.0) < 1e-12:
+            break
+    return h
+
+
+def _betai(a: float, b: float, x: float) -> float:
+    if x <= 0:
+        return 0.0
+    if x >= 1:
+        return 1.0
+    bt = math.exp(math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b) + a * math.log(x) + b * math.log(1 - x))
+    return bt * _betacf(a, b, x) / a if x < (a + 1) / (a + b + 2) else 1.0 - bt * _betacf(b, a, 1 - x) / b
+
+
+def t_quantile(p: float, df: int) -> float:
+    """Student-t quantile by bisection on the CDF (standard library only)."""
+    def cdf(t: float) -> float:
+        x = df / (df + t * t)
+        tail = 0.5 * _betai(df / 2, 0.5, x)
+        return 1 - tail if t > 0 else tail
+
+    lo, hi = -100.0, 100.0
+    for _ in range(200):
+        mid = (lo + hi) / 2
+        if cdf(mid) < p:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2
+
+
+def forecast_conditioned(events: list[dict[str, Any]], threshold_ft: float = 148.0) -> dict[str, Any] | None:
+    """F3 (Stage 4): sorted by what was forecast, not by what happened. Across warning events with both a first
+    forecast crest and an observed crest: OLS observed = a + b x first forecast, the slope's 95 % interval (t), the
+    residual SD and n; and when the first forecast was >= threshold: how many came in lower or higher, and the error
+    (observed - forecast) mean and range."""
+    pairs = [(e["first_forecast_crest_ft"], e["observed_crest_ft"]) for e in events
+             if e.get("first_forecast_crest_ft") is not None and e.get("observed_crest_ft") is not None]
+    n = len(pairs)
+    if n < 3:
+        return None
+    xs, ys = [p[0] for p in pairs], [p[1] for p in pairs]
+    mx, my = statistics.fmean(xs), statistics.fmean(ys)
+    sxx = sum((x - mx) ** 2 for x in xs)
+    slope = sum((x - mx) * (y - my) for x, y in pairs) / sxx
+    icpt = my - slope * mx
+    res = [y - (icpt + slope * x) for x, y in pairs]
+    sd = math.sqrt(sum(r * r for r in res) / (n - 2))
+    se = sd / math.sqrt(sxx)
+    tq = t_quantile(0.975, n - 2)
+    errs = [y - x for x, y in pairs]
+    hi = [(x, y) for x, y in pairs if x >= threshold_ft]
+    he = [y - x for x, y in hi]
+    return {"n": n, "intercept_ft": round(icpt, 2), "slope": round(slope, 3),
+            "slope_ci95": [round(slope - tq * se, 2), round(slope + tq * se, 2)],
+            "residual_sd_ft": round(sd, 2), "mean_abs_miss_ft": round(statistics.fmean(abs(e) for e in errs), 2),
+            "first_forecast_at_or_above": {"threshold_ft": threshold_ft, "n": len(hi),
+                                           "came_in_lower": sum(1 for e in he if e < 0),
+                                           "came_in_higher": sum(1 for e in he if e > 0),
+                                           "error_mean_ft": round(statistics.fmean(he), 2) if he else None,
+                                           "error_range_ft": [round(min(he), 2), round(max(he), 2)] if he else None},
+            "note": "Sorted by what was forecast. Sorting by the outcome makes any forecast look low for the largest "
+                    "floods; the honest gap is the missing range, not a bias to correct."}
 
 
 def _series(conn: psycopg.Connection, sid: str, t0: datetime, t1: datetime) -> list[tuple[datetime, float]]:

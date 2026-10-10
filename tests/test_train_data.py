@@ -50,3 +50,27 @@ def test_walk_forward_never_trains_on_wy2022_and_final_run_folds() -> None:
     assert [k for _, k in td.walk_forward_folds()] == [2016, 2017, 2018, 2019, 2020, 2021, 2023, 2024, 2025]
     f = td.final_run_folds()
     assert f["heldout_wy2022"][-1] == 2021 and 2022 in f["heldout_wy2026"] and f["live"] == f["heldout_wy2026"]
+
+
+def test_final_training_rows_allow_exactly_the_a2_folds(tmp_path: Path) -> None:
+    years = [(2015, "False"), (2021, "False"), (2022, "True"), (2025, "False"), (2026, "True"), (2027, "False")]
+    p = write(tmp_path / "f.csv.gz", years)
+    got = {f: sorted({int(r["wy"]) for r in td.final_training_rows(p, f)}) for f in td.final_run_folds()}
+    assert got["heldout_wy2022"] == [2015, 2021]  # WY2022 refused in its own fold
+    assert got["heldout_wy2026"] == [2015, 2021, 2022, 2025] == got["live"]  # WY2022 allowed, as in A2
+    for f in td.final_run_folds():
+        assert 2026 not in got[f] and 2027 not in got[f]
+        with pytest.raises(td.HeldOutRowError):
+            td.check_final_rows([{"wy": "2026"}], f)
+        with pytest.raises(td.HeldOutRowError):
+            td.check_final_rows([{"wy": "2027"}], f)
+    with pytest.raises(td.HeldOutRowError):
+        td.check_final_rows([{"wy": "2022"}], "heldout_wy2022")
+    with pytest.raises(td.HeldOutRowError):
+        list(td.final_training_rows(p, "development"))
+
+
+def test_only_the_final_run_module_calls_final_training_rows() -> None:
+    src = Path(__file__).resolve().parents[1] / "src" / "floodlead"
+    callers = {p.name for p in src.rglob("*.py") if "final_training_rows(" in p.read_text()}
+    assert callers <= {"train_data.py", "model_final.py"}, callers

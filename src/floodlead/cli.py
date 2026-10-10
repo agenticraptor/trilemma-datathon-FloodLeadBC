@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 
 from floodlead import db, log
 from floodlead.config import get_settings
@@ -38,6 +39,12 @@ def _jobs(pool):  # type: ignore[no-untyped-def]
     ]
 
 
+def model_targets() -> tuple[str, ...]:
+    from floodlead.model import TARGETS
+
+    return TARGETS
+
+
 def main(argv: list[str] | None = None) -> int:
     log.setup()
     ap = argparse.ArgumentParser(prog="floodlead")
@@ -58,6 +65,10 @@ def main(argv: list[str] | None = None) -> int:
     bu.add_argument("--api", choices=["auto", "ogc", "nwis"], default="auto",
                     help="auto: OGC API v1 when USGS_API_KEY is set, else legacy NWIS IV (no key needed)")
     bsub.add_parser("nwps", help="NWPS gauge metadata, flood categories and current forecasts")
+    bw = bsub.add_parser("usgs-window", help="forced NWIS IV re-fetch of one site and window (with a 1-day margin)")
+    bw.add_argument("--site", required=True)
+    bw.add_argument("--start", required=True, help="ISO time (UTC)")
+    bw.add_argument("--end", required=True, help="ISO time (UTC)")
     h = sub.add_parser("history", help="Stage 3 history: paced, resumable downloads into the raw archive")
     hsub = h.add_subparsers(dest="hcmd", required=True)
     hd = hsub.add_parser("download", help="download one or more sources, in order (skips finished tasks)")
@@ -87,11 +98,114 @@ def main(argv: list[str] | None = None) -> int:
     lv.add_argument("--from-seq", type=int, default=1)
     ex = sub.add_parser("export-demo", help="write the app's snapshot JSON (web/data/snapshot/) from the live DB")
     ex.add_argument("--out", default="web/data/snapshot")
+    md = sub.add_parser("model", help="Stage 4 model (run only in a capped one-off container)")
+    mds = md.add_subparsers(dest="model_cmd", required=True)
+    mf = mds.add_parser("dev-fit", help="walk-forward fits on development years; saves validation predictions")
+    mf.add_argument("--datasets", default="/datasets")
+    mf.add_argument("--out", required=True)
+    mf.add_argument("--candidate", action="append", required=True, help="family:group:sub|full, e.g. lgb:G+R:sub")
+    mf.add_argument("--targets", default=",".join(model_targets()), help="comma-separated, e.g. d_6,d_12,d_24,m_24")
+    mf.add_argument("--folds", default="", help="validation water years to run (default: all)")
+    ms = mds.add_parser("dev-score", help="score saved walk-forward predictions into the development report")
+    ms.add_argument("--datasets", default="/datasets")
+    ms.add_argument("--preds", action="append", required=True, help="a directory of preds-*.npz (repeatable)")
+    ms.add_argument("--inputs", default="docs/data/stage4-inputs-v1.json")
+    ms.add_argument("--catalogue", default="docs/data/catalogue-v1.json")
+    ms.add_argument("--relay", default="docs/data/relay-v1.json")
+    ms.add_argument("--chosen", default=None)
+    ms.add_argument("--out", required=True)
+    mg = mds.add_parser("merge-preds", help="merge one candidate's prediction files (same rows) into one")
+    mg.add_argument("--out", required=True)
+    mg.add_argument("paths", nargs="+")
+    ft = mds.add_parser("final-train", help="train the A2 final models (final_training_rows) into a new run dir")
+    ft.add_argument("--datasets", default="/datasets")
+    ft.add_argument("--out", required=True)
+    ft.add_argument("--family", required=True, choices=["lgb", "linear"])
+    ft.add_argument("--subsample", action="store_true")
+    ft.add_argument("--only", default="", help="comma-separated artifact names (default: the whole plan)")
+    mm = mds.add_parser("manifest", help="write the final manifest from the run dir and the development report")
+    mm.add_argument("--datasets", default="/datasets")
+    mm.add_argument("--run-dir", required=True)
+    mm.add_argument("--dev-report", required=True)
+    mm.add_argument("--chosen", required=True)
+    mm.add_argument("--chosen-preds", required=True)
+    mm.add_argument("--inputs", default="docs/data/stage4-inputs-v1.json")
+    mm.add_argument("--protocol", default="docs/evaluation-protocol.md")
+    mm.add_argument("--out", required=True)
+    fr = mds.add_parser("final-run", help="THE single final run on held-out rows: only after the supervisor's go")
+    fr.add_argument("--supervisor-go", required=True, help="who gave the go and when (recorded in the results)")
+    fr.add_argument("--datasets", default="/datasets")
+    fr.add_argument("--manifest", default="docs/data/stage4-final-manifest-v1.json")
+    fr.add_argument("--run-dir", required=True)
+    fr.add_argument("--inputs", default="docs/data/stage4-inputs-v1.json")
+    fr.add_argument("--catalogue", default="docs/data/catalogue-v1.json")
+    fr.add_argument("--relay", default="docs/data/relay-v1.json")
+    fr.add_argument("--trust", default="docs/data/trust-v2.json")
+    fr.add_argument("--out", required=True)
+    mc = mds.add_parser("ledger-card", help="append the manifest's model_card to the ledger (once)")
+    mc.add_argument("--manifest", required=True)
     a = sub.add_parser("api", help="serve the read-only API")
     a.add_argument("--host", default="0.0.0.0")
     a.add_argument("--port", type=int, default=8000)
     args = ap.parse_args(argv)
 
+    if args.cmd == "model" and args.model_cmd == "dev-fit":
+        from floodlead import model_dev
+
+        folds = [int(x) for x in args.folds.split(",") if x]
+        model_dev.fit_candidates(Path(args.datasets), Path(args.out), args.candidate, tuple(args.targets.split(",")),
+                                 folds or None)
+        return 0
+    if args.cmd == "model" and args.model_cmd == "dev-score":
+        import json
+
+        from floodlead import model_report
+
+        rep = model_report.development_report(Path(args.datasets), [Path(p) for p in args.preds], Path(args.inputs),
+                                              Path(args.catalogue), Path(args.relay), args.chosen)
+        Path(args.out).write_text(json.dumps(rep, indent=1, default=float))
+        for r in rep["ranking_G+R"]:
+            print(json.dumps(r))
+        return 0
+    if args.cmd == "model" and args.model_cmd == "merge-preds":
+        from floodlead import model_dev
+
+        print(model_dev.merge_preds([Path(p) for p in args.paths], Path(args.out)))
+        return 0
+    if args.cmd == "model" and args.model_cmd == "final-train":
+        from floodlead import model_final
+
+        model_final.train(Path(args.datasets), Path(args.out), args.family, args.subsample,
+                          [x for x in args.only.split(",") if x] or None)
+        return 0
+    if args.cmd == "model" and args.model_cmd == "final-run":
+        import json
+
+        from floodlead import model_final
+
+        out = Path(args.out)
+        if out.exists():
+            raise SystemExit(f"{out} exists: the final run happens once (amendment 4, item 9)")
+        res = model_final.final_run(Path(args.datasets), Path(args.manifest), Path(args.run_dir), Path(args.inputs),
+                                    Path(args.catalogue), Path(args.relay), Path(args.trust))
+        res["supervisor_go"] = args.supervisor_go
+        out.write_text(json.dumps(res, indent=1, default=float) + "\n")
+        print(json.dumps({"run_id": res["run_id"], "kill_criteria": res["kill_criteria"]}))
+        return 0
+    if args.cmd == "model" and args.model_cmd == "manifest":
+        import json
+
+        from floodlead import model_final
+
+        dev = json.loads(Path(args.dev_report).read_text())
+        m = model_final.manifest(Path(args.run_dir), Path(args.datasets), dev, args.chosen,
+                                 model_final.freeze_from_dev(dev, args.chosen),
+                                 model_final.calibration_maps(Path(args.datasets), Path(args.chosen_preds), dev,
+                                                              args.chosen),
+                                 Path(args.inputs), Path(args.protocol))
+        Path(args.out).write_text(json.dumps(m, indent=1) + "\n")
+        print(model_final.sha256_file(Path(args.out)))
+        return 0
     if args.cmd == "migrate":
         print(db.migrate())
         return 0
@@ -143,6 +257,14 @@ def main(argv: list[str] | None = None) -> int:
         from floodlead import issuer
 
         print(json.dumps(issuer.run(pool, dry_run=args.dry_run), indent=1, default=str))
+        return 0
+    if args.cmd == "model" and args.model_cmd == "ledger-card":
+        import json
+
+        from floodlead import model_final
+
+        with pool.connection() as conn:
+            print(json.dumps(model_final.append_card(conn, Path(args.manifest))))
         return 0
     if args.cmd == "ledger" and args.ledger_cmd == "anchor":
         import json
@@ -199,6 +321,10 @@ def main(argv: list[str] | None = None) -> int:
             usgs.backfill(pool, sites, since, until, chunk_months=args.chunk_months, api=args.api)
         elif args.what == "nwps":
             nwps.ingest_live(pool, job="backfill-nwps")
+        elif args.what == "usgs-window":
+            a = datetime.fromisoformat(args.start).replace(tzinfo=UTC)
+            b = datetime.fromisoformat(args.end).replace(tzinfo=UTC)
+            print(usgs.refetch_window(pool, args.site, a, b))
         return 0
     return 1
 

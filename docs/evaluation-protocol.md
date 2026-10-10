@@ -324,3 +324,70 @@ Coordinates are from the NRCS AWDB station list, and each model's own grid cell 
 - Google WeatherNext access.
 
 **After Demo Day** (roadmap only): a live shadow archive of AI and physics rainfall forecasts, logged as issued and scored storm by storm against basin gauges. AI rain becomes a model feature only after at least 30 scored wet days show lower 24 h and 48 h CRPS than HRDPS and NBM.
+
+### Amendment 4 — 2026-10-10 (Stage 4 design choices, fixed before any model is fitted)
+
+Added at the start of Stage 4 (`docs/build/prompts/STAGE-04-model.md`, item 2), **before any model was fitted**. Where the Stage 4 prompt and this protocol differ, the protocol wins.
+
+**1. NWS inputs.**
+- The NWS-derived columns (`nws_*`) are **comparators, not inputs** to the primary model. That keeps "model vs NWS" a fair comparison.
+- A post-processing variant "plus NWS products" may be added as one extra ablation, labelled as such. It is not the primary model.
+
+**2. Targets.** Both are derived from the frozen files' columns; nothing is rebuilt.
+- **Level change:** North Cedarville at the ledger horizons h ∈ {1, 3, 6, 12, 18, 24, 36, 48}, as `y_lvl_h − nc_lvl` (`nc_lvl` is the latest reading at the feature cut-off).
+- **Window maximum:** M_H = max(`y_lvl_h1` … `y_lvl_hH`) for H ∈ {12, 24, 48}, as `M_H − nc_lvl`. M_H is defined only when at least H − 2 of the H hourly targets exist.
+
+**3. Quantiles.**
+- 19 levels, 0.05 … 0.95.
+- Each family fits its own levels and is interpolated linearly in level to the 19.
+- The 19 values are sorted, so they never cross.
+- Fair CRPS of the stored quantiles is computed with `crps.fair` (exponential tails).
+
+**4. Crossing probabilities.**
+- P(level ≥ X within H) = 1 − F_H(X − `nc_lvl`), where F_H is the predictive CDF of M_H − `nc_lvl`: piecewise linear between the 19 quantiles, with the exponential tails of `crps.py`. **Never from a classifier trained on threshold labels** (§2.1).
+- A calibration map (isotonic, on the raw probability) is allowed only under two conditions:
+  - it is fitted on pooled walk-forward validation predictions;
+  - in a leave-one-validation-year-out check it lowers the Brier score for ≥ 148 ft within 24 h.
+- Otherwise the raw CDF probabilities are used.
+
+**5. Overflow onset (the model's move tier).** With 3 development overflows, no high-capacity classifier is allowed.
+- **Default:** P(onset within H) = mean over the development episodes j of P(M_H ≥ L_j). L_j is the North Cedarville level at SR 544 onset in development episode j (Nov 2015, Nov 2017, Feb 2020, the replay's `cedarville_ft_at_onset`, the latest North Cedarville reading at or before the onset).
+- **Onset time:** when the predicted median path (the median at 1, 3, 6 and 12 h, linearly interpolated) first reaches the median of the L_j.
+- **Alternative:** a logistic model with at most 3 inputs (`nc_lvl`, `nc_d3h`, `snotel_p24h`), chosen on validation only if its pooled validation Brier for onset within 12 h is lower.
+- The overflow targets are undefined when water was already flowing at the cut-off (as in the datasets).
+
+**6. Model families compared on validation** (one is chosen, and the reason is logged):
+- **(a)** Linear quantile regression on a small feature set: `nc_lvl`, `nc_d1h`, `nc_d3h`, `nc_d6h`, the three forks' `_d3h`, `snotel_p6h`, `snotel_p24h`, `kbli_p6h`, `doy_sin`, `doy_cos`.
+  - Missing inputs are filled with their training medians.
+  - Fitted at the 7 levels 0.05, 0.1, 0.25, 0.5, 0.75, 0.9 and 0.95 on a random subsample of at most 30,000 training rows per fold, with a fixed seed.
+- **(b)** Gradient boosting (LightGBM, quantile objective) at the same 7 levels, on the feature group's columns, with fixed hyperparameters (200 trees, learning rate 0.05, 31 leaves, min 50 rows per leaf).
+- **Quiet-row subsampling** (keep all rows with |`nc_d3h`| ≥ 0.1 ft or `nc_lvl` ≥ 144 ft, and 20 % of the others, fixed seed) is a candidate for both families. It is kept only if it wins on validation.
+- **Selection criterion, fixed now:**
+  - the lowest pooled validation fair CRPS, averaged over h ∈ {6, 12, 24} and over all rows;
+  - tie-break (within 1 %): the lower Brier for ≥ 148 ft within 24 h.
+  - Every candidate is reported, including the ones that lose.
+
+**7. Feature groups for the ablations (§7).**
+- **G**, gauges only: North Cedarville, the three forks, Everson and Ferndale (level, 1/3/6/12-h changes, 24-h max), `nc_mean7d`, `nc_mean30d`, `doy_sin`, `doy_cos`.
+- **G+R**, plus observed rain: SNOTEL precipitation, SWE and its change, and KBLI (with its live caveat: needs the NWS METAR feed). **This is the primary model**, because its inputs exist in every year.
+- **G+R+F**, plus as-issued forecast rain (`fc_rain_0_18h`, `fc_rain_18_42h`). The values exist only from 2024-01-19, so it is scored on validation WY2024–2025 and held-out WY2026 only, and every number says so.
+- **Oracle** (G+R plus `oracle_future_rain_*`): an upper bound, always labelled.
+- **Relay only:** the comparator rows (relay v1, relay v2).
+
+**8. Alert rules.**
+- (p\*, k) for the prepare tier (≥ 148 ft within 24 h) and the move tier (overflow within 12 h), chosen per §5 on pooled validation predictions only.
+- Each event-based rate carries its exact interval.
+
+**9. Re-runs.**
+- The final run happens once.
+- A re-run needs a further dated amendment saying why, and **both** results are reported.
+
+**10. Checkpoint before the final run.**
+- The final models are trained per A2 with `train_data.final_training_rows()`.
+- Their manifest (`docs/data/stage4-final-manifest-v1.json`: code commit, dataset sha256 values, configuration, features, (p\*, k), calibration maps, artifact sha256 values and training years) is committed.
+- Its sha256 is recorded in the ledger as a new `model_card` entry (`floodlead-nooksack-v1`) and anchored, before any held-out row is scored.
+
+**11. Compute limits.**
+- Training runs only in one-off containers capped at 1 CPU and 3 GB, reading the datasets read-only.
+- Models are written to `/srv/floodlead/models/<run_id>/`, never overwritten.
+- `/v1/track-record` is checked for gaps after each long job.

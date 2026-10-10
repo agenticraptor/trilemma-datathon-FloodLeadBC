@@ -51,3 +51,27 @@ def test_body_serialises_datetimes() -> None:
     import json
 
     assert json.dumps({"t": T0}, default=sc._iso) == '{"t": "2021-11-14T12:00:00Z"}'
+
+
+def test_after_crest_timing_is_not_shown() -> None:
+    obs = sc.observe(series(), STAGES)
+    late = [{"issued_at": T0 + timedelta(hours=20), "action": "EXT", "severity": "3", "forecast_crest_ft": 150.0,
+             "flood_crest": T0 + timedelta(hours=40), "flood_begin": None, "flood_end": None}]
+    s = sc.summarise([sc.score_event(late, obs, STAGES, None)])
+    b = next(x for x in s["lead_bins"] if x["lead"] == "after the crest")
+    assert b["crest_time_mae_h"] is None and "not a forecast" in b["crest_time_note"]
+    assert "largest floods" in s["lead_table_note"]
+
+
+def test_forecast_conditioned_regression_and_counts() -> None:
+    # observed = forecast + noise; forecasts >= 148 come in lower 2 of 3 times
+    fc = [140.0, 142.0, 144.0, 146.0, 148.0, 149.0, 150.0]
+    ob = [x + d for x, d in zip(fc, [0.3, -0.2, 0.1, -0.4, -0.5, -0.6, 2.0], strict=True)]
+    ev = [{"first_forecast_crest_ft": x, "observed_crest_ft": y} for x, y in zip(fc, ob, strict=True)]
+    ev.append({"first_forecast_crest_ft": None, "observed_crest_ft": 147.0})  # no forecast crest: left out
+    r = sc.forecast_conditioned(ev)
+    assert r is not None and r["n"] == 7
+    assert r["slope_ci95"][0] < r["slope"] < r["slope_ci95"][1]
+    hi = r["first_forecast_at_or_above"]
+    assert (hi["n"], hi["came_in_higher"]) == (3, 1)
+    assert round(sc.t_quantile(0.975, 26), 4) == 2.0555 and round(sc.t_quantile(0.975, 8), 3) == 2.306
