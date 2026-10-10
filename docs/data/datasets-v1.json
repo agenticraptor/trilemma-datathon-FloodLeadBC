@@ -1,0 +1,48 @@
+{
+ "built_at": "2026-10-09 23:01:10.757130+00:00",
+ "period": [
+  "2004-10-01 00:00:00+00:00",
+  "2026-10-07 22:00:00+00:00"
+ ],
+ "latency_min": {
+  "usgs": 60,
+  "snotel": 120,
+  "kbli": 20
+ },
+ "holdout_water_years": [
+  2022,
+  2026
+ ],
+ "files": {
+  "honest": {
+   "file": "nooksack_hourly_honest_v1.csv.gz",
+   "rows": 193007,
+   "columns": 136,
+   "bytes": 22081642,
+   "sha256": "e0d165a99afd0103d209be37284efebe7878d85ba7426e07ce0c10a78e81549d",
+   "label": "honest: only information available at issue time"
+  },
+  "oracle": {
+   "file": "nooksack_hourly_oracle_v1.csv.gz",
+   "rows": 193007,
+   "columns": 140,
+   "bytes": 25132228,
+   "sha256": "5ffea66a3cfed2fa9ea075e4a6114db8fedd7d3eece10852c6a60329e7400054",
+   "label": "UPPER BOUND: uses future observed rain"
+  },
+  "fraser_valley": {
+   "honest": {
+    "file": "fraser_valley_daily_honest_v1.csv.gz",
+    "rows": 93805,
+    "bytes": 3919681,
+    "sha256": "88a4e92ae51b83c279efb7ca306de22fecf64252b7796dd780661034d2a0f6bf"
+   },
+   "oracle": {
+    "file": "fraser_valley_daily_oracle_v1.csv.gz",
+    "rows": 93805,
+    "bytes": 4116375,
+    "sha256": "63356ef750fb951a84cf16b333364358176a15f51425b4ae30c833baa64ee5cb"
+   }
+  }
+ }
+}

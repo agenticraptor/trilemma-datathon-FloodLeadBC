@@ -1,0 +1,376 @@
+{
+ "computed_at": "2026-10-09T20:50Z",
+ "method": "src/floodlead/history/links.py (D-03.14)",
+ "nooksack_hourly": [
+  {
+   "upstream": "usgs:12205000",
+   "target": "usgs:12210700",
+   "label": "North Fork below Cascade Creek near Glacier \u2192 North Cedarville",
+   "resolution": "hourly",
+   "period": [
+    "2004-10-01",
+    "2026-10-09"
+   ],
+   "rise_correlation": {
+    "lag_h": 4.0,
+    "r": 0.703,
+    "n": 82632
+   },
+   "peak_to_peak": {
+    "n": 237,
+    "median_h": 4.0,
+    "iqr_h": [
+     2.0,
+     6.0
+    ],
+    "threshold": 43.373
+   },
+   "source": "USGS 15-min levels (approved and provisional), hourly means; this repository's history"
+  },
+  {
+   "upstream": "usgs:12208000",
+   "target": "usgs:12210700",
+   "label": "Middle Fork near Deming \u2192 North Cedarville",
+   "resolution": "hourly",
+   "period": [
+    "2004-10-01",
+    "2026-10-09"
+   ],
+   "rise_correlation": {
+    "lag_h": 4.0,
+    "r": 0.759,
+    "n": 81372
+   },
+   "peak_to_peak": {
+    "n": 234,
+    "median_h": 5.0,
+    "iqr_h": [
+     4.0,
+     6.0
+    ],
+    "threshold": 43.373
+   },
+   "source": "USGS 15-min levels (approved and provisional), hourly means; this repository's history"
+  },
+  {
+   "upstream": "usgs:12210000",
+   "target": "usgs:12210700",
+   "label": "South Fork at Saxon Bridge \u2192 North Cedarville",
+   "resolution": "hourly",
+   "period": [
+    "2004-10-01",
+    "2026-10-09"
+   ],
+   "rise_correlation": {
+    "lag_h": 4.0,
+    "r": 0.816,
+    "n": 77997
+   },
+   "peak_to_peak": {
+    "n": 216,
+    "median_h": 4.0,
+    "iqr_h": [
+     3.0,
+     5.0
+    ],
+    "threshold": 43.373
+   },
+   "source": "USGS 15-min levels (approved and provisional), hourly means; this repository's history"
+  },
+  {
+   "upstream": "usgs:12210700",
+   "target": "usgs:12211200",
+   "label": "North Cedarville \u2192 Everson",
+   "resolution": "hourly",
+   "period": [
+    "2004-10-01",
+    "2026-10-09"
+   ],
+   "rise_correlation": {
+    "lag_h": 2.0,
+    "r": 0.93,
+    "n": 43577
+   },
+   "peak_to_peak": {
+    "n": 116,
+    "median_h": 1.0,
+    "iqr_h": [
+     1.0,
+     2.0
+    ],
+    "threshold": 23.533
+   },
+   "source": "USGS 15-min levels (approved and provisional), hourly means; this repository's history"
+  },
+  {
+   "upstream": "usgs:12210700",
+   "target": "usgs:12213100",
+   "label": "North Cedarville \u2192 Ferndale",
+   "resolution": "hourly",
+   "period": [
+    "2004-10-01",
+    "2026-10-09"
+   ],
+   "rise_correlation": {
+    "lag_h": 6.0,
+    "r": 0.834,
+    "n": 82140
+   },
+   "peak_to_peak": {
+    "n": 215,
+    "median_h": 7.0,
+    "iqr_h": [
+     6.0,
+     9.0
+    ],
+    "threshold": 3.306
+   },
+   "source": "USGS 15-min levels (approved and provisional), hourly means; this repository's history"
+  }
+ ],
+ "fraser_valley_daily": [
+  {
+   "upstream": "eccc:08MH016",
+   "target": "eccc:08MH001",
+   "label": "Chilliwack R. at outlet of Chilliwack Lake \u2192 Vedder Crossing",
+   "resolution": "daily",
+   "overlap": [
+    "2011-01-01",
+    "2024-12-31"
+   ],
+   "overlap_days": 5055,
+   "rise_correlation": {
+    "lag_h": 0.0,
+    "r": 0.497,
+    "n": 5048
+   },
+   "peak_to_peak": {
+    "n": 72,
+    "median_h": 0.0,
+    "iqr_h": [
+     0.0,
+     0.0
+    ],
+    "threshold": 2.629
+   },
+   "source": "ECCC daily means (HYDAT, to 2024); USGS hourly means aggregated to days",
+   "note": "daily resolution: lags under a day cannot be resolved"
+  },
+  {
+   "upstream": "eccc:08MH103",
+   "target": "eccc:08MH001",
+   "label": "Chilliwack R. above Slesse Ck \u2192 Vedder Crossing",
+   "resolution": "daily",
+   "overlap": [
+    "2011-01-01",
+    "2024-12-31"
+   ],
+   "overlap_days": 5079,
+   "rise_correlation": {
+    "lag_h": 0.0,
+    "r": 0.939,
+    "n": 5073
+   },
+   "peak_to_peak": {
+    "n": 71,
+    "median_h": 0.0,
+    "iqr_h": [
+     0.0,
+     0.0
+    ],
+    "threshold": 2.629
+   },
+   "source": "ECCC daily means (HYDAT, to 2024); USGS hourly means aggregated to days",
+   "note": "daily resolution: lags under a day cannot be resolved"
+  },
+  {
+   "upstream": "eccc:08MH056",
+   "target": "eccc:08MH001",
+   "label": "Slesse Ck near Vedder Crossing \u2192 Chilliwack R. at Vedder Crossing",
+   "resolution": "daily",
+   "overlap": [
+    "2011-01-01",
+    "2024-12-31"
+   ],
+   "overlap_days": 4863,
+   "rise_correlation": {
+    "lag_h": 0.0,
+    "r": 0.905,
+    "n": 4833
+   },
+   "peak_to_peak": {
+    "n": 72,
+    "median_h": 0.0,
+    "iqr_h": [
+     0.0,
+     24.0
+    ],
+    "threshold": 2.629
+   },
+   "source": "ECCC daily means (HYDAT, to 2024); USGS hourly means aggregated to days",
+   "note": "daily resolution: lags under a day cannot be resolved"
+  },
+  {
+   "upstream": "usgs:12214500",
+   "target": "eccc:08MH029",
+   "label": "Sumas R. near Sumas, WA (USGS) \u2192 Sumas R. near Huntingdon, BC",
+   "resolution": "daily",
+   "overlap": [
+    "2022-10-29",
+    "2024-12-31"
+   ],
+   "overlap_days": 427,
+   "rise_correlation": {
+    "lag_h": 0.0,
+    "r": 0.906,
+    "n": 424
+   },
+   "peak_to_peak": {
+    "n": 14,
+    "median_h": 0.0,
+    "iqr_h": [
+     0.0,
+     0.0
+    ],
+    "threshold": 2.637
+   },
+   "source": "ECCC daily means (HYDAT, to 2024); USGS hourly means aggregated to days",
+   "note": "daily resolution: lags under a day cannot be resolved"
+  },
+  {
+   "upstream": "usgs:12210700",
+   "target": "eccc:08MH029",
+   "label": "Nooksack at North Cedarville (overflow source) \u2192 Sumas R. near Huntingdon",
+   "resolution": "daily",
+   "overlap": [
+    "2011-01-01",
+    "2024-12-31"
+   ],
+   "overlap_days": 4925,
+   "rise_correlation": {
+    "lag_h": 0.0,
+    "r": 0.639,
+    "n": 4888
+   },
+   "peak_to_peak": {
+    "n": 80,
+    "median_h": 12.0,
+    "iqr_h": [
+     0.0,
+     24.0
+    ],
+    "threshold": 2.637
+   },
+   "source": "ECCC daily means (HYDAT, to 2024); USGS hourly means aggregated to days",
+   "note": "daily resolution: lags under a day cannot be resolved"
+  },
+  {
+   "upstream": "eccc:08MF040",
+   "target": "eccc:08MF005",
+   "label": "Fraser R. above Texas Creek \u2192 Fraser R. at Hope",
+   "resolution": "daily",
+   "overlap": [
+    "2011-01-01",
+    "2024-12-31"
+   ],
+   "overlap_days": 5016,
+   "rise_correlation": {
+    "lag_h": 0.0,
+    "r": 0.692,
+    "n": 4993
+   },
+   "peak_to_peak": {
+    "n": 64,
+    "median_h": 24.0,
+    "iqr_h": [
+     0.0,
+     24.0
+    ],
+    "threshold": 7.798
+   },
+   "source": "ECCC daily means (HYDAT, to 2024); USGS hourly means aggregated to days",
+   "note": "daily resolution: lags under a day cannot be resolved"
+  },
+  {
+   "upstream": "eccc:08LF051",
+   "target": "eccc:08MF005",
+   "label": "Thompson R. near Spences Bridge \u2192 Fraser R. at Hope",
+   "resolution": "daily",
+   "overlap": [
+    "2011-01-01",
+    "2024-12-31"
+   ],
+   "overlap_days": 4964,
+   "rise_correlation": {
+    "lag_h": 0.0,
+    "r": 0.611,
+    "n": 4946
+   },
+   "peak_to_peak": {
+    "n": 65,
+    "median_h": 24.0,
+    "iqr_h": [
+     0.0,
+     48.0
+    ],
+    "threshold": 7.798
+   },
+   "source": "ECCC daily means (HYDAT, to 2024); USGS hourly means aggregated to days",
+   "note": "daily resolution: lags under a day cannot be resolved"
+  },
+  {
+   "upstream": "eccc:08MF005",
+   "target": "eccc:08MH024",
+   "label": "Fraser R. at Hope \u2192 Fraser R. at Mission (tidal)",
+   "resolution": "daily",
+   "overlap": [
+    "1990-01-01",
+    "2024-12-31"
+   ],
+   "overlap_days": 10885,
+   "rise_correlation": {
+    "lag_h": 0.0,
+    "r": 0.706,
+    "n": 10828
+   },
+   "peak_to_peak": {
+    "n": 102,
+    "median_h": 24.0,
+    "iqr_h": [
+     0.0,
+     48.0
+    ],
+    "threshold": 4.661
+   },
+   "source": "ECCC daily means (HYDAT, to 2024); USGS hourly means aggregated to days",
+   "note": "daily resolution: lags under a day cannot be resolved"
+  },
+  {
+   "upstream": "eccc:08MF068",
+   "target": "eccc:08MF062",
+   "label": "Coquihalla R. above Alexander Ck \u2192 below Needle Ck",
+   "resolution": "daily",
+   "overlap": [
+    "2011-01-01",
+    "2024-12-31"
+   ],
+   "overlap_days": 4990,
+   "rise_correlation": {
+    "lag_h": 0.0,
+    "r": 0.857,
+    "n": 4969
+   },
+   "peak_to_peak": {
+    "n": 57,
+    "median_h": 0.0,
+    "iqr_h": [
+     0.0,
+     0.0
+    ],
+    "threshold": 2.608
+   },
+   "source": "ECCC daily means (HYDAT, to 2024); USGS hourly means aggregated to days",
+   "note": "daily resolution: lags under a day cannot be resolved"
+  }
+ ]
+}

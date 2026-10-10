@@ -71,6 +71,7 @@ def run(
     *,
     pace_s: float,
     is_empty: Callable[[bytes], bool] = lambda b: len(b) == 0,
+    is_valid: Callable[[bytes], bool] = lambda b: True,
     expand: Callable[[Task, bytes], Iterator[Task]] | None = None,
     limit: int | None = None,
 ) -> Report:
@@ -117,11 +118,17 @@ def run(
                             **log.kv(source=source, retry_after_s=e.retry_after_s))
                     break
                 continue
-            empty = is_empty(f.content)
+            valid = is_valid(f.content)
+            empty = valid and is_empty(f.content)
             with pool.connection() as conn, conn.transaction():
-                ref = archive.store(conn, s.archive_dir, source, t.name or t.key, f)
-                record(conn, source, t, f.url, "empty" if empty else "ok", f.status, len(f.content),
-                       ref.raw_object_id, f.fetched_at, round(f.elapsed_s, 3), None)
+                ref = archive.store(conn, s.archive_dir, source, t.name or t.key, f)  # kept as evidence either way
+                record(conn, source, t, f.url, "empty" if empty else "ok" if valid else "error", f.status,
+                       len(f.content), ref.raw_object_id, f.fetched_at, round(f.elapsed_s, 3),
+                       None if valid else f"invalid body: {f.content[:200]!r}")
+            if not valid:  # e.g. HTTP 200 with "Unexpected error while streaming data: timeoutReached" (Open-Meteo)
+                L.warning("history invalid body", **log.kv(source=source, key=t.key, bytes=len(f.content)))
+                rep.errors += 1
+                continue
             rep.done += 1
             rep.bytes += len(f.content)
             if rep.done % 25 == 0:

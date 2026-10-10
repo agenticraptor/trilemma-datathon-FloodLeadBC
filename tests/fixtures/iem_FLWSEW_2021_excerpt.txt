@@ -1,0 +1,268 @@
+
+361 
+WGUS46 KSEW 151007
+FLWSEW
+
+BULLETIN - IMMEDIATE BROADCAST REQUESTED
+Flood Warning
+National Weather Service Seattle WA
+207 AM PST Mon Nov 15 2021
+
+...Forecast flooding changed from Moderate to Major severity and 
+increased in duration for the following rivers in Washington...
+
+  Nooksack River At North Cedarville affecting Whatcom County.
+
+.Heavy rain over Whatcom county and the North Washington Cascades 
+will come to an end this morning.
+
+PRECAUTIONARY/PREPAREDNESS ACTIONS...
+
+Motorists should not attempt to drive around barricades or drive 
+cars through flooded areas.
+
+Turn around, don't drown when encountering flooded roads. Most flood 
+deaths occur in vehicles.
+
+Additional information is available at www.weather.gov.
+
+The next statement will be issued by this morning at 1015 AM PST.
+
+&&
+
+
+WAC073-151815-
+/O.EXT.KSEW.FL.W.0078.000000T0000Z-211117T0233Z/
+/NRKW1.3.ER.211114T2218Z.211115T1800Z.211116T1733Z.NR/
+207 AM PST Mon Nov 15 2021
+
+...FLOOD WARNING NOW IN EFFECT FROM EARLY THIS MORNING THROUGH 
+TUESDAY EVENING...
+
+* WHAT...Moderate flooding is occurring and major flooding is 
+  forecast. This approaches the flood of record.
+
+* WHERE...Nooksack River At North Cedarville.
+
+* WHEN...Until tomorrow evening.
+
+* IMPACTS...At 150.0 feet, the Nooksack River will cause major near 
+  record flooding downstream through Lynden. Deep and swift flood 
+  waters will inundate farm lands...roads...and residential areas. 
+  The flood may overtop levees. In addition...flood waters could 
+  overflow and flood the Sumas drainage. Flooding will occur all 
+  along the river including headwaters...tributaries...and other 
+  streams within and near the Nooksack River Basin.
+
+* ADDITIONAL DETAILS...
+  - At 1:45 AM PST Monday the stage was 149.5 feet.
+  - Recent Activity...The maximum river stage in the 24 hours
+    ending at 1:45 AM PST Monday was 149.5 feet.
+  - Forecast...The river is expected to rise to a crest of 150.1
+    feet late this morning. It will then fall below flood stage
+    late tomorrow morning.
+  - Flood stage is 146.5 feet.
+  - Flood History...This crest compares to a previous crest of
+    149.6 feet on 10/17/2003.
+  - http://www.weather.gov/safety/flood
+
+&&
+
+LAT...LON 4880 12224 4885 12236 4889 12247 4896 12247
+      4895 12233 4882 12215
+
+
+$$
+
+44
+
+
+
+042 
+WGUS46 KSEW 141950
+FLWSEW
+
+BULLETIN - IMMEDIATE BROADCAST REQUESTED
+Flood Warning
+National Weather Service Seattle WA
+1150 AM PST Sun Nov 14 2021
+
+...The National Weather Service in Seattle WA has issued a Flood 
+Warning for the following rivers in Washington...
+
+  Nooksack River At North Cedarville affecting Whatcom County.
+
+.The Nooksack River at North Cedarville will continue to rise 
+sharply today.
+
+PRECAUTIONARY/PREPAREDNESS ACTIONS...
+
+Motorists should not attempt to drive around barricades or drive 
+cars through flooded areas.
+
+Turn around, don't drown when encountering flooded roads. Most flood 
+deaths occur in vehicles.
+
+Additional information is available at www.weather.gov.
+
+The next statement will be issued by this evening at 745 PM PST.
+
+&&
+
+
+WAC073-150400-
+/O.NEW.KSEW.FL.W.0078.211114T2218Z-211116T2137Z/
+/NRKW1.2.ER.211114T2218Z.211115T1800Z.211116T1236Z.NO/
+1150 AM PST Sun Nov 14 2021
+
+...FLOOD WARNING IN EFFECT FROM THIS AFTERNOON THROUGH TUESDAY 
+AFTERNOON...
+
+* WHAT...Moderate flooding is forecast.
+
+* WHERE...Nooksack River At North Cedarville.
+
+* WHEN...Until early Tuesday afternoon.
+
+* IMPACTS...At 148.0 feet, the Nooksack River will cause widespread 
+  flooding downstream through Lynden...with swift waters covering 
+  some farm lands and roads. Erosion may affect some river banks.
+
+* ADDITIONAL DETAILS...
+  - At 11:00 AM PST Sunday the stage was 145.0 feet.
+  - Forecast...The river is expected to rise above flood stage
+    this afternoon to a crest of 148.9 feet late tomorrow
+    morning. It will then fall below flood stage early Tuesday
+    morning.
+  - Flood stage is 146.5 feet.
+  - Flood History...This crest compares to a previous crest of
+    148.7 feet on 01/07/2009.
+  - http://www.weather.gov/safety/flood
+
+&&
+
+LAT...LON 4880 12224 4885 12236 4889 12247 4896 12247
+      4895 12233 4882 12215
+
+
+$$
+
+33
+
+
+
+482 
+WGUS46 KSEW 280929
+FLWSEW
+
+BULLETIN - IMMEDIATE BROADCAST REQUESTED
+Flood Warning
+National Weather Service Seattle WA
+129 AM PST Sun Nov 28 2021
+
+...The National Weather Service in Seattle WA has issued a Flood 
+Warning for the following rivers in Washington...
+
+  Nooksack River At North Cedarville affecting Whatcom County.
+
+  South Fork Nooksack River At Saxon Bridge affecting Whatcom 
+  County.
+
+.Moderate to heavy rain will continue along the North Washington 
+Cascades will continue through Sunday night.
+
+PRECAUTIONARY/PREPAREDNESS ACTIONS...
+
+Motorists should not attempt to drive around barricades or drive 
+cars through flooded areas.
+
+Turn around, don't drown when encountering flooded roads. Most flood 
+deaths occur in vehicles.
+
+Be especially cautious at night when it is harder to recognize the 
+dangers of flooding.
+
+Additional information is available at www.weather.gov.
+
+The next statement will be issued by this morning at 1115 AM PST.
+
+&&
+
+
+WAC073-290000-
+/O.NEW.KSEW.FL.W.0088.211128T1125Z-211130T0006Z/
+/NRKW1.2.ER.211128T1125Z.211129T0000Z.211129T1828Z.NO/
+129 AM PST Sun Nov 28 2021
+
+...FLOOD WARNING IN EFFECT FROM EARLY THIS MORNING THROUGH MONDAY 
+AFTERNOON...
+
+* WHAT...Moderate flooding is forecast.
+
+* WHERE...Nooksack River At North Cedarville.
+
+* WHEN...Until tomorrow afternoon.
+
+* IMPACTS...At 148.0 feet, the Nooksack River will cause widespread 
+  flooding downstream through Lynden...with swift waters covering 
+  some farm lands and roads. Erosion may affect some river banks.
+
+* ADDITIONAL DETAILS...
+  - At 12:15 AM PST Sunday the stage was 144.0 feet.
+  - Forecast...The river is expected to rise above flood stage
+    early this morning to a crest of 148.5 feet late this
+    afternoon. It will then fall below flood stage late tomorrow
+    morning.
+  - Flood stage is 146.5 feet.
+  - Flood History...This crest compares to a previous crest of
+    148.1 feet on 12/13/2010.
+  - http://www.weather.gov/safety/flood
+
+&&
+
+LAT...LON 4880 12224 4885 12236 4889 12247 4896 12247
+      4895 12233 4882 12215
+
+
+$$
+
+WAC073-290000-
+/O.NEW.KSEW.FL.W.0089.211128T1151Z-211129T1226Z/
+/NSSW1.2.ER.211128T1151Z.211128T1800Z.211129T0325Z.UU/
+129 AM PST Sun Nov 28 2021
+
+...FLOOD WARNING IN EFFECT FROM EARLY THIS MORNING THROUGH LATE 
+TONIGHT...
+
+* WHAT...Moderate flooding is forecast.
+
+* WHERE...South Fork Nooksack River At Saxon Bridge.
+
+* WHEN...Until late tonight.
+
+* IMPACTS...At 8.5 feet, the Nooksack River flooding will be 
+  widespread with swift water covering farm lands and many roads.  
+  Highway 9 north of Acme may be impassable.  Erosion may affect 
+  some river banks.
+
+* ADDITIONAL DETAILS...
+  - At 1:00 AM PST Sunday the stage was 6.2 feet.
+  - Forecast...The river is expected to rise above flood stage
+    early this morning to a crest of 8.5 feet late this morning.
+    It will then fall below flood stage this evening.
+  - Flood stage is 8.0 feet.
+  - Flood History...This crest compares to a previous crest of
+    8.5 feet on 01/08/2009.
+  - http://www.weather.gov/safety/flood
+
+&&
+
+LAT...LON 4865 12219 4871 12226 4880 12224 4882 12215
+      4873 12215 4865 12208
+
+
+$$
+
+45
+
+

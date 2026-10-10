@@ -805,3 +805,22 @@ def track_record() -> dict[str, Any]:
     """FloodLead's live track record from the latest scorer run: forecasts issued, chain head and anchor, skill against
     pure persistence (fair CRPS and median MAE) with n, and plain statements of what the numbers do and do not show."""
     return _cached("track-record", 60, _track_record)
+
+
+@app.api_route("/v1/official-scorecard", methods=["GET", "HEAD"])
+def official_scorecard(point: str | None = Query(None, pattern="^(NRKW1|NKSW1|NREW1|NOEW1)$")) -> dict[str, Any]:
+    """How accurate were the official forecasts? Every archived NWS Seattle river flood warning product for
+    North Cedarville (NRKW1) and three neighbouring points, scored against the USGS gauge record: crest error by lead
+    time, crest timing, category, the first warning's lead before minor stage, and the "major" upgrade against the
+    overflow onset. FloodLead-computed from public archives; NWS publishes no such scorecard."""
+    rows = _q("SELECT scorecard_id, generated_at, body FROM official_scorecards ORDER BY scorecard_id DESC LIMIT 1")
+    if not rows:
+        raise HTTPException(404, "the official-forecast scorecard has not been built yet")
+    b = rows[0]["body"]
+    events = [e for e in b.get("events", []) if point is None or e.get("point") == point]
+    summary = b.get("summary", {}) if point is None else {point: b.get("summary", {}).get(point)}
+    return _wrap({"scorecard_id": rows[0]["scorecard_id"], "generated_at": rows[0]["generated_at"],
+                  "method": b.get("method"), "period": b.get("period"), "points": b.get("points"),
+                  "summary": summary, "events": events,
+                  "sources": ["NWS Seattle FLW/FLS products via the Iowa Environmental Mesonet archive "
+                              "(Iowa State University)", "USGS 15-min gauge records"]})

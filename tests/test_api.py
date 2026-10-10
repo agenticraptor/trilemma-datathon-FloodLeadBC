@@ -247,3 +247,20 @@ def test_track_record_contract(client: TestClient, conn: psycopg.Connection) -> 
     finally:
         conn.execute("DELETE FROM score_summaries")
         conn.execute("DELETE FROM scorer_runs")
+
+
+def test_official_scorecard_contract(client: TestClient, conn: psycopg.Connection) -> None:
+    assert client.get("/v1/official-scorecard").status_code == 404
+    body = {"method": "m", "period": ["2006-11-06T12:22:00Z", "2026-03-20T23:16:00Z"],
+            "points": {"NRKW1": "usgs:12210700"},
+            "summary": {"NRKW1": {"n_events": 1, "lead_bins": []}, "NKSW1": {"n_events": 0, "lead_bins": []}},
+            "events": [{"point": "NRKW1", "etn": 78}, {"point": "NKSW1", "etn": 5}]}
+    conn.execute("INSERT INTO official_scorecards (generated_at, body) VALUES (now(), %s)", (json.dumps(body),))
+    try:
+        b = client.get("/v1/official-scorecard").json()
+        assert b["summary"]["NRKW1"]["n_events"] == 1 and len(b["events"]) == 2 and b["attribution"]
+        one = client.get("/v1/official-scorecard?point=NRKW1").json()
+        assert [e["etn"] for e in one["events"]] == [78] and list(one["summary"]) == ["NRKW1"]
+        assert client.get("/v1/official-scorecard?point=XXXX1").status_code == 422
+    finally:
+        conn.execute("DELETE FROM official_scorecards")

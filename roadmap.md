@@ -20,6 +20,7 @@
 4. Shared farm plans: one threshold, many helpers, with roles and check-ins.
 5. Punjabi voice and SMS by default for Fraser Valley users who choose it.
 6. Contribute a dataset guide for the self-built sub-daily archive to the Trilemma data catalog.
+7. A live shadow archive of AI and physics rainfall forecasts: AIFS, AIGFS/HGEFS, IFS, HRDPS, HRRR and NBM, logged as issued and scored storm by storm against the basin gauges. AI rain becomes a model feature only after at least 30 scored wet days show lower 24 h and 48 h CRPS than HRDPS and NBM (Stage 3 addendum 2; R0 on Oct 10 found AIFS available at day-1 and day-2 leads).
 
 ## Explicit rejects
 
@@ -28,6 +29,7 @@
 | Issuing evacuation guidance | Official orders belong to local authorities; we link to them |
 | Scraping private or unlicensed feeds | Violates the data contract |
 | Parcel-level inundation maps | Needs DEM and hydraulic modelling beyond microproduct scope |
+| Satellite imagery or vision models as forecast inputs | Free radar revisits about every 3 days, clouds blind optical sensors, and in both floods every satellite view came after the gauges had shown the overflow (Stage 3 addendum 2; `docs/research/satellite-imagery-for-flood-prediction.md`) |
 | Auto-calling 911 | Safety and liability; users call emergency services themselves |
 | Snowmelt basins in v1 | Different physics; would dilute the first proof |
 | Chatbot front end | Adds no forecast skill; the value is the calibrated number and the action |

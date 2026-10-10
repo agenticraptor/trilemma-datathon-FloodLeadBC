@@ -8,8 +8,9 @@
 //   layout-check.txt    per page and width: document.documentElement.scrollWidth vs the viewport width,
 //                       and when the page is wider than the viewport, every element wider than it
 //                       (tag, class, width). Pages: #/ (also with the "How to read this" panel open),
-//                       #/stations, two #/station/<id> pages and #/track-record. Also loads of #/ and
-//                       #/track-record with navigator.language = 'en-US@posix'.
+//                       #/stations, two #/station/<id> pages, #/track-record and #/official-scorecard
+//                       (also with every <details> open: each warning's products and the method). Also loads
+//                       of #/, #/track-record and #/official-scorecard with navigator.language = 'en-US@posix'.
 // Locale: Chromium runs with --lang=en-CA, the CDP locale override en-CA, and Accept-Language: en-CA.
 const puppeteer = require('puppeteer');
 const fs = require('fs');
@@ -98,6 +99,17 @@ const personal = process.argv[4] || '147.0';
     const t = await open(`track-record-${tag}`, width, '#/track-record');
     await t.screenshot({ path: `${out}/track-record-${tag}.png`, fullPage: true });
     await t.close();
+    const o = await open(`official-scorecard-${tag}`, width, '#/official-scorecard');
+    await o.screenshot({ path: `${out}/official-scorecard-${tag}.png`, fullPage: true });
+    await card(o, `official-scorecard-lead-${tag}`, 'crest forecast error');
+    await card(o, `official-scorecard-events-${tag}`, 'north cedarville warnings');
+    await card(o, `official-scorecard-means-${tag}`, 'what this means');
+    // Opening every warning's products table (and the method) must not widen the page either.
+    await o.evaluate(() => { for (const d of document.querySelectorAll('#app details')) d.open = true; window.scrollTo(0, 0); });
+    await new Promise((r) => setTimeout(r, 300));
+    await checkLayout(o, `official-scorecard-${tag} (details open)`, '#/official-scorecard');
+    await o.screenshot({ path: `${out}/official-scorecard-open-${tag}.png`, fullPage: true });
+    await o.close();
   }
   // A browser whose default locale is POSIX reports navigator.language = 'en-US@posix' (not a valid
   // BCP 47 tag). The page must still load with 0 page errors and draw its charts.
@@ -112,6 +124,9 @@ const personal = process.argv[4] || '147.0';
   const pt = await open('posix-locale-track-record', 1280, '#/track-record', posix);
   await pt.screenshot({ path: `${out}/posix-locale-track-record-desktop.png` });
   await pt.close();
+  const po = await open('posix-locale-official-scorecard', 1280, '#/official-scorecard', posix);
+  await po.screenshot({ path: `${out}/posix-locale-official-scorecard-desktop.png` });
+  await po.close();
   layout.push(`posix-locale: page errors=${pageErrors - before}`);
   log.push(`page errors (all pages): ${pageErrors}; with navigator.language=en-US@posix: ${pageErrors - before}`);
   fs.writeFileSync(`${out}/console-errors.txt`, (log.join('\n') || 'none') + '\n');

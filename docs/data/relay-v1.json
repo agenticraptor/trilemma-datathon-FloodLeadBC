@@ -1,0 +1,416 @@
+{
+ "events": [
+  {
+   "event_id": "2015-11-18",
+   "minor_first": "2015-11-18 00:45:00+00:00",
+   "peak_ft": 148.53,
+   "overflow": true,
+   "overflow_onset": "2015-11-18 06:45:00+00:00",
+   "heads_up": {
+    "at": "2015-11-11 22:53:00+00:00",
+    "what": "FA.A NEW",
+    "daylight": true,
+    "lead_before_overflow_h": 151.87
+   },
+   "prepare": {
+    "at": "2015-11-17 23:40:00+00:00",
+    "what": "NRKW1 FL.W NEW",
+    "daylight": true,
+    "lead_before_overflow_h": 7.08
+   },
+   "move": {
+    "at": "2015-11-18 00:45:00+00:00",
+    "what": "North Cedarville reached minor stage (146.5 ft), rising",
+    "daylight": false,
+    "lead_before_overflow_h": 6.0
+   },
+   "seven_hour_rule_arrival": "2015-11-18 13:45:00+00:00"
+  },
+  {
+   "event_id": "2016-01-28",
+   "minor_first": "2016-01-28 19:30:00+00:00",
+   "peak_ft": 147.18,
+   "overflow": false,
+   "overflow_onset": null,
+   "heads_up": {
+    "at": "2016-01-22 05:54:00+00:00",
+    "what": "FA.A CON",
+    "daylight": false,
+    "lead_before_overflow_h": null
+   },
+   "prepare": {
+    "at": "2016-01-28 17:23:00+00:00",
+    "what": "NRKW1 FL.W NEW",
+    "daylight": true,
+    "lead_before_overflow_h": null
+   },
+   "move": {
+    "at": "2016-01-28 19:30:00+00:00",
+    "what": "North Cedarville reached minor stage (146.5 ft), rising",
+    "daylight": true,
+    "lead_before_overflow_h": null
+   }
+  },
+  {
+   "event_id": "2017-11-23",
+   "minor_first": "2017-11-23 13:00:00+00:00",
+   "peak_ft": 148.13,
+   "overflow": true,
+   "overflow_onset": "2017-11-23 19:25:00+00:00",
+   "heads_up": {
+    "at": "2017-11-20 22:22:00+00:00",
+    "what": "FA.A NEW",
+    "daylight": true,
+    "lead_before_overflow_h": 69.05
+   },
+   "prepare": {
+    "at": "2017-11-23 10:09:00+00:00",
+    "what": "NRKW1 FL.W NEW",
+    "daylight": false,
+    "lead_before_overflow_h": 9.27
+   },
+   "move": {
+    "at": "2017-11-23 13:00:00+00:00",
+    "what": "North Cedarville reached minor stage (146.5 ft), rising",
+    "daylight": false,
+    "lead_before_overflow_h": 6.42
+   },
+   "seven_hour_rule_arrival": "2017-11-24 02:25:00+00:00"
+  },
+  {
+   "event_id": "2018-11-02",
+   "minor_first": "2018-11-02 15:30:00+00:00",
+   "peak_ft": 146.73,
+   "overflow": false,
+   "overflow_onset": null,
+   "heads_up": {
+    "at": "2018-11-01 20:57:00+00:00",
+    "what": "FA.A NEW",
+    "daylight": true,
+    "lead_before_overflow_h": null
+   },
+   "prepare": {
+    "at": "2018-11-02 14:29:00+00:00",
+    "what": "NRKW1 FL.W NEW",
+    "daylight": false,
+    "lead_before_overflow_h": null
+   },
+   "move": {
+    "at": "2018-11-02 15:30:00+00:00",
+    "what": "North Cedarville reached minor stage (146.5 ft), rising",
+    "daylight": true,
+    "lead_before_overflow_h": null
+   }
+  },
+  {
+   "event_id": "2018-11-27",
+   "minor_first": "2018-11-27 14:00:00+00:00",
+   "peak_ft": 147.04,
+   "overflow": false,
+   "overflow_onset": null,
+   "heads_up": {
+    "at": "2018-11-25 22:01:00+00:00",
+    "what": "FA.A EXB",
+    "daylight": true,
+    "lead_before_overflow_h": null
+   },
+   "prepare": {
+    "at": "2018-11-27 06:03:00+00:00",
+    "what": "NRKW1 FL.W NEW",
+    "daylight": false,
+    "lead_before_overflow_h": null
+   },
+   "move": {
+    "at": "2018-11-27 14:00:00+00:00",
+    "what": "North Cedarville reached minor stage (146.5 ft), rising",
+    "daylight": false,
+    "lead_before_overflow_h": null
+   }
+  },
+  {
+   "event_id": "2020-02-01",
+   "minor_first": "2020-02-01 11:45:00+00:00",
+   "peak_ft": 148.85,
+   "overflow": true,
+   "overflow_onset": "2020-02-01 16:55:00+00:00",
+   "heads_up": {
+    "at": "2020-01-29 20:03:00+00:00",
+    "what": "FA.A NEW",
+    "daylight": true,
+    "lead_before_overflow_h": 68.87
+   },
+   "prepare": {
+    "at": "2020-02-01 04:55:00+00:00",
+    "what": "NRKW1 FL.W NEW",
+    "daylight": false,
+    "lead_before_overflow_h": 12.0
+   },
+   "move": {
+    "at": "2020-02-01 11:45:00+00:00",
+    "what": "North Cedarville reached minor stage (146.5 ft), rising",
+    "daylight": false,
+    "lead_before_overflow_h": 5.17
+   },
+   "seven_hour_rule_arrival": "2020-02-01 23:55:00+00:00"
+  },
+  {
+   "event_id": "2021-11-14",
+   "minor_first": "2021-11-14 21:30:00+00:00",
+   "peak_ft": 150.76,
+   "overflow": true,
+   "overflow_onset": "2021-11-15 02:25:00+00:00",
+   "heads_up": {
+    "at": "2021-11-10 20:56:00+00:00",
+    "what": "FA.A NEW",
+    "daylight": true,
+    "lead_before_overflow_h": 101.48
+   },
+   "prepare": {
+    "at": "2021-11-14 19:50:00+00:00",
+    "what": "NRKW1 FL.W NEW",
+    "daylight": true,
+    "lead_before_overflow_h": 6.58
+   },
+   "move": {
+    "at": "2021-11-14 21:30:00+00:00",
+    "what": "North Cedarville reached minor stage (146.5 ft), rising",
+    "daylight": true,
+    "lead_before_overflow_h": 4.92
+   },
+   "abbotsford": {
+    "first_alert": [
+     "2021-11-15 08:30:00+00:00",
+     "2021-11-15 08:30:00+00:00"
+    ],
+    "first_order": [
+     "2021-11-16 01:00:00+00:00",
+     "2021-11-16 04:00:00+00:00"
+    ],
+    "note": "first alert touching Sumas Prairie ~12:30 AM Nov 15; first orders evening Nov 15"
+   },
+   "seven_hour_rule_arrival": "2021-11-15 09:25:00+00:00"
+  },
+  {
+   "event_id": "2021-11-28",
+   "minor_first": "2021-11-28 22:45:00+00:00",
+   "peak_ft": 147.26,
+   "overflow": true,
+   "overflow_onset": "2021-11-28 22:50:00+00:00",
+   "heads_up": {
+    "at": "2021-11-25 10:53:00+00:00",
+    "what": "FA.A EXB",
+    "daylight": false,
+    "lead_before_overflow_h": 83.95
+   },
+   "prepare": {
+    "at": "2021-11-28 09:29:00+00:00",
+    "what": "NRKW1 FL.W NEW",
+    "daylight": false,
+    "lead_before_overflow_h": 13.35
+   },
+   "move": {
+    "at": "2021-11-28 22:45:00+00:00",
+    "what": "North Cedarville reached minor stage (146.5 ft), rising",
+    "daylight": true,
+    "lead_before_overflow_h": 0.08
+   },
+   "seven_hour_rule_arrival": "2021-11-29 05:50:00+00:00"
+  },
+  {
+   "event_id": "2022-11-05",
+   "minor_first": "2022-11-05 05:45:00+00:00",
+   "peak_ft": 146.93,
+   "overflow": false,
+   "overflow_onset": null,
+   "heads_up": {
+    "at": "2022-11-03 23:01:00+00:00",
+    "what": "FA.A EXA",
+    "daylight": true,
+    "lead_before_overflow_h": null
+   },
+   "prepare": {
+    "at": "2022-11-05 06:57:00+00:00",
+    "what": "NRKW1 FL.W NEW",
+    "daylight": false,
+    "lead_before_overflow_h": null
+   },
+   "move": {
+    "at": "2022-11-05 05:45:00+00:00",
+    "what": "North Cedarville reached minor stage (146.5 ft), rising",
+    "daylight": false,
+    "lead_before_overflow_h": null
+   }
+  },
+  {
+   "event_id": "2023-12-05",
+   "minor_first": "2023-12-05 18:15:00+00:00",
+   "peak_ft": 146.86,
+   "overflow": false,
+   "overflow_onset": null,
+   "heads_up": {
+    "at": "2023-12-04 00:52:00+00:00",
+    "what": "FA.A CON",
+    "daylight": false,
+    "lead_before_overflow_h": null
+   },
+   "prepare": {
+    "at": "2023-12-05 19:04:00+00:00",
+    "what": "NRKW1 FL.W NEW",
+    "daylight": true,
+    "lead_before_overflow_h": null
+   },
+   "move": {
+    "at": "2023-12-05 18:15:00+00:00",
+    "what": "North Cedarville reached minor stage (146.5 ft), rising",
+    "daylight": true,
+    "lead_before_overflow_h": null
+   }
+  },
+  {
+   "event_id": "2024-01-28",
+   "minor_first": "2024-01-28 16:30:00+00:00",
+   "peak_ft": 147.3,
+   "overflow": false,
+   "overflow_onset": null,
+   "heads_up": null,
+   "prepare": {
+    "at": "2024-01-28 15:49:00+00:00",
+    "what": "NRKW1 FL.W NEW",
+    "daylight": true,
+    "lead_before_overflow_h": null
+   },
+   "move": {
+    "at": "2024-01-28 16:30:00+00:00",
+    "what": "North Cedarville reached minor stage (146.5 ft), rising",
+    "daylight": true,
+    "lead_before_overflow_h": null
+   }
+  },
+  {
+   "event_id": "2025-12-10",
+   "minor_first": "2025-12-10 20:15:00+00:00",
+   "peak_ft": 150.44,
+   "overflow": true,
+   "overflow_onset": "2025-12-11 00:45:00+00:00",
+   "heads_up": {
+    "at": "2025-12-06 00:10:00+00:00",
+    "what": "FA.A NEW",
+    "daylight": true,
+    "lead_before_overflow_h": 120.58
+   },
+   "prepare": {
+    "at": "2025-12-10 06:17:00+00:00",
+    "what": "NRKW1 FL.W NEW",
+    "daylight": false,
+    "lead_before_overflow_h": 18.47
+   },
+   "move": {
+    "at": "2025-12-10 20:15:00+00:00",
+    "what": "North Cedarville reached minor stage (146.5 ft), rising",
+    "daylight": true,
+    "lead_before_overflow_h": 4.5
+   },
+   "abbotsford": {
+    "first_alert": [
+     "2025-12-11 00:00:00+00:00",
+     "2025-12-11 01:20:00+00:00"
+    ],
+    "first_order": [
+     "2025-12-11 07:00:00+00:00",
+     "2025-12-11 07:00:00+00:00"
+    ],
+    "note": "alerts ~4:00-5:20 PM Dec 10; order ~11 PM Dec 10 (371 properties)"
+   },
+   "seven_hour_rule_arrival": "2025-12-11 07:45:00+00:00"
+  },
+  {
+   "event_id": "2026-03-20",
+   "minor_first": "2026-03-20 21:45:00+00:00",
+   "peak_ft": 146.6,
+   "overflow": true,
+   "overflow_onset": "2026-03-21 01:30:00+00:00",
+   "heads_up": {
+    "at": "2026-03-16 20:21:00+00:00",
+    "what": "FA.A EXB",
+    "daylight": true,
+    "lead_before_overflow_h": 101.15
+   },
+   "prepare": {
+    "at": "2026-03-20 23:16:00+00:00",
+    "what": "NRKW1 FL.W NEW",
+    "daylight": true,
+    "lead_before_overflow_h": 2.23
+   },
+   "move": {
+    "at": "2026-03-20 21:45:00+00:00",
+    "what": "North Cedarville reached minor stage (146.5 ft), rising",
+    "daylight": true,
+    "lead_before_overflow_h": 3.75
+   },
+   "seven_hour_rule_arrival": "2026-03-21 08:30:00+00:00"
+  }
+ ],
+ "summary": {
+  "heads_up": {
+   "events": 13,
+   "overflow_events": 7,
+   "fired": 12,
+   "hits": 7,
+   "false_alarms": 5,
+   "missed": 0,
+   "far": 0.417,
+   "pod": 1.0,
+   "lead_before_overflow_h": [
+    68.87,
+    69.05,
+    83.95,
+    101.15,
+    101.48,
+    120.58,
+    151.87
+   ],
+   "daylight_share": 0.75
+  },
+  "prepare": {
+   "events": 13,
+   "overflow_events": 7,
+   "fired": 13,
+   "hits": 7,
+   "false_alarms": 6,
+   "missed": 0,
+   "far": 0.462,
+   "pod": 1.0,
+   "lead_before_overflow_h": [
+    2.23,
+    6.58,
+    7.08,
+    9.27,
+    12.0,
+    13.35,
+    18.47
+   ],
+   "daylight_share": 0.462
+  },
+  "move": {
+   "events": 13,
+   "overflow_events": 7,
+   "fired": 13,
+   "hits": 7,
+   "false_alarms": 6,
+   "missed": 0,
+   "far": 0.462,
+   "pod": 1.0,
+   "lead_before_overflow_h": [
+    0.08,
+    3.75,
+    4.5,
+    4.92,
+    5.17,
+    6.0,
+    6.42
+   ],
+   "daylight_share": 0.615
+  }
+ },
+ "method": "Relay and trigger replay: what model-free rules built only from archived official products and gauge readings\nwould have done in every North Cedarville minor-stage event since the SR 544 overflow gauge began (Stage 3\naddendum 1, item 3.2; D-03.16). This is \"relay value\"; a model must not take credit for it.\n\nTiers (pre-registered in docs/evaluation-protocol.md; the first fire of each tier in the event window):\n- heads-up: an NWS flood watch (VTEC significance A, phenomena FA or FL) whose segment names Whatcom County, issued\n  from 7 days before the minor crossing to its end. (BC River Forecast Centre watches are not archived: their licence\n  record is still yellow, so this half of the rule cannot be replayed.)\n- prepare: an NWS North Cedarville (NRKW1) flood warning product forecasting at least minor stage (H-VTEC severity\n  1-3 or a forecast crest >= 146.5 ft), or an NWS warning segment naming the Everson overflow, issued from 72 h before\n  the minor crossing to its end.\n- move: the SR 544 overflow gauge's onset (first record before 2026-10-01, then >= 3.6 ft), or North Cedarville\n  reaching minor stage (146.5 ft) while rising (the event's minor crossing).\nEach fire is flagged daylight or night at Abbotsford (floodlead.sun). Events with no overflow count as false alarms for\nany tier that fired. Lead = overflow onset - fire time."
+}

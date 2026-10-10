@@ -13,6 +13,7 @@ It makes **no third-party requests** (no CDNs, web fonts or analytics) and works
 | `#/stations` | Station picker: every gauge, searchable by name or ID |
 | `#/station/<id>` | One station: latest level, official thresholds, 7-day chart, latest FloodLead baseline forecast |
 | `#/track-record` | **Track record** (one scorer run, its ID on every table): the plain-language statements first, then forecasts issued (count, since when, gaps), the ledger chain head and latest public anchor with the two "verify it yourself" commands, a table per source (ECCC BC gauges, USGS Nooksack/Sumas gauges) of fair CRPS, CRPSS, MAE and MAE skill against pure persistence per model and horizon with n pairs, stations and days, and the NOAA matched-pair count |
+| `#/official-scorecard` | **How accurate were the official forecasts?** (nav: "Official forecasts"; `GET /v1/official-scorecard`, one scorecard, its ID, period and computed time under the intro): every archived NWS flood warning checked against the USGS gauge record. A table per NWS forecast point, North Cedarville (NRKW1) first, then the other points that have events: crest forecast error by lead time (lead bin, products n, events n, signed bias, mean absolute error, category right %, crest timing error) and the first warning's lead before minor stage (median, range, n). Then North Cedarville's warnings, newest first: crest date, first warning and its forecast crest, observed crest and category, first-warning lead before minor stage, and when the first "major" product came relative to the SR 544 overflow onset. Each warning has a `<details>` with its products (issued, action, severity, forecast crest, error, lead). Events in water years 2022 and 2026 are tinted and tagged "held out for the final test". "What this means" sentences are generated only from the North Cedarville numbers ("too few products to judge" below 5 products). Sources and the stored method text close the page. The page only displays the data; nothing is recomputed in the browser |
 
 On every page:
 
@@ -95,8 +96,9 @@ The snapshot must contain exactly these paths (same parameter order) to cover th
 | `/v1/ledger/head` | `v1_ledger_head.json` |
 | `/v1/gauges/fraser-valley` (home page, Fraser Valley gauges) | `v1_gauges_fraser-valley.json` |
 | `/v1/track-record` (`#/track-record`) | `v1_track-record.json` |
+| `/v1/official-scorecard` (`#/official-scorecard`) | `v1_official-scorecard.json` |
 
-If either of the last two files is missing, its card shows a placeholder ("… not available right now") and the
+If any of the last three files is missing, its cards show a placeholder ("… not available right now") and the
 rest of the page works. `POST /v1/feedback` is never part of a snapshot. In the Fraser Valley list the data age of
 a snapshot is shown relative to that file's `snapshot_at`, like every other age.
 

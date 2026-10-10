@@ -47,6 +47,7 @@ SLUG_CASES = {
     "/v1/ledger/head": "v1_ledger_head",
     "/v1/gauges/fraser-valley": "v1_gauges_fraser-valley",
     "/v1/track-record": "v1_track-record",
+    "/v1/official-scorecard": "v1_official-scorecard",
 }
 
 

@@ -8,7 +8,7 @@
 | Started | 2026-10-09 12:42 PT (19:42 UTC) |
 | Finished | (fill at end) |
 | Prompt | `docs/build/prompts/STAGE-03-public-history.md` |
-| Status | part 1 ready for QA (PR #5); part 2 in progress (draft PR #6) |
+| Status | part 1 passed QA (PR #5, `fa0b2a7`); part 2 ready for QA (PR #6) |
 
 ## Goal
 
@@ -85,6 +85,200 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
 - the training sets (`honest` and `oracle`);
 - the event catalogue;
 - the frozen `docs/evaluation-protocol.md` (after the supervisor's addendum).
+
+### Part 2 progress log (branch `stage-03-history`; merged with part 1's doc when PR 1 is in `main`)
+
+- `13:33–13:39` — In a separate worktree (`../trilemma-part2`), so part-1 deploys never build part-2 code:
+  - **NWS VTEC parser** (`src/floodlead/history/nws.py`, migration 011): products split on `\x01`, segments on `$$`, P-VTEC paired with the following H-VTEC, issuance from the local time line cross-checked against the WMO DDHHMM.
+    - Tests on real Nov 2021 products (`tests/fixtures/iem_FLWSEW_2021_excerpt.txt`).
+    - **The first North Cedarville flood warning of Nov 2021 (ETN 78, NEW) was issued at "1150 AM PST Sun Nov 14 2021" = 19:50Z**, WMO `141950`. Its H-VTEC: severity 2 (moderate), forecast flood begin 22:18Z, crest Nov 15 18:00Z. The supervisor's approximate ≈ 21:28Z is corrected here; the full timeline comes in part 2. The "major" upgrade (EXT, severity 3, record `NR`) was at 10:07Z Nov 15, as the supervisor said.
+  - **Rainfall parsers** (`src/floodlead/history/rain.py`, migration 012): ECCC climate, NCEI FM-15 AA1, SNOTEL accumulation → hourly (PST → UTC), and Open-Meteo, all with UTC hour-ending timestamps.
+    - Tests: `tests/test_rain.py`.
+  - Not deployed; production loads wait for PR 2.
+- `13:40` — **From which date as-issued forecast rainfall exists (part 2 item 2).** Binary search with one-day requests at the `nooksack-nf` point (48.90, −121.80), Open-Meteo `best_match`, 27 calls in all; "data" means at least 12 non-null hours that day:
+
+  | Series | First day with data | Probes | What it is |
+  |---|---|---|---|
+  | historical-forecast API `precipitation` | **2018-01-01** | 11 | Stitched from the first hours of each archived model run, so it is close to an analysis. It is **not** a forecast issued before our issue time for hours ahead |
+  | previous-runs API `precipitation_previous_day1` | **2024-01-19** | 8 | What was forecast for that hour **one day earlier**: as-issued, lead ≈ 24 h |
+  | previous-runs API `precipitation_previous_day2` | **2024-01-20** | 8 | As forecast two days earlier, lead ≈ 48 h |
+
+  **Consequence for fair replays:**
+  - Dec 2025 can be replayed with rainfall forecasts as they were issued 1–2 days ahead.
+  - Nov 2021 and earlier floods can only use observed rainfall up to the issue time (`honest`). Future observed rainfall stands in only in the labelled `oracle` variant.
+  - The historical-forecast series is not used as an "as-issued" input for lead times beyond its own run age. Decided in part 2.
+- `13:42–13:45` — **Upstream links (part 2 item 4)**, `src/floodlead/history/links.py`, read-only on production (hourly means per water year, constant bounds, 86.7 s + 21.3 s). Results in `docs/data/upstream_links.json`. Synthetic known-delay test: `tests/test_links.py` recovers a 5 h lag.
+
+  | Pair (hourly, 2004–2026) | Rise correlation: best lag, r, n hours | Peak-to-peak: median (IQR), n events |
+  |---|---|---|
+  | NF Nooksack near Glacier → North Cedarville | 4 h, 0.703, 82,632 | 4 h (2–6), 237 |
+  | MF Nooksack near Deming → North Cedarville | 4 h, 0.759, 81,372 | 5 h (4–6), 234 |
+  | SF Nooksack at Saxon Bridge → North Cedarville | 4 h, 0.816, 77,997 | 4 h (3–5), 216 |
+  | North Cedarville → Everson | 2 h, 0.930, 43,577 | 1 h (1–2), 116 |
+  | North Cedarville → Ferndale | 6 h, 0.834, 82,140 | 7 h (6–9), 215 |
+
+  **The upstream Nooksack gauges lead North Cedarville by only about 4–5 h.** Warnings longer than that have to come from rainfall (observed and forecast), not from routing.
+
+  | Pair (daily means; lags under a day not resolvable) | Overlap (days) | Rise corr. (lag, r) | Peak-to-peak median (IQR), n |
+  |---|---|---|---|
+  | Chilliwack above Slesse Ck → Vedder Crossing | 5,079 | 0 d, 0.939 | 0 d (0–0), 71 |
+  | Slesse Ck → Chilliwack at Vedder Crossing | 4,863 | 0 d, 0.905 | 0 d (0–1), 72 |
+  | Chilliwack Lake outlet → Vedder Crossing | 5,055 | 0 d, 0.497 | 0 d (0–0), 72 |
+  | Sumas near Sumas, WA (USGS) → Sumas near Huntingdon | 427 | 0 d, 0.906 | 0 d (0–0), 14 |
+  | North Cedarville → Sumas near Huntingdon | 4,925 | 0 d, 0.639 | 0.5 d (0–1), 80 |
+  | Fraser above Texas Ck → Fraser at Hope | 5,016 | 0 d, 0.692 | 1 d (0–1), 64 |
+  | Thompson near Spences Bridge → Fraser at Hope | 4,964 | 0 d, 0.611 | 1 d (0–2), 65 |
+  | Fraser at Hope → Fraser at Mission (tidal) | 10,885 | 0 d, 0.706 | 1 d (0–2), 102 |
+  | Coquihalla above Alexander Ck → below Needle Ck | 4,990 | 0 d, 0.857 | 0 d (0–0), 57 |
+
+- `13:45–13:46` — **Official NWS warnings for North Cedarville (part 2 item 3), first read of the whole archive** (read-only, in memory).
+  - 5,181 products parsed; 1 unparsed (to inspect); 156 VTEC records with H-VTEC `NRKW1`, in 36 FL.W events from 2006 to 2026.
+  - **The supervisor's spot checks, verified against the raw products:**
+
+    | Flood | First NRKW1 flood warning (VTEC NEW) | Its forecast flood begin | Supervisor's estimate | What the estimate was |
+    |---|---|---|---|---|
+    | Dec 2025 (ETN 47) | **06:17Z Dec 10** ("1017 PM PST Tue Dec 9 2025", FLWSEW `WGUS46 KSEW 100617`), moderate | 20:28Z Dec 10 | ≈ 13:40–14:10Z | an EXT statement (FLSSEW `101340`, "540 AM PST Wed Dec 10") |
+    | Nov 2021 (ETN 78) | **19:50Z Nov 14** ("1150 AM PST Sun Nov 14 2021"), moderate | 22:18Z Nov 14 | ≈ 21:28Z | to be matched in the full timeline |
+
+  - If the observed minor-stage crossings are 20:15Z Dec 10 and 21:30Z Nov 14 (to be verified from our own 15-min data in the event catalogue), **the official lead is ≈ 14.0 h in Dec 2025 and ≈ 1.7 h in Nov 2021**, against the supervisor's ≈ 6 h and ≈ 0 h. The bar FloodLead has to beat in Dec 2025 is much higher than assumed.
+  - The "major" upgrade in 2021 (EXT, severity 3) at 10:07Z Nov 15 matches the supervisor.
+  - Parser fixes found on the way, each with a test:
+    - older products write months in capitals ("DEC");
+    - correction products carry a BBB indicator (`CCA`) on the WMO line, which had been read as the product id;
+    - severity is now ranked 3 > 2 > 1 > N/0/U, not compared as text.
+
+- `13:49–13:52` — Part-2 code for addendum 1:
+  - the forecast crest, observed crest and stage from each segment's text (`FC_CREST` skips "a previous crest of"). The 2021 first warning gives **148.9 ft**, as the supervisor found. In 156 NRKW1 segments, 57 say "crest near", 14 "crest of", 14 "crested at" (observed), 6 "previous crest of" (history); 49 have no crest phrase (mostly CAN/EXP);
+  - `src/floodlead/scorecard.py` and migration 013, with tests on a synthetic event.
+- `13:52–13:54` — **Which archived products carry values (addendum item 3.1).** One request each to IEM for Dec 1–15 (or 9–11), 2025:
+
+  | PIL | Products | Use |
+  |---|---|---|
+  | FFASEW | 17 | Flood watches → the "heads-up" relay tier. Added to the downloads |
+  | ESFSEW | 5 | Hydrologic outlooks. Added to the downloads |
+  | RVFSEW, HYDSEW, RVSSEW, RRSSEW | 0 | — |
+  | RVFPTR, RVFSEA, RVFNRK, RVDPTR, RVFSTR | 0 | — |
+  | HYDPTR | 2, no NRKW1 line | — |
+
+  No archived RVF/HYD product with NRKW1 values was found under these PILs. The scorecard's forecast values are therefore the crest and timing stated in the FLW/FLS products: text crests, plus H-VTEC begin, crest and end times. NOAA's 6-hourly forecast series is archived by FloodLead only since Oct 7, 2026 (Stage 1).
+
+- `14:00` — **ECCC hourly precipitation completeness** (archived climate-hourly pages, 2004–2026; temperature is 99–100 % complete everywhere):
+
+  | Climate ID | Station | Hours | Precip non-null |
+  |---|---|---|---|
+  | 1100030 | Abbotsford A (to 2012) | 74,260 | **0.0 %** |
+  | 1100031 | Abbotsford A (2011–) | 125,309 | **0.0 %** |
+  | 1100032 | Abbotsford A (2016–) | 93,842 | 12.4 % |
+  | 1106178 | Pitt Meadows CS | 199,241 | 73.2 % |
+  | 1108910 | White Rock CS | 198,884 | 50.7 % |
+  | 1113541 | Hope (AUT), to 2012 | 61,897 | 0.0 % |
+  | 1113542 | Hope A | 130,595 | 81.2 % |
+  | 1113543 | Hope Airport | 123,859 | 95.4 % |
+
+  **Abbotsford has essentially no hourly precipitation in ECCC's climate archive.** The live probe also found its newest hour about 14 h old with no precipitation. So the Fraser Valley rain features cannot rest on the airport next to Sumas Prairie: Hope and Pitt Meadows bracket the valley, with KBLI and SNOTEL on the US side. Open-Meteo reanalysis serves as the oracle and the basin average.
+
+- `14:01–14:08` — **Draft PR #6 opened** (`stage-03-history`, base `main`). Until PR #5 merges it also shows part 1; the PR body says so. It was opened so that part-2 code runs only from an open PR.
+  - Part-2 code runs from its own image tag, `floodlead-app:part2` (built from this worktree), in one-off `docker run --rm` containers. The live services keep `floodlead-app:latest` (part 1), so no part-2 code reaches them.
+  - `floodlead migrate` → `011_nws_products.sql`, `012_rain.sql`, `013_official_scorecard.sql` (new tables only).
+  - `history download iem-nws` → 46 new requests (FFASEW and ESFSEW, 2004–2026), 3,865,352 B; 46 skipped.
+  - `history load nws` → **7,278 + 15 products, 11,018 VTEC records** in 22.8 s. 28 unparsed: 27 spring/summer water-supply outlooks (ESFSEW) with irregular date lines ("June 20 2017", "Thu July 8, 2021") and 1 empty correction (FLSSEW 2006). None is a flood product.
+  - Parser fix: full month names ("JULY"); test added.
+- `14:08` — **Official-forecast scorecard built** (`floodlead history build scorecard`, 2.3 s; `official_scorecards` row 1. The final build at 23:02Z is row 2, the one served). The addendum's corrected numbers are reproduced from the archive and our gauge record:
+
+  | | Nov 2021 (ETN 78) | Dec 2025 (ETN 47) |
+  |---|---|---|
+  | First North Cedarville warning | 19:50Z Nov 14, forecast crest **148.9 ft** | 06:17Z Dec 10, forecast crest **148.4 ft** |
+  | Observed crest (our USGS record) | **150.76 ft** (major) | **150.44 ft** (major); the review cites ≈ 150.49–150.5 |
+  | Observed minor crossing | **21:30Z Nov 14** | **20:15Z Dec 10** |
+  | First warning's lead before minor | **1.67 h** | **13.97 h** |
+  | First "major" product | 10:07Z Nov 15 | 01:32Z Dec 11 (5:32 PM PST Dec 10) |
+  | SR 544 overflow onset (replay definition) | 02:25Z Nov 15 | 00:45Z Dec 11 |
+  | "Major" relative to the onset | **7.7 h after** | **0.8 h after** (the review: ~3 h after the Emerson Rd rise at 2:30 PM) |
+
+  North Cedarville, all archived warnings: 36 events, of which 32 are scored and 4 (2006-11 to 2007-03) predate our level record. Crest error of the official forecast crest by lead before the observed crest:
+
+  | Lead | Products | Events | Bias (ft) | MAE (ft) | Category right | Crest-time MAE (h) |
+  |---|---|---|---|---|---|---|
+  | 0–6 h | 31 | 24 | +0.50 | 0.82 | 38.7 % | 3.6 |
+  | 6–12 h | 12 | 12 | +0.87 | 1.05 | 25.0 % | 4.4 |
+  | 12–24 h | 11 | 7 | **−0.59** | 1.09 | 27.3 % | 5.2 |
+  | 24–48 h | 4 | 3 | **−1.48** | 1.49 | 25.0 % | 4.4 |
+
+  - First warning before minor stage: median **1.67 h**, range −1.52 to 23.7 h, n = 19 events that reached minor.
+  - Small n at the longer leads (7 and 3 events). The pattern matches the review: low a day out, slightly high in the last hours.
+  - Ferndale (NKSW1): 16 events. Everson (NREW1) and the overflow (NOEW1) have no point warnings; the Everson overflow warnings are areal (FA) products and feed the relay tiers.
+  - The "after the crest" bin (crest-time MAE 288 h) is not a forecast. It is shown only for completeness, and dropped from the README table.
+
+- `14:09–14:19` — **Relay replay** (`floodlead history build relay`, 27 s) and the **rain load** (`history load rain`).
+  - The rain load's first run failed after 2.9 s, with nothing written: `relation "_stage" already exists`. The same transaction bug as the CRPS recompute: without autocommit, the per-payload `ON COMMIT DROP` temp table outlived each payload.
+    - Fixed with autocommit per payload. `test_load_two_overlapping_payloads` **fails without the fix and passes with it**.
+    - Rerun: `{'eccc-climate': 1007776, 'ncei': 188757, 'openmeteo-archive': 660264, 'openmeteo-histfc': 475008, 'openmeteo-prevruns': 264576, 'snotel': 587425}` rows in 450.5 s. The Open-Meteo reanalysis download was still running, so it is reloaded at the end.
+  - **Superseded: addendum 1 examples, kept for the record (relay v1, counted by minor-stage event; see D-03.23 for relay v2, counted by alert).** Relay tiers, 13 North Cedarville minor-stage events since the SR 544 gauge began (7 with overflow). The prepare window was first 7 days, which let in a warning from an earlier event (a 106.8 h "lead"). It is now 72 h before the minor crossing, as in the catalogue:
+
+    | Tier | Fired | Hits / overflow events | False alarms | POD | FAR | Lead before overflow onset (h) | Daylight share |
+    |---|---|---|---|---|---|---|---|
+    | Heads-up (NWS flood watch naming Whatcom) | 12 | 7 / 7 | 5 | 1.00 | 0.42 | 68.9, 69.1, 84.0, 101.2, 101.5, 120.6, 151.9 | 0.75 |
+    | Prepare (NRKW1 warning ≥ minor, or Everson-overflow warning) | 13 | 7 / 7 | 6 | 1.00 | 0.46 | 2.2, 6.6, 7.1, 9.3, 12.0, 13.4, 18.5 | 0.46 |
+    | Move (SR 544 onset, or North Cedarville ≥ minor and rising) | 13 | 7 / 7 | 6 | 1.00 | 0.46 | 0.1, 3.8, 4.5, 4.9, 5.2, 6.0, 6.4 | 0.62 |
+
+    These are relay value, with no model. With 7 overflow events, the exact 95 % interval on POD 7/7 is 0.59–1.00. Comparisons with Abbotsford's times and the 7-hour rule are in the relay output (`/srv/floodlead/datasets/relay.json`) and go into the part-2 report.
+- `14:19` — **`#/official-scorecard` page** ("How accurate were the official forecasts?", background frontend agent).
+  - **My mistake:** a `git commit -a` for the NWS month-name fix (`638d6d3`, pushed) also swept in the agent's unfinished draft of this page. Pushed history is not rewritten; the final page is committed separately.
+  - `/v1/official-scorecard` was added to the snapshot export; slug test 19 passed.
+
+- `14:20` — **Event catalogue** (`floodlead history build catalogue`, 30.7 s → `/srv/floodlead/datasets/catalogue.json`):
+  - **Nooksack:** 20 North Cedarville minor-stage events since 2007, 8 of them with an SR 544 overflow onset (where the gauge existed), and a first NWS North Cedarville warning found for all 20.
+    - Each event carries its crossings, crest, onset, and the first warning's issuance, forecast begin, crest time, crest value and lead before minor.
+    - Examples: Dec 2025 — minor 20:15Z Dec 10, crest 150.44 ft, major 10:00Z Dec 11, onset 00:45Z Dec 11, first warning 06:17Z (148.4 ft forecast), lead 13.97 h. Nov 28, 2021 — first warning 09:29Z, lead 13.27 h.
+  - **BC:** typical-peak crossings at 310 stations with an `ok` or flagged value. 2,576 station-years had an annual instantaneous maximum at or above the station's typical yearly peak (about half the years, by construction), and 274 stations had daily means at or above it on at least one day.
+
+- `15:05` — Open-Meteo downloads finished, 22:04:56Z; `hist-openmeteo` exit 0. 272 requests, 0 errors:
+  - prevruns 32 (12.6 MB, 19:50–20:05Z);
+  - histfc 56 (22.0 MB, 20:05–20:33Z);
+  - archive 184 (77.5 MB, 20:33–22:04Z), at 1 request / 30 s.
+- **Rainfall publication latency (part 2 item 2).** Hourly probes (`scratchpad/latency_probe.py`, 16 runs scheduled), the first two at 20:40Z and 21:40Z:
+  - SNOTEL Wells Creek: newest hour-ending value **40 and 41 min old**;
+  - ECCC Abbotsford A: newest hour 07:00Z, **about 14 h old, with no precipitation value**;
+  - NCEI KBLI: **no records in the last 7 days**, so it is a history source only;
+  - Open-Meteo "archive": values up to 23:00Z today, so its recent hours are model-filled, not reanalysis.
+  - `data-contract.md` latency fields updated.
+- **AC-8 numbers** (new tables):
+  - `eccc_daily`: 7,825,554 rows, 448 stations, 1903-04-01 → 2026-06-09, median 53 years per station (1–123), **665 MB**;
+  - `eccc_annual_peaks`: 37,789 rows, 962 BC stations, 1923–2025 (7,285 annual level maxima), 4.9 MB;
+  - `typical_peaks`: 256 kB;
+  - `nws_products` 14 MB, `nws_vtec` 9.1 MB.
+
+- **Superseded: addendum 1 examples, kept for the record.** **Relay tiers against Abbotsford and the 7-hour rule** (`relay.json`). Abbotsford's times come from the status-quo review: reconstructed, with ranges, PST shown as UTC.
+
+  | | Nov 2021 | Dec 2025 |
+  |---|---|---|
+  | Heads-up: NWS flood watch naming Whatcom (FA.A NEW) | 20:56Z Nov 10 (12:56 PM PST, day); 101.5 h before the onset | 00:10Z Dec 6 (4:10 PM PST Dec 5, day); 120.6 h before the onset |
+  | Prepare: first NRKW1 warning ≥ minor | 19:50Z Nov 14 (11:50 AM PST, **day**); 6.6 h before the onset | 06:17Z Dec 10 (10:17 PM PST Dec 9, **night**); 18.5 h before the onset |
+  | … before Abbotsford's first alert | **12.7 h** (alert ~12:30 AM Nov 15) | **17.7–19.1 h** (alerts ~4:00–5:20 PM Dec 10) |
+  | … before Abbotsford's first order | 29.2–32.2 h | 24.7 h (order ~11 PM Dec 10) |
+  | Move: North Cedarville ≥ minor and rising | 21:30Z Nov 14 (day); 4.9 h before the onset; 11.0 h before the alert | 20:15Z Dec 10 (day); 4.5 h before the onset; 3.8–5.1 h before the alert |
+  | SR 544 onset (our gauge record) / 7-hour-rule arrival | 02:25Z / 09:25Z Nov 15 | 00:45Z / 07:45Z Dec 11 (the review bounds the actual crossing at ~10–20 h after the onset) |
+
+  - The prepare tier fired at night in 2025. Held to the next sunrise (15:51Z Dec 10), it would still have come about 8–9 h before the City's alert.
+  - All of this is relay value, with no model, as addendum 1 requires. It is replayed from archived products, with today's rules applied to the past.
+
+- `15:05–15:35` — **A data defect found and fixed before the datasets were trusted.**
+  - The rain reload at 22:05Z exited 1 after 234 s (`json.decoder.JSONDecodeError`). My `tail` hid the error, so the first dataset build (22:09–22:26Z) ran on partly reloaded rain tables. That build is discarded.
+  - Cause: **4 of 184 Open-Meteo reanalysis requests returned HTTP 200 with the body `Unexpected error while streaming data: timeoutReached` (53 B)**. They were recorded as `ok`: nooksack-lower 2020 and 2021, coquihalla-hope 2022 and 2023.
+  - Fixes:
+    - the downloader now validates JSON bodies for JSON sources, and an invalid body is recorded as `error` and retried on the next run (`tests/test_history_download.py`);
+    - the rain loader skips invalid payloads and reports them instead of failing;
+    - the 4 manifest rows were set to `error`; the refetch gave 4 × ~435 kB, 0 errors (22:32–22:34Z).
+  - Rain reload and dataset rebuild rerun (results below).
+
+- `16:01–16:10` — **Training sets rebuilt and checked; protocol frozen.**
+  - The rain reload is complete: Open-Meteo reanalysis 1,597,056 rows.
+  - Datasets, image commit `f502b49`: Nooksack hourly honest and oracle, 193,007 rows each; Fraser Valley daily 93,805 rows each. The sha256 values are in the protocol.
+  - `python3 scripts/check_datasets.py /srv/floodlead/datasets` → **0 violations on every row** of both variants (leakage cut-offs, NWS issuance ≤ t, held-out flags), `RESULT OK`.
+  - **Finding:** North Cedarville never reached 150 ft outside the two held-out floods (0 development events; 5 at ≥ 148 ft; 3 development overflow events). The protocol fixes how this is handled: P(≥ 150 ft) comes only from the level distribution, and is reported descriptively on n = 2.
+  - **`docs/evaluation-protocol.md` FROZEN at commit `45367d1171b781656c2d859a8155fac254d79ed4`, sha256 `ecdefe0bcdb27ff00508c58da9d2819b13ad14b2c9e2febfe86a2741e230abad`.**
+
+  The Sumas USGS–ECCC overlap is only 427 days. The USGS hourly level at Sumas, WA needs at least 18 hours a day to make a daily mean, and its level record is short. As found.
 
 ## Decisions
 
@@ -337,6 +531,243 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - The forecast crests (148.9 and 148.4 ft) and the observed crossings and crests are reproduced in the scorecard.
 - **Reversibility / cost:** documentation and text only in part 1.
 
+### D-03.13 — NWS text products: VTEC and H-VTEC per segment, text crest values, WMO time authoritative
+
+- **Context:** part 2 item 3 and addendum item 3.1 need every official warning's times, category and forecast crest.
+- **Choice (`src/floodlead/history/nws.py`):**
+  - products split on `\x01`, segments on `$$`;
+  - each P-VTEC is paired with the H-VTEC line that follows it;
+  - issuance comes from the local time line, but the WMO heading's DDHHMM (UTC) wins when they differ: a correction keeps the original's text time;
+  - the forecast crest, observed crest and stage come from the segment text by explicit patterns ("crest near/of/at/around/to", not "a previous crest of"; "crested at"; "the stage was");
+  - PILs: FLWSEW, FLSSEW, FFASEW (watches) and ESFSEW (outlooks).
+- **Why:**
+  - VTEC gives machine-readable events, actions and times; the crest value exists only in the text;
+  - no archived RVF/HYD product with NRKW1 values was found (8 PILs probed).
+- **Limits:**
+  - 49 of 156 NRKW1 segments state no crest (mostly CAN/EXP);
+  - 27 spring/summer outlooks and 1 empty correction stay unparsed;
+  - categories use today's NWS stages.
+
+### D-03.14 — Rainfall history: one time convention, and only sources a live forecast could have used as inputs
+
+- **Convention:** every rain row's `ts` is the end of its hour, in UTC.
+  - SNOTEL timestamps are local standard time (UTC−8 all year). PREC is a water-year accumulation in inches, so hourly amounts are its increases; a negative step becomes 0 and is flagged.
+  - NCEI uses routine METARs only (FM-15, AA1 period 1 h).
+- **Which sources are honest inputs (measured):**
+
+  | Source | Status | Why |
+  |---|---|---|
+  | SNOTEL | Yes | newest hour about 40 min old |
+  | KBLI | Yes, as a stand-in for the live METAR feed | the same observations |
+  | NCEI's archive itself | Not a live source | nothing from the last 7 days |
+  | ECCC Abbotsford hourly | Not usable | 0 % precipitation; about 14 h behind |
+  | Open-Meteo reanalysis | **Oracle only** | — |
+  | Open-Meteo previous runs | The only as-issued forecast rain | from 2024-01-19 |
+  | Open-Meteo historical-forecast series | Not used as an as-issued forecast | stitched from each run's first hours |
+- **Reversibility:** all of these are derived tables, reloadable from the archive.
+
+### D-03.15 — Upstream links: rise correlation and peak-to-peak lags from the history
+
+- **Method:**
+  - hourly means per water year (constant bounds);
+  - lagged Pearson correlation of 1-h rises in Oct–Mar, at lags 0–36 h;
+  - for target events above the 95th percentile, at least 72 h apart: the lag of the upstream maximum in the 48 h before each.
+  - BC pairs use daily means and say that lags under a day are not resolvable.
+- **Result:** the Nooksack forks lead North Cedarville by about 4–5 h (n 216–237 events), so longer warnings must come from rain.
+
+### D-03.16 — Official-forecast scorecard definitions
+
+- **Units:**
+  - an event is one VTEC FL.W series (ETN, water year) at one point;
+  - the observed crest is the maximum 15-min stage in [first product − 12 h, last product or forecast flood end + 48 h].
+- **Per product:**
+  - lead = observed crest time − issuance;
+  - crest error = forecast − observed;
+  - crest-time error, from the H-VTEC crest time;
+  - category right;
+  - flood-begin error against the observed minor crossing.
+- **Per event:**
+  - the first warning's lead before minor;
+  - the first severity-3 product against the SR 544 onset (the replay definition).
+- **Published:** `/v1/official-scorecard`, `#/official-scorecard`, and a README table with n and the period.
+- **Why:** it reproduces the review's figures from the raw archive, and lets farmers calibrate trust in a "moderate" call. No agency publishes one.
+
+### D-03.17 — Training sets: hourly Nooksack (honest/oracle) and daily Fraser Valley
+
+- **Cut-offs:** every feature is cut at its own latency (`LATENCY`, D-03.14), and records the newest timestamp used (`asof_*`).
+- **As-issued forecast rain:** day 1 only for valid hours ≤ t + 18 h, day 2 ≤ t + 42 h (about 24/48 h issue lag plus 6 h for run availability); NaN before 2024-01-19.
+- **NWS-derived probabilities:** taken from the product in force at t.
+- **Targets:** levels at 1–48 h, and crossings at 6/12/24/48 h. Overflow targets only where the gauge existed, and not when water was already flowing.
+- **Splits:** by water year. WY2022 and WY2026 are flagged `holdout`.
+- **Tests (`tests/test_datasets.py`):**
+  - poisoning every value after each source's cut-off leaves every honest feature unchanged;
+  - targets do change;
+  - the NWS comparator switches on and off with the products;
+  - the held-out water years are flagged;
+  - the oracle columns appear only in `oracle`.
+  - The first version of the lookup had a bug the test caught: a 10-min window on a 15-min grid looked at no cell, so every level target would have been empty.
+- **Features table:** `docs/data/features-nooksack-v1.md`.
+
+### D-03.18 — Event catalogue and relay replay (relay value kept apart from model value)
+
+- **Catalogue:** for North Cedarville, the replay's minor events, each with its crossings, crest, SR 544 onset and first NWS warning. For BC, typical-peak crossings, from the annual instantaneous maxima and the daily means (the latter undercount).
+- **Relay replay:** three pre-registered tiers built only from archived products and gauges:
+  - heads-up: a flood watch naming Whatcom, 7 days before the minor crossing up to its end;
+  - prepare: an NRKW1 warning ≥ minor or an Everson-overflow warning, 72 h before to the end;
+  - move: the SR 544 onset, or North Cedarville ≥ minor and rising.
+  - Every event since the SR 544 gauge began is counted, and a minor event without overflow is a false alarm.
+  - Each fire is flagged daylight or night at Abbotsford (NOAA solar approximation, within 4 min of api.sunrise-sunset.org).
+  - BC River Forecast Centre watches cannot be replayed (not archived; licence yellow).
+
+### D-03.19 — Part 2 runs early, from draft PR #6, under its own image tag
+
+- **Context:** part 2 is due Oct 10 ~12:00Z, and PR #5 is in QA until Build Session 3. Waiting would idle the night.
+- **Choice:**
+  - part 2 is built in a separate git worktree (`../trilemma-part2`), so a part-1 build never picks up part-2 code;
+  - draft PR #6 (base `main`) was opened before any part-2 code touched production;
+  - part-2 code runs only as one-off `docker run --rm` containers of `floodlead-app:part2` into new tables;
+  - `floodlead-app:latest` and the live services stay on part 1.
+- **Cost:** PR #6's diff shows part 1 until #5 merges, then `main` is merged in.
+- **Slip:** one `git commit -a` swept a frontend draft into a parser-fix commit (`638d6d3`). It is recorded, not rewritten.
+
+### D-03.20 — Protocol amendment 1 (review A1–A3, A5, A7, A8) and the Stage 4 loader that enforces A1 (Oct 10, 01:57 UTC)
+
+- **Context:** the supervisor reviewed the frozen protocol (sound; eight amendments). It was frozen before addenda 2 and 3 arrived, so they enter it as dated amendments, and the frozen text is never edited.
+- **Choice:** amendment 1, appended under `## Amendments`. The diff touches only the "(none)" line below that heading.
+  - **A1:** development years are WY2005–WY2025 except WY2022; WY2027 onward is the live period.
+    - `src/floodlead/train_data.py` enforces this, because the frozen files flag the 167 Oct 1–7, 2026 rows `holdout = false` and must not be rebuilt.
+    - `tests/test_train_data.py`: 4 tests, including rejection of WY2022, WY2026 and WY ≥ 2027.
+  - **A2:** final-run folds (`final_run_folds()`).
+  - **A3:** T5 renamed crossing-probability skill; T6 level skill added.
+  - **A5:** the model's tiers are unchanged; Prepare-M = §5.
+  - **A7:** the SR 544 onset definition differs before and after Oct 1, 2026; relay v2 is in-sample.
+  - **A8:** T3's bias wording; T1 rests on 2 events.
+- **sha256 of `docs/evaluation-protocol.md` after amendment 1: `45fd36a3f87852b2eb6ae7ac0a913877512c98eaf614b326aacf44bc208d8214`** (frozen version `ecdefe0b…abad`).
+
+### D-03.21 — Protocol amendment 2: relay v2, counted by alert, with its counting rules fixed before computing (Oct 10, 01:58 UTC)
+
+- **Context:** addendum 3 sets tiers by action cost and asks for a trust table; review A4 asks for them as a second relay comparator, labelled in-sample.
+- **Choice:** amendment 2 adds:
+  - the tiers: Watch, Heads-up, Prepare, Move now at 5.0 ft with the 4.0 ft variant, and the Everson FA.W row as descriptive;
+  - **the counting rules, written before any number was computed:**
+    - the record period starts at the first SR 544 record;
+    - overflow episodes are SR 544 records grouped by gaps of more than 48 h;
+    - an alert's window is its event − 12 h to + 24 h;
+    - leads are listed per alert;
+    - misses are counted;
+    - precision carries a Clopper–Pearson interval;
+  - the labels: in-sample; 5.0 ft chosen after seeing the data; never held-out results.
+  - Relay v1 stays as built.
+- **Episode rule, written after one look at the SR 544 episode list** (8 episodes; the first is 2 h, 3.84 ft, at the start of the record, in an event warned 13 h before the gauge existed): an episode whose warning began before the record start is excluded. Disclosed here, so the reader can judge it.
+- **sha256 of the protocol after amendment 2: `39355efe22a0d6b0e0c2898c4693ea1db6d6b08be85bfeb662240d545bb2cbe4`.**
+
+### D-03.22 — Protocol amendment 3: the AI-rainfall case study R0–R3, fixed before any of its data is pulled (Oct 10, 01:59 UTC)
+
+- **Context:** addendum 2 decides against satellite imagery as a forecast input and adds a one-event AI-rainfall case study. Review A6 asks for it as its own amendment, with T0–T3 renamed R0–R3.
+- **Choice:** amendment 3 fixes, before any R0 request:
+  - the 5 models;
+  - the sample points: the 3 Nooksack SNOTEL sites' grid cells, i.e. the upper-basin gauges;
+  - the 24 and 48 h windows ending at the 2025-12-10 20:15Z minor crossing;
+  - the truth: SNOTEL hourly totals, never IMERG;
+  - the outputs: totals, ratio, and the timing of the heaviest 6 h;
+  - the reporting rules: every model; "one event, descriptive"; AIFS as 6-hourly; no product change before Demo Day;
+  - the Open-Meteo quota rule.
+  - R1 and R2 are Stage 4 work; R3 is optional.
+- **sha256 of the protocol after amendment 3: `c78bed9fc7af5b04ef8df0c0f273f4ed31776c2ab8bb532d353a62f1bc46ec7c`.**
+
+### D-03.23 — Relay v2 and the trust table, counted by alert; the supervisor's count reproduced (Oct 10, 02:00–02:03 UTC)
+
+- **Code:**
+  - `src/floodlead/trust.py` (`floodlead history build trust`) implements amendment 2's rules, written before any number was computed.
+  - Tests in `tests/test_trust.py` (8): Clopper–Pearson against published intervals (7/18, 6/8, 4/8, 4/4, 5/5 → 0.48, 3/3 → 0.29), episode splitting, alert scoring.
+  - Output `docs/data/trust-v2.json` (sha256 `4d10b858…7202`); `run_id = trust-<generated_at>`.
+- **Record:** SR 544 from 2015-11-14 09:15Z, 10.9 years; 18 NRKW1 warning events.
+  - Overflow episodes: 7, of which 4 are ≥ 5 ft:
+
+    | Onset | Peak (ft) |
+    |---|---|
+    | 2015-11-18 | 4.91 |
+    | 2017-11-23 | 4.76 |
+    | 2020-02-01 | 5.55 |
+    | 2021-11-15 | 7.75 |
+    | 2021-11-28 | 5.51 |
+    | 2025-12-11 | 6.91 |
+    | 2026-03-21 | 4.06 |
+
+  - Excluded, per amendment 2: the 2015-11-14 episode (3.84 ft), whose warning (ETN 55) began 13 h before the record.
+
+  | Tier | Alerts | Followed by any overflow (precision, 95 % CI) | By a ≥ 5 ft overflow | Overflows missed | Leads before onset of the large ones (h) |
+  |---|---|---|---|---|---|
+| Watch (NWS flood watch naming Whatcom) | 47 (4.31/yr) | 8 (17 %, 8–31 %) | 4 (8 %, 2–20 %) | 0 | +68.9, +84.0, +101.5, +120.6 |
+| Heads-up (NRKW1 warning, NEW) | 18 (1.65/yr) | 7 (39 %, 17–64 %) | 4 (22 %, 6–48 %) | 0 | +6.6, +12.0, +13.3, +18.5 |
+| Prepare (first NRKW1 product, severity ≥ 2) | 8 (0.73/yr) | 6 (75 %, 35–97 %) | 4 (50 %, 16–84 %) | 1 | +4.0, +6.6, +13.3, +18.5 |
+| Move now, SR 544 ≥ 5.0 ft (chosen after seeing the data) | 4 (0.37/yr) | 4 (100 %, 40–100 %) | 4 (100 %, 40–100 %) | 3 | -3.5, -1.6, -1.3, -0.8 |
+| Move now, SR 544 ≥ 4.0 ft (NWS minor stage; not chosen from the data) | 7 (0.64/yr) | 7 (100 %, 59–100 %) | 4 (57 %, 18–90 %) | 0 | -0.5, -0.3, -0.1, +0.0 |
+| Everson-overflow areal warning (FA.W), descriptive | 7 (0.64/yr) | 4 (57 %, 18–90 %) | 3 (43 %, 10–82 %) | 3 | -0.0, +2.8, +6.3 |
+
+  - **Relay v2 is descriptive and in-sample.** The Prepare tier and the 5.0 ft level were chosen after seeing every year (amendment 2).
+  - A negative Move-now lead means the reading came after the onset, by construction.
+  - Every alert, with its outcome (✔ followed by an overflow, ✘ not; lead before onset; night at Abbotsford):
+    - **Heads-up (NRKW1 warning, NEW):** 2015-11-17 23:40Z ✔ (+7.1 h); 2015-12-08 18:45Z ✘; 2016-01-28 17:23Z ✘; 2017-10-19 04:23Z ✘ night; 2017-11-23 10:09Z ✔ (+9.3 h) night; 2018-02-05 00:28Z ✘; 2018-11-02 14:29Z ✘ night; 2018-11-27 06:03Z ✘ night; 2020-02-01 04:55Z ✔ large (+12.0 h) night; 2021-10-29 07:14Z ✘ night; 2021-11-14 19:50Z ✔ large (+6.6 h); 2021-11-28 09:29Z ✔ large (+13.3 h) night; 2022-11-05 06:57Z ✘ night; 2022-12-26 19:58Z ✘; 2023-12-05 19:04Z ✘; 2024-01-28 15:49Z ✘; 2025-12-10 06:17Z ✔ large (+18.5 h) night; 2026-03-20 23:16Z ✔ (+2.2 h)
+    - **Prepare (first NRKW1 product, severity ≥ 2):** 2015-11-17 23:40Z ✔ (+7.1 h); 2015-12-08 18:45Z ✘; 2017-11-23 16:22Z ✔ (+3.0 h); 2018-11-27 06:03Z ✘ night; 2020-02-01 12:54Z ✔ large (+4.0 h) night; 2021-11-14 19:50Z ✔ large (+6.6 h); 2021-11-28 09:29Z ✔ large (+13.3 h) night; 2025-12-10 06:17Z ✔ large (+18.5 h) night
+    - **Move now, SR 544 ≥ 5.0 ft (chosen after seeing the data):** 2020-02-01 17:45Z ✔ large (-0.8 h); 2021-11-15 04:00Z ✔ large (-1.6 h) night; 2021-11-29 00:10Z ✔ large (-1.3 h); 2025-12-11 04:15Z ✔ large (-3.5 h) night
+    - **Move now, SR 544 ≥ 4.0 ft (NWS minor stage; not chosen from the data):** 2015-11-18 06:45Z ✔ (+0.0 h) night; 2017-11-23 19:30Z ✔ (-0.1 h); 2020-02-01 16:55Z ✔ large (+0.0 h); 2021-11-15 02:30Z ✔ large (-0.1 h) night; 2021-11-28 23:10Z ✔ large (-0.3 h); 2025-12-11 01:15Z ✔ large (-0.5 h) night; 2026-03-21 02:45Z ✔ (-1.2 h) night
+    - **Everson-overflow areal warning (FA.W), descriptive:** 2021-11-14 23:40Z ✔ large (+2.8 h); 2021-11-16 03:20Z ✘ night; 2021-11-28 22:51Z ✔ large (-0.0 h); 2024-01-28 20:17Z ✘; 2024-01-29 00:03Z ✘; 2025-12-10 18:26Z ✔ large (+6.3 h); 2026-03-21 00:12Z ✔ (+1.3 h)
+  - **Rule artefact (reported, not adjusted):** a warning re-issued while an overflow is under way counts ✘, because the onset precedes its window. Example: FA.W ETN 3, 03:20Z Nov 16, 2021, issued while the Nov 15 overflow was still flowing.
+  - The FA.W row matches on the product text. The first segment-head match missed the 10:26 AM PST Dec 10, 2025 warning; it was fixed and rerun. In 2021 (twice) and 2025, the Everson-overflow warning came after Prepare, as addendum 3 says.
+- **Reproduction of the supervisor's count (addendum 3, section 2):**
+
+  | Item | Supervisor | Worker (`trust-v2.json`) |
+  |---|---|---|
+  | NRKW1 warning events, Nov 14, 2015 → Oct 9, 2026 | 18 (10.9 years) | 18 (10.9 years) |
+  | Overflows at SR 544 / ≥ 5 ft | 7 / 4 | 7 / 4 (plus 1 record-start episode excluded by rule) |
+  | Heads-up: alerts; followed by overflow; by ≥ 5 ft | 18; 7 (39 %, 17–64 %); 4 (22 %) | 18; 7 (39 %, 17–64 %); 4 (22 %, 6–48 %) |
+  | Prepare: alerts; followed by overflow; by ≥ 5 ft | 8; 6 (75 %, 35–97 %); 4 (50 %, 16–84 %) | 8; 6 (75 %, 35–97 %); 4 (50 %, 16–84 %) |
+  | Prepare: leads before the 4 large onsets | 4.0, 6.6, 13.3, 18.5 h | +4.0, +6.6, +13.3, +18.5 h |
+  | Prepare: alerts with no overflow | Dec 2015, Nov 2018 | 2015-12-08, 2018-11-27 |
+  | Move now 5.0 ft | 4 of 4 (40–100 %), 0.8–3.5 h after onset | 4 of 4 (40–100 %), 0.8–3.5 h after onset |
+  | Move now 4.0 ft | 7 alerts, 4 large | 7 alerts, 4 large |
+
+  **Every number agrees.** The only rule I had to state that the supervisor did not is the exclusion of the record-start episode. Their "from Nov 14, 2015" count implies the same.
+- **2021 and 2025 against Abbotsford (2 events only, amendment 1 A8):**
+  - Prepare came 12.7 h (2021, daylight) and 17.7–19.1 h (2025, night) before the City's first alert.
+  - Move now at 5.0 ft came 4.5 h before the alert in 2021, but 2.9–4.2 h after it in 2025.
+
+### D-03.24 — Archive completeness test, and the SR 544 record start (addendum 3, sections 3 and 6; Oct 10, 02:04 UTC)
+
+- **Whole years:**
+  - every IEM task is one calendar year (`sdate` YYYY-01-01, `edate` YYYY+1-01-01);
+  - production `history_downloads` holds all 23 years (2004–2026), `ok`, for each of FLWSEW, FLSSEW, FFASEW and ESFSEW, with 0 failures.
+- **Test** (`tests/test_nws_archive.py`):
+  - the fixture `tests/fixtures/iem_nrkw1_2015_2026.txt` holds every archived product naming NRKW1 from 2015-11-14 to 2026-10-09: 75 products, 290 kB, cut from the whole-year downloads;
+  - the test asserts **all 18 warning events**, with the supervisor's anchors: ETN 78 at 19:50Z Nov 14, 2021; **ETN 88 at 09:29Z (1:29 AM PST) Nov 28, 2021**, the event a partial-year pull once missed; ETN 47 at 06:17Z Dec 10, 2025;
+  - and whole-year coverage without gaps, for all four PILs.
+- **SR 544 record start (§6):**
+  - USGS NWIS IV gives the first records at 00:15 PST, 2015-11-14 (08:15Z): 3.59, 3.73, 3.80 and 3.83 ft, at 08:15–09:00Z.
+  - **Our backfill lacks those four**, and starts at 09:15Z (3.84 ft), although its chunk is recorded from 08:15Z with 45 rows. The cause is not yet known.
+  - Impact: none on any count. That episode is excluded by rule (D-03.23), and the onset of each later episode is unaffected.
+  - The backfill skips recorded chunks, so a re-fetch needs a forced window: a change to live code, left as an open issue for Stage 4 rather than patched tonight.
+
+### D-03.25 — R0: AI rainfall is testable (Oct 10, 02:05 UTC)
+
+- **Run:** `scripts/r0_availability.py`, one Previous Runs request per SNOTEL site with all 5 models and `precipitation`, `_previous_day1` and `_previous_day2`, Dec 7–12, 2025.
+  - **3 requests (≈ 5 counted calls); no quota refusal.** The responses are cached in `/srv/floodlead/datasets/r0/`; the summary is `docs/data/r0-availability.json`.
+- Non-null hours out of 144 at each of the 3 sites:
+
+  | Model | Lead 0 | Day-1 lead | Day-2 lead |
+  |---|---|---|---|
+  | `ecmwf_aifs025_single` (AIFS, AI) | 144 | **144** | **144** |
+  | `ecmwf_ifs025` | 144 | 144 | 144 |
+  | `gem_hrdps_continental` | 144 | 144 | **0** |
+  | `ncep_hrrr_conus` | 144 | 144 | **0** |
+  | `ncep_nbm_conus` | 144 | 144 | 144 |
+
+- **Result: AI rainfall (AIFS) returns values at fixed day-1 and day-2 leads, so R1 can run in Stage 4.**
+  - HRDPS and HRRR have no day-2 values, so their comparison is day-1 only.
+  - The model names in addendum 2 were accepted as given; no substitution.
+- **Grid note:** Elbow Lake (910) and MF Nooksack (1011) fall in the same ECMWF 0.25° cell (48.75, −122.0), so AIFS and IFS give identical values there. That is effectively 2 ECMWF sample cells, against 3 for HRDPS, HRRR and NBM. This is stated with R1.
+- These are raw availability counts, not a forecast verification.
+
 ## Work log
 
 - `12:42` — `git checkout main && git pull` → `bd3d092`. Branch `stage-03-public`. Read the prompt and the inputs above.
@@ -506,6 +937,26 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   ```
 - `14:32` — Part 1 finished. PR #5 marked ready with the STAGE REPORT.
 
+- `19:00–19:10` (Oct 10, 02:00–02:10Z) — **Supervisor's protocol review and addenda 2 and 3 applied.**
+  - `main` merged into `stage-03-history` after PR #5 (`a6f87d6`).
+  - Amendments 1–3, each in its own commit (D-03.20–D-03.22).
+  - Trust table and the reproduction of the supervisor's count (D-03.23); archive-completeness test and the SR 544 record-start finding (D-03.24); R0 (D-03.25).
+  - `pytest -q` → **154 passed**, 4 deselected; `ruff` clean.
+  - **Part 2 deployed from PR #6:**
+    - the `floodlead-app:part2` image, built at `3f8aea8`, tagged `latest`;
+    - `docker compose up -d --no-build ingest api`; `scripts/deploy_web.sh` → `.deployed-commit` `3f8aea8…`;
+    - health green; `/v1/official-scorecard` → scorecard 2, NRKW1 32 scored events.
+  - Screenshots (`img/stage-03/official-scorecard-*.png`, `layout-check-part2.txt`): **19 of 19 layout rows OK** at 1280 and 375 px, including `#/official-scorecard` with every `<details>` open; `page errors (all pages): 0; with navigator.language=en-US@posix: 0`.
+- **Latency probes, 7 hourly runs 20:40Z Oct 9 → 01:40Z Oct 10:**
+  - **SNOTEL newest hour 41 min old every time.** The datasets' 120-min cut-off is conservative.
+  - **ECCC Abbotsford A climate-hourly stuck at 07:00Z Oct 9**, falling further behind (13.7 → 18.7 h), and never with precipitation. ECCC climate-hourly is not near-real-time at this station.
+  - **NCEI KBLI: none in the last 7 days at any probe.**
+  - Open-Meteo "archive": recent hours are model-filled.
+- **Disk:**
+  - history tables **1.6 GB** in all: `eccc_daily` 665 MB, `openmeteo_hourly` 527 MB, `rain_hourly` 376 MB (both rain tables include dead tuples from the reloads; a VACUUM would reclaim them), NWS 23 MB;
+  - database 6.4 GB (was 4.8 GB); raw archive 342 MB gzipped; datasets 54 MB; disk 28 % used.
+- Contract files (part 2): `README.md` (scorecard table), `architecture.md`, `data-contract.md` (FFASEW/ESFSEW; latencies), `roadmap.md` (the AI-rain shadow archive after Demo Day; satellite imagery rejected), `tests/fixtures/README.md`, `docs/evaluation-protocol.md` (frozen plus amendments 1–3).
+
 ## Measurements
 
 | What | Value | How measured | When |
@@ -527,6 +978,19 @@ Part 1 (PR #5). Part 2's criteria (AC-8 to AC-10) are reported with PR 2.
 | AC-11 ruff and pytest | **PASS** | `ruff check .` → All checks passed; `pytest -q` → 117 passed, 4 deselected, DB tests run (part-1 branch) |
 | AC-12 Decisions, stage doc, contracts | **PASS** (part 1) | 12 decisions (D-03.1–D-03.12). The stage doc is in 13 of the 15 part-1 commits on top of `main` (counting the commit that records this number; one of the 15 is a merge of `main`), 19:43–21:32Z. Contract files table below |
 
+Part 2 (PR #6):
+
+| AC | Result | Evidence |
+|---|---|---|
+| AC-8 ECCC daily history and annual peaks in new tables | **PASS** | `eccc_daily` **7,825,554 rows, 448 stations**, 1903-04-01 → 2026-06-09, median 53 years per station (1–123), **665 MB**. `eccc_annual_peaks` **37,789 rows, 962 BC stations**, 1923–2025, 4.9 MB. Typical peaks for 433 stations (part 1) |
+| AC-9 Rainfall with licence records, latencies and as-issued start dates; the NWS archive parsed with the official warning timeline per event | **PASS** | **Records:** 5 new usage-rights records (D-03.2), plus FFASEW/ESFSEW. **Rows:** `rain_hourly` eccc-climate 1,007,776, ncei 188,757, snotel 587,425; `openmeteo_hourly` archive 1,597,056, histfc 475,008, prevruns 264,576. **Latency** (7 probes): SNOTEL 41 min; ECCC Abbotsford stuck, 14–19 h, no precipitation; NCEI not live. **As-issued forecast rain from:** previous runs day 1 **2024-01-19**, day 2 2024-01-20 (historical forecast 2018-01-01, not as-issued at lead). **NWS:** 7,293 products, 11,018 VTEC records; the scorecard and catalogue give the official timeline per event; the archive test holds all 18 NRKW1 events since Nov 2015, including ETN 0088 |
+| AC-10 Training sets, features table, leakage and split tests, event catalogue, frozen protocol | **PASS** | `nooksack_hourly_{honest,oracle}_v1` (193,007 rows each) and `fraser_valley_daily_*` (93,805), sha256 pinned. `docs/data/features-nooksack-v1.md`. `tests/test_datasets.py` (poisoning after each cut-off changes no feature); `scripts/check_datasets.py` → **0 violations on every row**; `tests/test_train_data.py` (the Stage 4 loader rejects WY2022, WY2026, WY ≥ 2027). Catalogue: 20 Nooksack events with the first NWS warning. **Protocol frozen at `45367d1`, sha256 `ecdefe0b…abad`**; amendments 1 → `45fd36a3…8214`, 2 → `39355efe…2cbe4`, 3 → `c78bed9f…ec7c` |
+| Addendum 1 (scorecard, relay replay, arrival, the review's bar) | **PASS** | `/v1/official-scorecard`, `#/official-scorecard` and the README table, with n and period (D-03.16). Relay v1 replay (superseded) and the relay v2 trust table (D-03.23). Arrival is a labelled range only (protocol §6). The bar is adopted (protocol §6) |
+| Addendum 3 (tiers, trust table, archive test) | **PASS** | Tiers in amendment 2; trust table `trust-v2.json` with every alert listed; **the supervisor's count reproduced exactly**; archive-completeness test. Alert wording from the trust table: Stage 4/7 |
+| Addendum 2 (R0) | **PASS** | AIFS returns day-1 and day-2 leads, so AI rainfall is testable (D-03.25). R1/R2 are Stage 4 work; R3 (satellite overlay) not done (optional) |
+| AC-11 ruff and pytest | **PASS** | `ruff check .` → All checks passed; `pytest -q` → **154 passed**, 4 deselected (DB tests run) |
+| AC-12 Decisions, stage doc, contracts | **PASS** | 25 decisions in the stage (D-03.13–D-03.25 in part 2). The stage doc is in most part-2 commits (count in the report). Contract files above |
+
 ## Contract files changed
 
 | File | What changed | Why |
@@ -536,6 +1000,11 @@ Part 1 (PR #5). Part 2's criteria (AC-8 to AC-10) are reported with PR 2.
 | `architecture.md` | Components (history, scorer, feedback, web deploy), Stage 3 tables, new endpoints, DB guard rails, web deploy | Facts changed |
 | `docs/ledger-spec.md` | The `typical` threshold kind and `params.typical_peak` in model cards | D-03.8 |
 | `README.md` | "Build Session 3 — working in public": who it is for and 3 steps, feedback, what is measured live (with the run ID), known limits, how FloodLead will be judged, what changed; links to the track record | Part 1 item 6 |
+| `docs/evaluation-protocol.md` (part 2) | New: frozen before any model (`45367d1`); amendments 1–3 on Oct 10 | Part 2 item 7; review A1–A8; addenda 2–3 |
+| `README.md` (part 2) | "How accurate were the official forecasts?" table | Addendum 1 item 3.1 |
+| `data-contract.md` (part 2) | NWS FFASEW/ESFSEW; measured latencies | D-03.13, D-03.14 |
+| `architecture.md` (part 2) | New tables, `/v1/official-scorecard`, history commands | Facts changed |
+| `roadmap.md` | AI-rain shadow archive after Demo Day; satellite imagery rejected | Addendum 2 items 6–7 |
 | `compose.yaml` | Caddy serves `/srv/floodlead/web` (deployed by `scripts/deploy_web.sh`) | D-03.11 |
 
 ## Open issues and handoff to next stage
@@ -558,3 +1027,23 @@ Part 1 (at PR #5):
 6. **The GitHub issue form** goes live when PR #5 is merged; GitHub reads templates from the default branch.
 7. **Open-Meteo is non-commercial** (D-03.2). Fine for the datathon and for training; a commercial FloodLead needs a paid plan or a swap.
 8. **Downloads still running at PR time:** Open-Meteo reanalysis, 184 point-years at 30 s each, expected to finish ≈ 22:05Z. Parsing is part 2.
+
+Part 2 (at PR #6):
+
+1. **P(≥ 150 ft) has no development event.** North Cedarville reached 150 ft only in the two held-out floods; the protocol makes it distribution-derived and descriptive. Development years hold only 5 events ≥ 148 ft and 3 overflows: thin evidence for any alert rule.
+2. **The SR 544 backfill lacks the first four USGS records** (08:15–09:00Z, Nov 14, 2015), for a cause not yet known. No count is affected. A forced re-fetch is for Stage 4.
+3. **The history is approved (revised) data**, not what was seen live. Only the live ledger is fully as-seen.
+4. **KBLI live use needs the NWS METAR feed**, a new source with its own record (Stage 5). NCEI's copy is not live.
+5. **ECCC Abbotsford hourly climate has no precipitation and is not near-real-time.** Fraser Valley rain rests on Hope and Pitt Meadows (daily) and Open-Meteo.
+6. **Scorecard limits:**
+   - categories use today's NWS stages;
+   - 49 of 156 NRKW1 segments state no crest;
+   - the page shows the "after the crest" bin with a meaningless timing value of 288 h, which the README already drops;
+   - n is small at 12–48 h leads.
+7. **Relay v2 is in-sample:**
+   - the 5.0 ft Move-now level is provisional and is re-checked after the first overflow of 2026–27 (SR 544 bridge);
+   - a warning re-issued during an ongoing overflow counts ✘ (FA.W ETN 3, 2021);
+   - Move now came after the City's alert in 2025.
+8. **R1 and R2 are Stage 4 work** (if on schedule). R3 was not done. In the ECMWF grid, Elbow Lake and MF Nooksack share one cell.
+9. **The rain tables carry dead tuples from the reloads** (`openmeteo_hourly` 527 MB); a VACUUM would reclaim them.
+10. **One `git commit -a` swept a frontend draft into `638d6d3`**, recorded and not rewritten. Part-2 code was deployed from PR #6 at 02:07Z on Oct 10, after PR #5 merged.

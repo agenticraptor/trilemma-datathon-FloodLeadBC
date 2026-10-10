@@ -43,7 +43,7 @@ ECCC_CLIMATE: dict[str, tuple[str, int, int]] = {
 }
 NCEI_STATIONS = {"72797624217": "BELLINGHAM INTL AIRPORT (KBLI)"}
 SNOTEL = {"909:WA:SNTL": "Wells Creek", "910:WA:SNTL": "Elbow Lake", "1011:WA:SNTL": "MF Nooksack"}
-NWS_PILS = ("FLWSEW", "FLSSEW")
+NWS_PILS = ("FLWSEW", "FLSSEW", "FFASEW", "ESFSEW")  # warnings, statements, flood watches, hydrologic outlooks
 
 
 def _years(first: int, last: int | None = None) -> range:

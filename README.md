@@ -57,7 +57,32 @@ For farmers and riverside households in the Fraser Valley and on the Nooksack/Su
 - **Relay first, model second.** The [status-quo review](docs/research/fraser-valley-flood-warning-status-quo.md) found that the weak link is the last mile from the Everson overflow to the barn, not the upstream river forecast. So:
   - model-free relay rules (official warnings plus overflow-gauge readings, pushed in farm terms) ship first;
   - a model has to earn its place on top of them, against the review's bar: a daylight "prepare" call at least 24 h before water reaches the border, and calibrated chances of North Cedarville reaching 148 and 150 ft with no low bias.
-- **A scorecard of the official forecasts** (next): every archived NWS North Cedarville warning's crest forecast against what the river did. No agency publishes one.
+- **A scorecard of the official forecasts:** every archived NWS North Cedarville warning's crest forecast against what the river did (below). No agency publishes one.
+
+### How accurate were the official forecasts? (NWS North Cedarville warnings, 2006–2026)
+
+FloodLead-computed from the public archives: NWS Seattle FLW/FLS products via the Iowa Environmental Mesonet, against the USGS gauge record. Live page: [#/official-scorecard](https://34-130-109-216.sslip.io/#/official-scorecard) · API: `/v1/official-scorecard` (scorecard built Oct 9, 2026).
+
+- **Coverage:** 36 warning events at North Cedarville (NRKW1); 32 scored, 4 before our level record.
+- **Lead** is hours from the product's issuance to the observed crest. **Bias** below zero means the forecast crest was too low.
+
+| Lead before the crest | Products | Events | Crest bias (ft) | Crest MAE (ft) | Category right | Crest-time MAE (h) |
+|---|---|---|---|---|---|---|
+| 0–6 h | 31 | 24 | +0.50 | 0.82 | 39 % | 3.6 |
+| 6–12 h | 12 | 12 | +0.87 | 1.05 | 25 % | 4.4 |
+| 12–24 h | 11 | 7 | −0.59 | 1.09 | 27 % | 5.2 |
+| 24–48 h | 4 | 3 | −1.48 | 1.49 | 25 % | 4.4 |
+
+- **First warning before minor stage:** median 1.7 h (range −1.5 to 23.7 h), n = 19 events that reached minor stage.
+- **The two big floods:**
+
+  | Flood | First warning | Forecast crest | Observed crest | Lead before minor stage | "Major" issued |
+  |---|---|---|---|---|---|
+  | Nov 2021 | 11:50 AM PST Nov 14 | 148.9 ft | 150.76 ft | 1.7 h | 7.7 h after the overflow began |
+  | Dec 2025 | 10:17 PM PST Dec 9 | 148.4 ft | 150.44 ft | 14.0 h | 0.8 h after the overflow began at SR 544 |
+
+- **Read it with care.** At 12–48 h there are only 7 and 3 events.
+- Categories use today's NWS stages (action 144.8, minor 146.5, moderate 148, major 150 ft).
 
 ### What changed since Build Session 2
 

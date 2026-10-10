@@ -124,7 +124,7 @@ Yellow sources are never core dependencies. If their terms do not allow the inte
   attribution_required: true
   share_alike: false
   terms_reviewed: 2026-10-09
-  latency: to be measured in Stage 3 part 2
+  latency: Abbotsford A's newest hour was ~14 h old, with no precipitation, at the Oct 9 probes (20:40Z and 21:40Z); hourly precipitation completeness 2004-2026 is 0 % at Abbotsford A, 51-95 % at the other stations (stage doc). Not used as a live feature in v1
   notes: Raw responses archived unchanged. Hourly precipitation is missing for many hours at some stations; recorded as found.
 
 - source: NOAA NCEI Global Hourly (Integrated Surface Database), US stations only
@@ -138,6 +138,7 @@ Yellow sources are never core dependencies. If their terms do not allow the inte
   attribution_required: false   # credit "NOAA National Centers for Environmental Information"
   share_alike: false
   terms_reviewed: 2026-10-09
+  latency: the Access Data Service had no KBLI records from the last 7 days at either Oct 9 probe, so it is a history source only. The same METARs are live within minutes from NWS, a new source that needs its own record before live use
   notes: Canadian stations come from ECCC directly (record above), never from ISD.
 
 - source: USDA NRCS SNOTEL hourly (precipitation accumulation, temperature, snow water equivalent, snow depth)
@@ -151,6 +152,7 @@ Yellow sources are never core dependencies. If their terms do not allow the inte
   attribution_required: false   # credit "USDA NRCS"
   share_alike: false
   terms_reviewed: 2026-10-09
+  latency: newest hour-ending value 40 and 41 min old at the Oct 9 probes (20:40Z, 21:40Z); timestamps in local standard time (UTC-8)
   notes: Provisional data are revised; PREC is a season accumulation (inches), so hourly amounts are differences.
 
 - source: Open-Meteo historical weather (reanalysis), historical forecast and previous-runs APIs
@@ -175,7 +177,7 @@ Yellow sources are never core dependencies. If their terms do not allow the inte
   license: Public domain (NWS products are US public domain; IEM states "The materials found on this website are in the public domain and may be used freely by anyone for any lawful purpose")
   license_url: https://mesonet.agron.iastate.edu/disclaimer.php
   terms_checked_at: https://mesonet.agron.iastate.edu/disclaimer.php (fetched 2026-10-09)
-  access_method: retrieve.py?pil=FLWSEW|FLSSEW&sdate&edate&fmt=text, one request per product and year since 2004, paced 1 request / 2 s
+  access_method: retrieve.py?pil=FLWSEW|FLSSEW|FFASEW|ESFSEW&sdate&edate&fmt=text (flood warnings, flood statements, flood watches, hydrologic outlooks; the last two added Oct 9 for the relay tiers of addendum 1), one request per product and year since 2004, paced 1 request / 2 s
   commercial_use: true
   redistribution: true
   attribution_required: false   # "Attributing the Iowa Environmental Mesonet of Iowa State University would be appreciated" — we do
