@@ -129,6 +129,16 @@ def main(argv: list[str] | None = None) -> int:
     mm.add_argument("--inputs", default="docs/data/stage4-inputs-v1.json")
     mm.add_argument("--protocol", default="docs/evaluation-protocol.md")
     mm.add_argument("--out", required=True)
+    fr = mds.add_parser("final-run", help="THE single final run on held-out rows: only after the supervisor's go")
+    fr.add_argument("--supervisor-go", required=True, help="who gave the go and when (recorded in the results)")
+    fr.add_argument("--datasets", default="/datasets")
+    fr.add_argument("--manifest", default="docs/data/stage4-final-manifest-v1.json")
+    fr.add_argument("--run-dir", required=True)
+    fr.add_argument("--inputs", default="docs/data/stage4-inputs-v1.json")
+    fr.add_argument("--catalogue", default="docs/data/catalogue-v1.json")
+    fr.add_argument("--relay", default="docs/data/relay-v1.json")
+    fr.add_argument("--trust", default="docs/data/trust-v2.json")
+    fr.add_argument("--out", required=True)
     mc = mds.add_parser("ledger-card", help="append the manifest's model_card to the ledger (once)")
     mc.add_argument("--manifest", required=True)
     a = sub.add_parser("api", help="serve the read-only API")
@@ -159,6 +169,20 @@ def main(argv: list[str] | None = None) -> int:
 
         model_final.train(Path(args.datasets), Path(args.out), args.family, args.subsample,
                           [x for x in args.only.split(",") if x] or None)
+        return 0
+    if args.cmd == "model" and args.model_cmd == "final-run":
+        import json
+
+        from floodlead import model_final
+
+        out = Path(args.out)
+        if out.exists():
+            raise SystemExit(f"{out} exists: the final run happens once (amendment 4, item 9)")
+        res = model_final.final_run(Path(args.datasets), Path(args.manifest), Path(args.run_dir), Path(args.inputs),
+                                    Path(args.catalogue), Path(args.relay), Path(args.trust))
+        res["supervisor_go"] = args.supervisor_go
+        out.write_text(json.dumps(res, indent=1, default=float) + "\n")
+        print(json.dumps({"run_id": res["run_id"], "kill_criteria": res["kill_criteria"]}))
         return 0
     if args.cmd == "model" and args.model_cmd == "manifest":
         import json

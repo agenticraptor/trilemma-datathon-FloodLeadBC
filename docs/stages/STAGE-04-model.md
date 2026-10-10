@@ -222,7 +222,7 @@ The relay (trust table) and the official scorecard already stand on their own; t
     - Sites 910 and 1011 share an ECMWF cell, so their AIFS and IFS values are identical.
   - Per amendment 3, this changes nothing in the product before Demo Day.
 
-### D-04.11 — What the checkpoint fixes, decided before any development result (Oct 10, 03:31 UTC)
+### D-04.11 — What the checkpoint fixes, decided before any development result (Oct 10, 03:29 UTC)
 
 - **Artifacts** (`model_final.plan`), all with the chosen family and subsample setting, and all trained through `final_training_rows()`:
   - **primary G+R:** all 11 targets, for both A2 folds: `heldout_wy2022` (WY2005–2021) and `heldout_wy2026` (WY2005–2025, which includes WY2022). The live period uses the `heldout_wy2026` artifacts, as `final_run_folds()['live']` has the same years;
@@ -256,7 +256,7 @@ The relay (trust table) and the official scorecard already stand on their own; t
 
 - `20:22–20:25` — R1 (D-04.10) from the R0 cache: 0 API calls, output `docs/data/r1-case-study.json`. Track record at 03:23Z: 32 issuances, 0 gaps; the 03:15 issuance took 101.6 s (written 03:16:42Z).
 
-- `20:25–20:31` — Final-model code: `model_final.py`, the only caller of `final_training_rows()`; artifacts, manifest and ledger card; tests including hash refusal (`b9f8bc9`). D-04.11.
+- `20:25–20:29` — Final-model code: `model_final.py`, the only caller of `final_training_rows()`; artifacts, manifest and ledger card; tests including hash refusal (`b9f8bc9`). D-04.11.
 
 ## Measurements
 
