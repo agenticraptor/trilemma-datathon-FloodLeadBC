@@ -64,3 +64,16 @@ def test_point_forecast_edges_are_point_masses() -> None:
     assert model.exceed_prob(q, np.array([0.5]))[0] == pytest.approx(1.0)
     assert model.exceed_prob(q, np.array([1.5]))[0] == pytest.approx(0.0)
     assert not math.isnan(model.exceed_prob(q, np.array([1.0]))[0])
+
+
+def test_vectorised_exceedance_matches_the_reference_cdf() -> None:
+    rng = np.random.default_rng(3)
+    q = np.sort(rng.normal(size=(300, 19)), axis=1)
+    q[:20, :3] = q[:20, [3]]  # ties at the lower edge
+    q[20:40, -3:] = q[20:40, [-4]]  # ties at the upper edge
+    c = rng.normal(scale=2, size=300)
+    c[40:60] = q[40:60, 5]  # exactly on a knot
+    got = model.exceed_prob(q, c)
+    want = [1 - model.cdf_at(q[i], float(c[i])) for i in range(300)]
+    assert got == pytest.approx(want, abs=1e-12)
+    assert np.isnan(model.exceed_prob(np.full((1, 19), np.nan), np.array([0.0]))[0])

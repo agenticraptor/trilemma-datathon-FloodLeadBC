@@ -106,6 +106,14 @@ def main(argv: list[str] | None = None) -> int:
     mf.add_argument("--candidate", action="append", required=True, help="family:group:sub|full, e.g. lgb:G+R:sub")
     mf.add_argument("--targets", default=",".join(model_targets()), help="comma-separated, e.g. d_6,d_12,d_24,m_24")
     mf.add_argument("--folds", default="", help="validation water years to run (default: all)")
+    ms = mds.add_parser("dev-score", help="score saved walk-forward predictions into the development report")
+    ms.add_argument("--datasets", default="/datasets")
+    ms.add_argument("--preds", action="append", required=True, help="a directory of preds-*.npz (repeatable)")
+    ms.add_argument("--inputs", default="docs/data/stage4-inputs-v1.json")
+    ms.add_argument("--catalogue", default="docs/data/catalogue-v1.json")
+    ms.add_argument("--relay", default="docs/data/relay-v1.json")
+    ms.add_argument("--chosen", default=None)
+    ms.add_argument("--out", required=True)
     a = sub.add_parser("api", help="serve the read-only API")
     a.add_argument("--host", default="0.0.0.0")
     a.add_argument("--port", type=int, default=8000)
@@ -117,6 +125,17 @@ def main(argv: list[str] | None = None) -> int:
         folds = [int(x) for x in args.folds.split(",") if x]
         model_dev.fit_candidates(Path(args.datasets), Path(args.out), args.candidate, tuple(args.targets.split(",")),
                                  folds or None)
+        return 0
+    if args.cmd == "model" and args.model_cmd == "dev-score":
+        import json
+
+        from floodlead import model_report
+
+        rep = model_report.development_report(Path(args.datasets), [Path(p) for p in args.preds], Path(args.inputs),
+                                              Path(args.catalogue), Path(args.relay), args.chosen)
+        Path(args.out).write_text(json.dumps(rep, indent=1, default=float))
+        for r in rep["ranking_G+R"]:
+            print(json.dumps(r))
         return 0
     if args.cmd == "migrate":
         print(db.migrate())

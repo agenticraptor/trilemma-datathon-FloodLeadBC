@@ -49,7 +49,7 @@ def targets(df: pd.DataFrame) -> pd.DataFrame:
         ok = np.isfinite(sub).sum(axis=1) >= w - 2
         mx = np.where(ok, np.nanmax(np.where(np.isfinite(sub), sub, -np.inf), axis=1), np.nan)
         out[f"m_{w}"] = mx - df["nc_lvl"].to_numpy(dtype=float)
-    return pd.concat([df, pd.DataFrame(out, index=df.index)], axis=1)
+    return pd.concat([df.drop(columns=[c for c in out if c in df]), pd.DataFrame(out, index=df.index)], axis=1)
 
 
 TARGETS = tuple(f"d_{h}" for h in HORIZONS) + tuple(f"m_{w}" for w in WINDOWS)
@@ -152,13 +152,25 @@ def cdf_at(q: np.ndarray, c: float) -> float:
 
 
 def exceed_prob(q19: np.ndarray, threshold_change: np.ndarray) -> np.ndarray:
-    """P(X > c) = 1 - F(c) per row, X with quantiles q19 at LEVELS."""
-    out = np.full(q19.shape[0], np.nan)
-    for i in range(q19.shape[0]):
-        q, c = q19[i], threshold_change[i]
-        if np.isfinite(c) and np.isfinite(q).all():
-            out[i] = 1.0 - cdf_at(q, float(c))
-    return out
+    """P(X > c) = 1 - F(c) per row, X with quantiles q19 at LEVELS; vectorised `cdf_at` (NaN where undefined)."""
+    q = np.asarray(q19, dtype=float)
+    c = np.asarray(threshold_change, dtype=float)
+    t = np.asarray(LEVELS)
+    ok = np.isfinite(c) & np.isfinite(q).all(axis=1)
+    q = np.where(ok[:, None], q, 0.0)
+    c = np.where(ok, c, 0.0)
+    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+        w0 = q[:, 1] - q[:, 0]
+        f_lo = np.where(w0 > 0, t[0] * np.exp((t[1] - t[0]) / w0 / t[0] * (c - q[:, 0])), 0.0)
+        w1 = q[:, -1] - q[:, -2]
+        f_hi = np.where(w1 > 0, 1 - (1 - t[-1]) * np.exp(-(t[-1] - t[-2]) / w1 / (1 - t[-1]) * (c - q[:, -1])),
+                        np.where(c == q[:, -1], t[-1], 1.0))
+        k = np.clip((q <= c[:, None]).sum(axis=1) - 1, 0, len(t) - 2)
+        r = np.arange(len(c))
+        a, b = q[r, k], q[r, k + 1]
+        f_mid = np.where(b > a, t[k] + (t[k + 1] - t[k]) * (c - a) / (b - a), t[k])
+    f = np.where(c < q[:, 0], f_lo, np.where(c >= q[:, -1], f_hi, f_mid))
+    return np.where(ok, 1.0 - f, np.nan)
 
 
 def crossing_prob(q19_window: np.ndarray, nc_lvl: np.ndarray, level_ft: float) -> np.ndarray:

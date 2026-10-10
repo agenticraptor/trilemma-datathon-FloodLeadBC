@@ -61,7 +61,7 @@ def level_skill(q19: np.ndarray, y_change: np.ndarray, nc_lvl: np.ndarray, nc_d3
         ok &= np.nan_to_num(nc_d3h, nan=-1) >= RISING_FT
     q, y, d3, w = q19[ok], y_change[ok], nc_d3h[ok], wy[ok]
     if len(y) == 0:
-        return {"n": 0}
+        return {"h": h, "n": 0, "rising_only": rising_only}
     c_model = fair_crps_rows(q, y)
     med = q[:, LEVELS.index(0.5)]
     ae_model = np.abs(y - med)
