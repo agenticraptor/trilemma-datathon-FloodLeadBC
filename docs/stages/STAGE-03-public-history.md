@@ -661,6 +661,20 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
 - **Episode rule, written after one look at the SR 544 episode list** (8 episodes; the first is 2 h, 3.84 ft, at the start of the record, in an event warned 13 h before the gauge existed): an episode whose warning began before the record start is excluded. Disclosed here, so the reader can judge it.
 - **sha256 of the protocol after amendment 2: `39355efe22a0d6b0e0c2898c4693ea1db6d6b08be85bfeb662240d545bb2cbe4`.**
 
+### D-03.22 — Protocol amendment 3: the AI-rainfall case study R0–R3, fixed before any of its data is pulled (Oct 10, 01:59 UTC)
+
+- **Context:** addendum 2 decides against satellite imagery as a forecast input and adds a one-event AI-rainfall case study. Review A6 asks for it as its own amendment, with T0–T3 renamed R0–R3.
+- **Choice:** amendment 3 fixes, before any R0 request:
+  - the 5 models;
+  - the sample points: the 3 Nooksack SNOTEL sites' grid cells, i.e. the upper-basin gauges;
+  - the 24 and 48 h windows ending at the 2025-12-10 20:15Z minor crossing;
+  - the truth: SNOTEL hourly totals, never IMERG;
+  - the outputs: totals, ratio, and the timing of the heaviest 6 h;
+  - the reporting rules: every model; "one event, descriptive"; AIFS as 6-hourly; no product change before Demo Day;
+  - the Open-Meteo quota rule.
+  - R1 and R2 are Stage 4 work; R3 is optional.
+- **sha256 of the protocol after amendment 3: `c78bed9fc7af5b04ef8df0c0f273f4ed31776c2ab8bb532d353a62f1bc46ec7c`.**
+
 ## Work log
 
 - `12:42` — `git checkout main && git pull` → `bd3d092`. Branch `stage-03-public`. Read the prompt and the inputs above.

@@ -275,3 +275,52 @@ A second relay comparator, counted **by alert**, added before any model is train
 **Re-check:** the 5.0 ft Move-now level is re-checked after the first overflow of the 2026–27 season, because the 2026 SR 544 bridge changes the hydraulics. This is stated here and in the alert help text (Stage 7).
 
 **Reproducibility:** the supervisor's independent count (addendum 3, section 2) is reproduced by the code. Any difference is reported with both counts and the reason; neither is adjusted to match.
+
+### Amendment 3 — 2026-10-10 (AI-rainfall case study; supervisor addendum 2, review A6)
+
+Addendum 2's items T0–T3 are renamed **R0–R3**, so they do not clash with targets T1–T6. This case study is **one event, descriptive**. Whatever it shows, it **changes nothing in the product before Demo Day**. It is fixed here before any of its data is pulled.
+
+**R0, availability (Stage 3 part 2):**
+- Query the Open-Meteo Previous Runs API for precipitation over Dec 7–12, 2025, with the previous-day-1 and day-2 offsets, at the sample points below.
+- Models: `ecmwf_aifs025_single`, `ecmwf_ifs025`, `gem_hrdps_continental`, `ncep_hrrr_conus`, `ncep_nbm_conus`. The exact names are checked against the Open-Meteo docs, and any substitution is recorded.
+- Record which models return values at fixed leads.
+- If AIFS returns none: record "AI rainfall not testable before Demo Day" and drop R1–R2.
+- Calls are paced, cached on disk and counted. If the free tier refuses, the run waits for the daily reset and that is said; a paid plan needs the human's approval.
+
+**Sample points:** the forecast grid cells containing the approved upper-basin rain gauges, i.e. the Nooksack SNOTEL sites:
+- Wells Creek 909 (48.8661, −121.7898);
+- Elbow Lake 910 (48.6909, −121.9089);
+- MF Nooksack 1011 (48.8244, −121.9295).
+
+Coordinates are from the NRCS AWDB station list, and each model's own grid cell is used.
+
+**Windows:** 24 h and 48 h ending at North Cedarville's minor-stage crossing, 2025-12-10 20:15Z. In hourly totals these are the hours ending 21:00Z Dec 9 … 20:00Z Dec 10 (24 h), and 21:00Z Dec 8 … 20:00Z Dec 10 (48 h).
+
+**Truth:** the hourly gauge totals at the same three SNOTEL sites (`rain_hourly`, the hourly increase of the accumulation). **Never IMERG.** SNOTEL storage gauges can under-catch in wind and snow; that is stated with the result.
+
+**Outputs, per model, site and window:**
+- the forecast total at the day-1 and day-2 lead, and the observed total;
+- their ratio;
+- the timing error (h) of the heaviest 6 h: the end of the highest 6-h running sum, forecast minus observed.
+
+**Reporting:**
+- every model is reported, including those that do badly or return nothing;
+- the label is "one event, descriptive";
+- AIFS is treated as 6-hourly information, because Open-Meteo interpolates it to hours.
+
+**R1** (Stage 4, Oct 10–11, only if Stage 4 is on schedule): run the case study as fixed above. Precipitation forecasts are cut first if time runs short (PLAN.md).
+
+**R2** (Stage 4, optional): plug each rain source into the Stage 4 model on the Dec 2025 holdout, without retraining. Every variant is reported, labelled "sensitivity, not skill".
+
+**R3** (optional, after the core of part 2): the satellite timeline and flood-extent overlay from NRCan EGS flood polygons for 2021 and 2025.
+- Its usage-rights record comes first.
+- It is a zone layer on the replay page only, never a forecast input or a timing label.
+
+**Not built or bought:**
+- satellite segmentation pipelines;
+- commercial imagery;
+- vision-language models reading imagery;
+- self-hosted AI weather models;
+- Google WeatherNext access.
+
+**After Demo Day** (roadmap only): a live shadow archive of AI and physics rainfall forecasts, logged as issued and scored storm by storm against basin gauges. AI rain becomes a model feature only after at least 30 scored wet days show lower 24 h and 48 h CRPS than HRDPS and NBM.
