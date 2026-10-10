@@ -114,6 +114,23 @@ def main(argv: list[str] | None = None) -> int:
     ms.add_argument("--relay", default="docs/data/relay-v1.json")
     ms.add_argument("--chosen", default=None)
     ms.add_argument("--out", required=True)
+    ft = mds.add_parser("final-train", help="train the A2 final models (final_training_rows) into a new run dir")
+    ft.add_argument("--datasets", default="/datasets")
+    ft.add_argument("--out", required=True)
+    ft.add_argument("--family", required=True, choices=["lgb", "linear"])
+    ft.add_argument("--subsample", action="store_true")
+    ft.add_argument("--only", default="", help="comma-separated artifact names (default: the whole plan)")
+    mm = mds.add_parser("manifest", help="write the final manifest from the run dir and the development report")
+    mm.add_argument("--datasets", default="/datasets")
+    mm.add_argument("--run-dir", required=True)
+    mm.add_argument("--dev-report", required=True)
+    mm.add_argument("--chosen", required=True)
+    mm.add_argument("--chosen-preds", required=True)
+    mm.add_argument("--inputs", default="docs/data/stage4-inputs-v1.json")
+    mm.add_argument("--protocol", default="docs/evaluation-protocol.md")
+    mm.add_argument("--out", required=True)
+    mc = mds.add_parser("ledger-card", help="append the manifest's model_card to the ledger (once)")
+    mc.add_argument("--manifest", required=True)
     a = sub.add_parser("api", help="serve the read-only API")
     a.add_argument("--host", default="0.0.0.0")
     a.add_argument("--port", type=int, default=8000)
@@ -136,6 +153,26 @@ def main(argv: list[str] | None = None) -> int:
         Path(args.out).write_text(json.dumps(rep, indent=1, default=float))
         for r in rep["ranking_G+R"]:
             print(json.dumps(r))
+        return 0
+    if args.cmd == "model" and args.model_cmd == "final-train":
+        from floodlead import model_final
+
+        model_final.train(Path(args.datasets), Path(args.out), args.family, args.subsample,
+                          [x for x in args.only.split(",") if x] or None)
+        return 0
+    if args.cmd == "model" and args.model_cmd == "manifest":
+        import json
+
+        from floodlead import model_final
+
+        dev = json.loads(Path(args.dev_report).read_text())
+        m = model_final.manifest(Path(args.run_dir), Path(args.datasets), dev, args.chosen,
+                                 model_final.freeze_from_dev(dev, args.chosen),
+                                 model_final.calibration_maps(Path(args.datasets), Path(args.chosen_preds), dev,
+                                                              args.chosen),
+                                 Path(args.inputs), Path(args.protocol))
+        Path(args.out).write_text(json.dumps(m, indent=1) + "\n")
+        print(model_final.sha256_file(Path(args.out)))
         return 0
     if args.cmd == "migrate":
         print(db.migrate())
@@ -188,6 +225,14 @@ def main(argv: list[str] | None = None) -> int:
         from floodlead import issuer
 
         print(json.dumps(issuer.run(pool, dry_run=args.dry_run), indent=1, default=str))
+        return 0
+    if args.cmd == "model" and args.model_cmd == "ledger-card":
+        import json
+
+        from floodlead import model_final
+
+        with pool.connection() as conn:
+            print(json.dumps(model_final.append_card(conn, Path(args.manifest))))
         return 0
     if args.cmd == "ledger" and args.ledger_cmd == "anchor":
         import json
