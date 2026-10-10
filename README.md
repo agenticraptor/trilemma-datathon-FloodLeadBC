@@ -32,7 +32,7 @@ For farmers and riverside households in the Fraser Valley and on the Nooksack/Su
 - **Every hour**, FloodLead issues baseline forecasts for every live gauge (`persistence-v1`, `trend3h-v1`) and fixes them in a public hash-chained ledger before the outcome exists. The chain is published hourly to the `ledger` branch, and anyone can verify it (`scripts/verify_ledger.py`).
 - The **[track record](https://34-130-109-216.sslip.io/#/track-record)** scores them against what the rivers did and against **pure persistence** (the level now, held flat), per horizon, with n, the number of stations and days, and the scorer run ID.
   - It uses a **fair CRPS**: the CDF is rebuilt from the stored quantiles and integrated exactly.
-  - The approximation used until Oct 9 favoured spread forecasts over point forecasts by about 19 %. It inflated our skill against persistence, and it was replaced. See [evaluation.md](evaluation.md).
+  - The approximation used until Oct 9 scored spread forecasts 13–19 % too low, which favoured them over point forecasts. It inflated our skill against persistence, and it was replaced. See [evaluation.md](evaluation.md).
 - **What it shows today** (scorer run 33, Oct 9 20:22Z; the page always shows the latest run):
   - On median error, the baselines are **not** better than pure persistence.
   - The one exception: `persistence-v1` at the 10 USGS gauges at 1–6 h, by 1.0–3.5 % (n 160–210). No gauge reached an official flood stage since Oct 8, so these numbers describe quiet rivers, not floods. Pure persistence is the bar the real model has to clear.
@@ -73,6 +73,12 @@ FloodLead-computed from the public archives: NWS Seattle FLW/FLS products via th
 | 12–24 h | 11 | 7 | −0.59 | 1.09 | 27 % | 5.2 |
 | 24–48 h | 4 | 3 | −1.48 | 1.49 | 25 % | 4.4 |
 
+Warnings issued 24–48 h before the crest exist mainly for the largest floods, so this bin's low bias partly reflects which floods had long warnings.
+
+- **Sorted by what was forecast, not by what happened:**
+  - Across the 28 warnings with both crests, the observed crest = 15.15 + 0.895 × the first forecast crest (95 % interval on the slope 0.35–1.44). The typical miss is 1.19 ft either way (residual SD).
+  - When the first forecast was 148 ft or more (10 warnings), the river came in **lower 8 times** and higher twice: by about 2 ft in 2021 and 2025. The observed-minus-forecast error ranged from −3.10 to +2.04 ft, mean −0.63 ft.
+  - **The honest gap is the missing range, not a bias to correct.** Sorting warnings by how big the flood turned out makes any forecast look low for the biggest outcomes.
 - **First warning before minor stage:** median 1.7 h (range −1.5 to 23.7 h), n = 19 events that reached minor stage.
 - **The two big floods:**
 
@@ -214,7 +220,7 @@ Answers to the [Build Session 1 checklist](https://github.com/TrilemmaFoundation
 
 **The pain is timing, not awareness.** The owner of an Abbotsford farm market (Seasons Farm Market) told The Cascade about 2025: "This time we heard the sirens, but we still had lots of time." The reporter adds that in 2021 they "barely had any time to prepare", and sums up that uncertainty about when and from where the water would rise made people feel unsafe ([The Cascade](https://ufvcascade.ca/the-2025-floods-effect-on-abbotsfords-farmers/)). The only documented flood siren is the City of Sumas, Washington one; none is on record for Abbotsford.
 
-In both floods the weak link was the last mile from the Everson overflow to the barn, not the upstream river forecast. The first official crest forecasts for North Cedarville were about 2 ft low. The upgrade to "major" came after the overflow had begun. No official product gives a calibrated probability or a time for the water to reach the border, and the City's 7-hour rule was off in 2025. See the sourced review [What Sumas Prairie farmers have today](docs/research/fraser-valley-flood-warning-status-quo.md) (AI-assisted, Oct 9, 2026).
+In both floods the weak link was the last mile from the Everson overflow to the barn, not the upstream river forecast. The first official crest forecasts for North Cedarville were about 2 ft low in both floods. Sorted by what was forecast, though, the first crest was higher than the outcome in 8 of 10 moderate-or-worse forecasts (2006–2026), so the gap is the missing range, not a systematic low bias (see the scorecard above). The upgrade to "major" came after the overflow had begun. No official product gives a calibrated probability or a time for the water to reach the border, and the City's 7-hour rule was off in 2025. See the sourced review [What Sumas Prairie farmers have today](docs/research/fraser-valley-flood-warning-status-quo.md) (AI-assisted, Oct 9, 2026).
 
 **Why this is my problem too.** I live in Vancouver, not on a farm. But when Sumas Prairie floods, my household and family feel it directly:
 
