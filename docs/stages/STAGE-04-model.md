@@ -183,7 +183,7 @@ The relay (trust table) and the official scorecard already stand on their own; t
 - **Validation events:** 3 at ≥ 148 ft (2015-11-18, 2017-11-23, 2020-02-01) and the 3 onsets above. The 2009 and 2010 ≥ 148 ft events lie in training-only years, so they have no out-of-sample prediction and are listed as such.
 - **Written down before any result:** the held-out onsets in the replay sit at 146.2–147.6 ft, below every development L_j. The default overflow model will therefore tend to be late or low on held-out data. That is the pre-registered model; it is not tuned.
 
-### D-04.9 — Scoring definitions, fixed before any development result (Oct 10, 03:25 UTC)
+### D-04.9 — Scoring definitions, fixed before any development result (Oct 10, 03:22 UTC)
 
 - **Outcomes** are the frozen dataset's `y_minor/moderate/major_{H}h` and `y_overflow_{H}h`, not re-derived.
 - **Overflow within 6 h** uses the 6-h level quantiles. Amendment 4 has no 6-h window target, and on a rising river the 6-h level is the 6-h maximum. Rows with water already flowing are excluded, because their target is undefined.
@@ -195,7 +195,7 @@ The relay (trust table) and the official scorecard already stand on their own; t
 - **T6 "met"** uses the point skill (> 0 on both scores), with the year-bootstrap interval shown beside it.
 - **Isotonic calibration:** if the leave-one-validation-year-out check on ≥ 148 ft within 24 h lowers the Brier score, isotonic maps are fitted on the pooled validation predictions for the **148 ft** probabilities at 12, 24 and 48 h. Otherwise everything stays raw. The 150-ft probabilities always stay raw: development has 0 events there, so an isotonic map would set them to 0. Overflow probabilities stay raw.
 
-### D-04.10 — R1, the AI-rainfall case study: one event, descriptive (Oct 10, 03:30–03:40 UTC)
+### D-04.10 — R1, the AI-rainfall case study: one event, descriptive (Oct 10, 03:23–03:25 UTC)
 
 - **Run as fixed in amendment 3, with no new API calls.**
   - Forecasts: R0's cached Previous Runs payloads (`/srv/floodlead/datasets/r0/{909,910,1011}.json`, sha256 values in the output).
@@ -222,6 +222,22 @@ The relay (trust table) and the official scorecard already stand on their own; t
     - Sites 910 and 1011 share an ECMWF cell, so their AIFS and IFS values are identical.
   - Per amendment 3, this changes nothing in the product before Demo Day.
 
+### D-04.11 — What the checkpoint fixes, decided before any development result (Oct 10, 03:31 UTC)
+
+- **Artifacts** (`model_final.plan`), all with the chosen family and subsample setting, and all trained through `final_training_rows()`:
+  - **primary G+R:** all 11 targets, for both A2 folds: `heldout_wy2022` (WY2005–2021) and `heldout_wy2026` (WY2005–2025, which includes WY2022). The live period uses the `heldout_wy2026` artifacts, as `final_run_folds()['live']` has the same years;
+  - **ablations G and oracle:** the 6 metric targets, for both folds;
+  - **ablation G+R+F:** the 6 metric targets, for `heldout_wy2026` only. Forecast rain exists from 2024-01-19, so WY2022 has none.
+  - The §11 table has one row per ablation, so the ablations' models must be fixed before the test as well.
+- **(p\*, k):** each variant gets its own §5 choice on its pooled validation predictions.
+  - G+R+F has no validation event in WY2024–2025 (the 3 ≥ 148 ft events and 3 onsets are in WY2016, 2018 and 2020), so it **uses the primary's rule**, and the manifest says so.
+- **Calibration:** per D-04.9. If adopted, it applies to the primary's 148-ft probabilities only, because the maps are fitted on the primary's validation predictions.
+- **The manifest** records:
+  - the code commit, protocol sha256, dataset and input-file sha256 values;
+  - the configuration, features per group, onset levels, (p\*, k) per variant, calibration and every artifact's sha256 and training years.
+  - Its sha256 goes into a ledger `model_card` (`floodlead-nooksack-v1`). That card is appended once (`model ledger-card` refuses a second) and anchored at the next HH:30.
+- **The final run** (written while waiting for the go, never run before it) refuses to start if any dataset or artifact hash differs from the manifest.
+
 ## Work log
 
 - `19:36` — `git checkout main && git pull` → `8c04afb`; branch `stage-04-model`. The Stage 3 part-2 worktree was removed (its branch is merged). Read the prompt and the inputs above.
@@ -236,9 +252,11 @@ The relay (trust table) and the official scorecard already stand on their own; t
   - `docker run --cpus 1.0 --memory 3g --cpu-shares 128 … floodlead model dev-fit --targets d_6,d_12,d_24,m_24 --candidate lgb:G+R:sub --candidate lgb:G+R:full` and the same with `linear:G+R:sub` and `linear:G+R:full`;
   - launched 03:16:37Z into `/srv/floodlead/models/dev-20261010T0316/`.
 
-- `20:16–20:25` — Scoring module and tests (`3d99776`); D-04.9 written before any development result.
+- `20:16–20:22` — Scoring module and tests (`3d99776`); D-04.9 written before any development result.
 
-- `20:25–20:40` — R1 (D-04.10) from the R0 cache: 0 API calls, output `docs/data/r1-case-study.json`. Track record at 03:23Z: 32 issuances, 0 gaps; the 03:15 issuance took 101.6 s (written 03:16:42Z).
+- `20:22–20:25` — R1 (D-04.10) from the R0 cache: 0 API calls, output `docs/data/r1-case-study.json`. Track record at 03:23Z: 32 issuances, 0 gaps; the 03:15 issuance took 101.6 s (written 03:16:42Z).
+
+- `20:25–20:31` — Final-model code: `model_final.py`, the only caller of `final_training_rows()`; artifacts, manifest and ledger card; tests including hash refusal (`b9f8bc9`). D-04.11.
 
 ## Measurements
 
