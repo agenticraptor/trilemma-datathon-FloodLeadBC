@@ -259,6 +259,39 @@ The relay (trust table) and the official scorecard already stand on their own; t
   - The ablations G, oracle and G+R+F use LightGBM-full; they started at 05:50Z.
   - The final models are trained with LightGBM-full.
 
+### D-04.13 — Development report for the chosen model: development (walk-forward), used to choose the model; not the result (Oct 10, 07:02 UTC)
+
+- **What was scored:** `lgb_GR_full`, all 11 targets, merged from the selection run and the completion run. Pooled over the 9 validation years, 78,912 rows; intervals bootstrapped by water year (1,000) or exact binomial.
+- **Output:** `/srv/floodlead/models/dev-20261010T0316/chosen.json`. It goes into `docs/data/stage4-development-v1.json` with the ablations.
+
+| Target | Development value | 95 % interval | Bar | Met on development? |
+|---|---|---|---|---|
+| T6, level at 6 / 12 / 24 h, all rows: fair CRPSS vs pure persistence | 0.771 / 0.625 / 0.453 | 0.760–0.780 / 0.616–0.635 / 0.443–0.461 | > 0 | yes |
+| T6, the same: median-MAE skill | 0.688 / 0.503 / 0.303 | 0.676–0.700 / 0.491–0.515 / 0.291–0.317 | > 0 | yes |
+| T6, rising limbs (n ≈ 880): CRPSS / MAE skill at 6, 12, 24 h | 0.75/0.67, 0.58/0.44, 0.56/0.42 | all lower bounds ≥ 0.36 | > 0 | yes |
+| T5, P(≥ 148 ft within 12 h): BSS vs persistence | 0.157 | **−0.145 to 0.436** | ≥ 0.10; ECE ≤ 0.05 | **on the point estimate only**; ECE 0.0000–0.0014 for every crossing target |
+| T3, ≥ 148 ft within 12 / 24 / 48 h: mean p − observed frequency | −0.0002 / −0.0006 / −0.0013 | upper bound +0.0001 in each | interval not entirely below 0 | yes, narrowly |
+| T3, the same: BSS vs NWS-derived on the 181 warning-in-force rows | 0.57 / 0.58 / 0.57 | lower bounds 0.05 / 0.13 / 0.15 | > 0 | yes |
+| T3, ≥ 150 ft | — | — | — | **not assessable**: 0 development events |
+| T4, overflow onset within 6 / 12 / 24 h: BSS vs persistence (no onset) and vs the trend | 0.31 / 0.40 / 0.23 and 0.70 / 0.61 / 0.41 | vs trend lower bounds 0.41 / 0.32 / 0.20 | > 0 | yes |
+| T4, onset timing in the 12 h before the 3 onsets (36 issuances) | median abs error 1.5 h, but only **11 of 36** issuances predicted an onset within 12 h; trend 2.4 h (19 of 36); persistence 1.3 h (6 of 36) | — | smaller than NWS | NWS issues no onset forecast (see the event table) |
+| T1, prepare: P(≥ 148 ft within 24 h) ≥ 0.5 for 2 h | 2 alerts; 1 of 3 events caught before the crossing (2020: 3.25 h); FAR 0.5 | POD 0.008–0.906, FAR 0.013–0.987 | FAR ≤ 0.5 and ≥ 24 h before the border | FAR part met. **Timing not assessable** (no verifiable arrival times, §6) |
+| T2, move: P(overflow within 12 h) ≥ 0.5, 1 h | 5 alerts; 3 of 3 onsets caught; FAR 0.2; median 4.75 h before onset | POD 0.29–1.00, FAR 0.005–0.716 | POD ≥ 0.8, FAR ≤ 0.2 | POD/FAR part met. Timing not assessable |
+
+- **Calibration:**
+  - The leave-one-validation-year-out isotonic check gave a Brier of 0.000966, against 0.000884 raw, so it **lost**. The raw CDF probabilities are used, per D-04.9.
+  - Reliability diagrams (10 bins) are in the report file.
+- **(p\*, k) chosen per §5:**
+  - prepare **(0.5, 2)**: of the rules meeting FAR ≤ 0.5, the longest median warning;
+  - move **(0.5, 1)**.
+  - Both rest on 3 validation events each, so the intervals are very wide, and are shown.
+- **Plain reading:**
+  - Level forecasts beat persistence clearly at every horizon.
+  - Probabilities are well calibrated on the rare high levels that development has (≤ 148.85 ft).
+  - Prepare caught 1 of the 3 validation ≥ 148 ft events in advance.
+  - The overflow-onset model is mostly late or silent in the hours before onset (11 of 36 issuances).
+  - Development has nothing at ≥ 150 ft. The held-out years hold the two largest floods on record, so the final run tests extrapolation (D-04.8).
+
 ## Work log
 
 - `19:36` — `git checkout main && git pull` → `8c04afb`; branch `stage-04-model`. The Stage 3 part-2 worktree was removed (its branch is merged). Read the prompt and the inputs above.
@@ -292,6 +325,8 @@ The relay (trust table) and the official scorecard already stand on their own; t
   - **05:03Z:** started LightGBM-full's remaining targets (`d_1`, `d_3`, `d_18`, `d_36`, `d_48`, `m_12`, `m_48`) in the free container (`s4-complete`, image `floodlead-app:s4` at `df5134c`). This is **speculative**: the choice is final only once linear-full is scored. If linear-full won, this run would be reported as an extra run, and the winner would be completed instead.
 
 - `22:47–22:50` — linear-full finished at 05:47:56Z and was scored; the choice is LightGBM-full (D-04.12). Ablations started at 05:50Z (`s4-abl`): G+R+F on folds 2024–2025, then G and oracle on all folds, each with 6 metric targets. Track record at 05:33Z: 34 issuances, 0 gaps.
+
+- `23:58–00:02` — The completion run finished at 06:58:49Z. Merged predictions → `chosen/preds-lgb_GR_full.npz` (11 targets). Scored (D-04.13). **Primary final models started at 06:59Z:** `model final-train --family lgb --only GR_heldout_wy2022,GR_heldout_wy2026` → `/srv/floodlead/models/final-20261010T0659/`, image `floodlead-app:s4` (`df5134c`).
 
 ## Measurements
 
