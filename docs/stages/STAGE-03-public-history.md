@@ -8,7 +8,7 @@
 | Started | 2026-10-09 12:42 PT (19:42 UTC) |
 | Finished | (fill at end) |
 | Prompt | `docs/build/prompts/STAGE-03-public-history.md` |
-| Status | part 1 ready for QA (PR #5); part 2 in progress (draft PR #6) |
+| Status | part 1 passed QA (PR #5, `fa0b2a7`); part 2 ready for QA (PR #6) |
 
 ## Goal
 
@@ -183,7 +183,7 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - `history download iem-nws` → 46 new requests (FFASEW and ESFSEW, 2004–2026), 3,865,352 B; 46 skipped.
   - `history load nws` → **7,278 + 15 products, 11,018 VTEC records** in 22.8 s. 28 unparsed: 27 spring/summer water-supply outlooks (ESFSEW) with irregular date lines ("June 20 2017", "Thu July 8, 2021") and 1 empty correction (FLSSEW 2006). None is a flood product.
   - Parser fix: full month names ("JULY"); test added.
-- `14:08` — **Official-forecast scorecard built** (`floodlead history build scorecard`, 2.3 s; `official_scorecards` row 2). The addendum's corrected numbers are reproduced from the archive and our gauge record:
+- `14:08` — **Official-forecast scorecard built** (`floodlead history build scorecard`, 2.3 s; `official_scorecards` row 1. The final build at 23:02Z is row 2, the one served). The addendum's corrected numbers are reproduced from the archive and our gauge record:
 
   | | Nov 2021 (ETN 78) | Dec 2025 (ETN 47) |
   |---|---|---|
@@ -937,6 +937,26 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   ```
 - `14:32` — Part 1 finished. PR #5 marked ready with the STAGE REPORT.
 
+- `19:00–19:10` (Oct 10, 02:00–02:10Z) — **Supervisor's protocol review and addenda 2 and 3 applied.**
+  - `main` merged into `stage-03-history` after PR #5 (`a6f87d6`).
+  - Amendments 1–3, each in its own commit (D-03.20–D-03.22).
+  - Trust table and the reproduction of the supervisor's count (D-03.23); archive-completeness test and the SR 544 record-start finding (D-03.24); R0 (D-03.25).
+  - `pytest -q` → **154 passed**, 4 deselected; `ruff` clean.
+  - **Part 2 deployed from PR #6:**
+    - the `floodlead-app:part2` image, built at `3f8aea8`, tagged `latest`;
+    - `docker compose up -d --no-build ingest api`; `scripts/deploy_web.sh` → `.deployed-commit` `3f8aea8…`;
+    - health green; `/v1/official-scorecard` → scorecard 2, NRKW1 32 scored events.
+  - Screenshots (`img/stage-03/official-scorecard-*.png`, `layout-check-part2.txt`): **19 of 19 layout rows OK** at 1280 and 375 px, including `#/official-scorecard` with every `<details>` open; `page errors (all pages): 0; with navigator.language=en-US@posix: 0`.
+- **Latency probes, 7 hourly runs 20:40Z Oct 9 → 01:40Z Oct 10:**
+  - **SNOTEL newest hour 41 min old every time.** The datasets' 120-min cut-off is conservative.
+  - **ECCC Abbotsford A climate-hourly stuck at 07:00Z Oct 9**, falling further behind (13.7 → 18.7 h), and never with precipitation. ECCC climate-hourly is not near-real-time at this station.
+  - **NCEI KBLI: none in the last 7 days at any probe.**
+  - Open-Meteo "archive": recent hours are model-filled.
+- **Disk:**
+  - history tables **1.6 GB** in all: `eccc_daily` 665 MB, `openmeteo_hourly` 527 MB, `rain_hourly` 376 MB (both rain tables include dead tuples from the reloads; a VACUUM would reclaim them), NWS 23 MB;
+  - database 6.4 GB (was 4.8 GB); raw archive 342 MB gzipped; datasets 54 MB; disk 28 % used.
+- Contract files (part 2): `README.md` (scorecard table), `architecture.md`, `data-contract.md` (FFASEW/ESFSEW; latencies), `roadmap.md` (the AI-rain shadow archive after Demo Day; satellite imagery rejected), `tests/fixtures/README.md`, `docs/evaluation-protocol.md` (frozen plus amendments 1–3).
+
 ## Measurements
 
 | What | Value | How measured | When |
@@ -958,6 +978,19 @@ Part 1 (PR #5). Part 2's criteria (AC-8 to AC-10) are reported with PR 2.
 | AC-11 ruff and pytest | **PASS** | `ruff check .` → All checks passed; `pytest -q` → 117 passed, 4 deselected, DB tests run (part-1 branch) |
 | AC-12 Decisions, stage doc, contracts | **PASS** (part 1) | 12 decisions (D-03.1–D-03.12). The stage doc is in 13 of the 15 part-1 commits on top of `main` (counting the commit that records this number; one of the 15 is a merge of `main`), 19:43–21:32Z. Contract files table below |
 
+Part 2 (PR #6):
+
+| AC | Result | Evidence |
+|---|---|---|
+| AC-8 ECCC daily history and annual peaks in new tables | **PASS** | `eccc_daily` **7,825,554 rows, 448 stations**, 1903-04-01 → 2026-06-09, median 53 years per station (1–123), **665 MB**. `eccc_annual_peaks` **37,789 rows, 962 BC stations**, 1923–2025, 4.9 MB. Typical peaks for 433 stations (part 1) |
+| AC-9 Rainfall with licence records, latencies and as-issued start dates; the NWS archive parsed with the official warning timeline per event | **PASS** | **Records:** 5 new usage-rights records (D-03.2), plus FFASEW/ESFSEW. **Rows:** `rain_hourly` eccc-climate 1,007,776, ncei 188,757, snotel 587,425; `openmeteo_hourly` archive 1,597,056, histfc 475,008, prevruns 264,576. **Latency** (7 probes): SNOTEL 41 min; ECCC Abbotsford stuck, 14–19 h, no precipitation; NCEI not live. **As-issued forecast rain from:** previous runs day 1 **2024-01-19**, day 2 2024-01-20 (historical forecast 2018-01-01, not as-issued at lead). **NWS:** 7,293 products, 11,018 VTEC records; the scorecard and catalogue give the official timeline per event; the archive test holds all 18 NRKW1 events since Nov 2015, including ETN 0088 |
+| AC-10 Training sets, features table, leakage and split tests, event catalogue, frozen protocol | **PASS** | `nooksack_hourly_{honest,oracle}_v1` (193,007 rows each) and `fraser_valley_daily_*` (93,805), sha256 pinned. `docs/data/features-nooksack-v1.md`. `tests/test_datasets.py` (poisoning after each cut-off changes no feature); `scripts/check_datasets.py` → **0 violations on every row**; `tests/test_train_data.py` (the Stage 4 loader rejects WY2022, WY2026, WY ≥ 2027). Catalogue: 20 Nooksack events with the first NWS warning. **Protocol frozen at `45367d1`, sha256 `ecdefe0b…abad`**; amendments 1 → `45fd36a3…8214`, 2 → `39355efe…2cbe4`, 3 → `c78bed9f…ec7c` |
+| Addendum 1 (scorecard, relay replay, arrival, the review's bar) | **PASS** | `/v1/official-scorecard`, `#/official-scorecard` and the README table, with n and period (D-03.16). Relay v1 replay (superseded) and the relay v2 trust table (D-03.23). Arrival is a labelled range only (protocol §6). The bar is adopted (protocol §6) |
+| Addendum 3 (tiers, trust table, archive test) | **PASS** | Tiers in amendment 2; trust table `trust-v2.json` with every alert listed; **the supervisor's count reproduced exactly**; archive-completeness test. Alert wording from the trust table: Stage 4/7 |
+| Addendum 2 (R0) | **PASS** | AIFS returns day-1 and day-2 leads, so AI rainfall is testable (D-03.25). R1/R2 are Stage 4 work; R3 (satellite overlay) not done (optional) |
+| AC-11 ruff and pytest | **PASS** | `ruff check .` → All checks passed; `pytest -q` → **154 passed**, 4 deselected (DB tests run) |
+| AC-12 Decisions, stage doc, contracts | **PASS** | 25 decisions in the stage (D-03.13–D-03.25 in part 2). The stage doc is in most part-2 commits (count in the report). Contract files above |
+
 ## Contract files changed
 
 | File | What changed | Why |
@@ -967,6 +1000,11 @@ Part 1 (PR #5). Part 2's criteria (AC-8 to AC-10) are reported with PR 2.
 | `architecture.md` | Components (history, scorer, feedback, web deploy), Stage 3 tables, new endpoints, DB guard rails, web deploy | Facts changed |
 | `docs/ledger-spec.md` | The `typical` threshold kind and `params.typical_peak` in model cards | D-03.8 |
 | `README.md` | "Build Session 3 — working in public": who it is for and 3 steps, feedback, what is measured live (with the run ID), known limits, how FloodLead will be judged, what changed; links to the track record | Part 1 item 6 |
+| `docs/evaluation-protocol.md` (part 2) | New: frozen before any model (`45367d1`); amendments 1–3 on Oct 10 | Part 2 item 7; review A1–A8; addenda 2–3 |
+| `README.md` (part 2) | "How accurate were the official forecasts?" table | Addendum 1 item 3.1 |
+| `data-contract.md` (part 2) | NWS FFASEW/ESFSEW; measured latencies | D-03.13, D-03.14 |
+| `architecture.md` (part 2) | New tables, `/v1/official-scorecard`, history commands | Facts changed |
+| `roadmap.md` | AI-rain shadow archive after Demo Day; satellite imagery rejected | Addendum 2 items 6–7 |
 | `compose.yaml` | Caddy serves `/srv/floodlead/web` (deployed by `scripts/deploy_web.sh`) | D-03.11 |
 
 ## Open issues and handoff to next stage
@@ -989,3 +1027,23 @@ Part 1 (at PR #5):
 6. **The GitHub issue form** goes live when PR #5 is merged; GitHub reads templates from the default branch.
 7. **Open-Meteo is non-commercial** (D-03.2). Fine for the datathon and for training; a commercial FloodLead needs a paid plan or a swap.
 8. **Downloads still running at PR time:** Open-Meteo reanalysis, 184 point-years at 30 s each, expected to finish ≈ 22:05Z. Parsing is part 2.
+
+Part 2 (at PR #6):
+
+1. **P(≥ 150 ft) has no development event.** North Cedarville reached 150 ft only in the two held-out floods; the protocol makes it distribution-derived and descriptive. Development years hold only 5 events ≥ 148 ft and 3 overflows: thin evidence for any alert rule.
+2. **The SR 544 backfill lacks the first four USGS records** (08:15–09:00Z, Nov 14, 2015), for a cause not yet known. No count is affected. A forced re-fetch is for Stage 4.
+3. **The history is approved (revised) data**, not what was seen live. Only the live ledger is fully as-seen.
+4. **KBLI live use needs the NWS METAR feed**, a new source with its own record (Stage 5). NCEI's copy is not live.
+5. **ECCC Abbotsford hourly climate has no precipitation and is not near-real-time.** Fraser Valley rain rests on Hope and Pitt Meadows (daily) and Open-Meteo.
+6. **Scorecard limits:**
+   - categories use today's NWS stages;
+   - 49 of 156 NRKW1 segments state no crest;
+   - the page shows the "after the crest" bin with a meaningless timing value of 288 h, which the README already drops;
+   - n is small at 12–48 h leads.
+7. **Relay v2 is in-sample:**
+   - the 5.0 ft Move-now level is provisional and is re-checked after the first overflow of 2026–27 (SR 544 bridge);
+   - a warning re-issued during an ongoing overflow counts ✘ (FA.W ETN 3, 2021);
+   - Move now came after the City's alert in 2025.
+8. **R1 and R2 are Stage 4 work** (if on schedule). R3 was not done. In the ECMWF grid, Elbow Lake and MF Nooksack share one cell.
+9. **The rain tables carry dead tuples from the reloads** (`openmeteo_hourly` 527 MB); a VACUUM would reclaim them.
+10. **One `git commit -a` swept a frontend draft into `638d6d3`**, recorded and not rewritten. Part-2 code was deployed from PR #6 at 02:07Z on Oct 10, after PR #5 merged.
