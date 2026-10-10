@@ -76,9 +76,34 @@ The relay (trust table) and the official scorecard already stand on their own; t
 
 ## Decisions
 
+### D-04.1 — F1: re-fetch the SR 544 record start with a request margin (Oct 10, 02:40 UTC)
+
+- **Cause found:** the archived NWIS IV payload of the original backfill (`raw_objects` 1647, `startDT=2015-11-14T08:15Z`) starts at **01:15 PST (09:15Z)**. NWIS answered a winter `…Z` start time one hour late.
+  - Today USGS's OGC v0 API holds all 13 records of Nov 14 from 08:15Z, and so does NWIS when asked in PST.
+- **Fix:**
+  - `fetch_nwis_window(..., request_margin=…)` asks from start − margin and keeps only [start, end);
+  - `floodlead backfill usgs-window --site … --start … --end …` is a forced re-fetch with a 1-day margin that ignores recorded chunks;
+  - `tests/test_usgs_refetch.py` checks the requested `startDT` and the window filter.
+- **Production (02:41Z):** SR 544, [2015-11-13, 2015-11-16) went **9 → 13 rows**. The 4 missing readings (08:15–09:00Z: 3.59, 3.73, 3.80, 3.83 ft) are present now; the payload held 13 rows in the window.
+- **Trust table rebuilt** (`/srv/floodlead/datasets/f1/trust.json`) against `trust-v2.json`: **no number changed**. The episodes are identical; the record start is now 08:15Z, and the excluded record-start episode starts 08:15Z.
+
+### D-04.2 — The same NWIS shift left a systematic gap on every Jan 1 (reported; fix deferred)
+
+- Backfill chunks start on Jan 1 and Jul 1 (UTC). The winter ones lost the first hour.
+- On the continuous USGS gauges, the Jan 1 readings at 00:00–00:45Z are missing in nearly every year, 2005–2026:
+  - North Cedarville 84 of 88;
+  - MF, SF, Everson and Ferndale 88 of 88;
+  - NF 76 of 88.
+  - The Jul 1 boundaries (summer time) are complete.
+  - The intermittent overflow gauges report only while water flows, so their absence is expected.
+- **Impact:** about 4 readings per site per year (≈ 0.01 % of rows). The frozen datasets (pinned sha256) are **not** rebuilt. A row whose target hour falls in such a gap has an empty target; features use the latest reading within 2 h.
+- **Fix later (Stage 5):** a bulk re-fetch with the margin, about 7 continuous sites × 22 years ≈ 154 NWIS requests. The pinned datasets stay as they are.
+
 ## Work log
 
 - `19:36` — `git checkout main && git pull` → `8c04afb`; branch `stage-04-model`. The Stage 3 part-2 worktree was removed (its branch is merged). Read the prompt and the inputs above.
+
+- `19:38–19:41` — Draft PR #7 opened. F1 (D-04.1, D-04.2): cause found in the archived payload; margin fetch and test; production re-fetch (9 → 13 rows); trust table unchanged; the Jan 1 gap measured.
 
 ## Measurements
 
