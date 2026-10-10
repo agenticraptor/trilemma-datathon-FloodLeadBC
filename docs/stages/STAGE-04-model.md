@@ -302,6 +302,37 @@ The relay (trust table) and the official scorecard already stand on their own; t
   - The overflow-onset model is mostly late or silent in the hours before onset (11 of 36 issuances).
   - Development has nothing at ≥ 150 ft. The held-out years hold the two largest floods on record, so the final run tests extrapolation (D-04.8).
 
+### D-04.14 — The checkpoint: final manifest committed before any held-out row is scored (Oct 10, 09:23 UTC)
+
+- **Development report** `docs/data/stage4-development-v1.json`, sha256 `8163205d62305b3c4e76684e1a7a6f6f1a35a89a10178924eebedad0b190c995`.
+  - Built by `model dev-score` at `514ec15`. It is labelled "development (walk-forward), used to choose the model; not the result".
+  - It holds all 7 candidates and ablations, plus the chosen model scored on the G+R+F rows (WY2024–2025).
+
+| Variant (LightGBM, all rows) | Rows | Fair CRPS, 6/12/24 h mean | CRPSS vs persistence at 6 / 12 / 24 h | T5 BSS at 12 h (95 % interval) | Prepare (p\*, k) | Move (p\*, k) |
+|---|---|---|---|---|---|---|
+| **G+R (chosen)** | 78,912 | 0.0898 | 0.771 / 0.625 / 0.453 | 0.157 (−0.145 to 0.436) | (0.5, 2) | (0.5, 1) |
+| G, gauges only | 78,912 | 0.0948 | 0.752 / 0.594 / 0.432 | 0.187 (−0.066 to 0.408) | (0.6, 2) | (0.3, 2) |
+| oracle, future rain known (upper bound) | 78,912 | 0.0610 | 0.786 / 0.721 / 0.670 | 0.246 (−0.036 to 0.610) | (0.5, 2) | (0.5, 2) |
+| G+R+F, WY2024–2025 only | 17,544 | 0.0778 | 0.787 / 0.641 / 0.505 | not assessable (0 events) | the primary's | the primary's |
+| G+R on the same WY2024–2025 rows | 17,544 | 0.0826 | 0.786 / 0.633 / 0.460 | not assessable | — | — |
+
+- **What the ablations say (development):**
+  - Observed rain improves level CRPS by about 5 % over gauges alone.
+  - Knowing the future rain (oracle) would cut it by about a third, mostly at 24 h.
+  - As-issued forecast rain cut it by about 6 % on WY2024–2025, a period with no ≥ 148 ft event.
+- **Manifest** `docs/data/stage4-final-manifest-v1.json`, **sha256 `1127595c5c8b57b19231c9b9b2ba1b71504dd909434f265b49e89c8581f39f4c`**.
+  - Built by `model manifest` with the training image (`floodlead-app:s4`, code commit `df5134c`).
+  - It records:
+    - the protocol sha256 `fd6ecb6e…03ab` (amendments 1–4);
+    - the dataset sha256 values (honest `e0d165a9…549d`, oracle `5ffea66a…0054`);
+    - the inputs file sha256;
+    - the configuration;
+    - the features per group;
+    - the onset levels;
+    - (p\*, k) per variant;
+    - calibration: **not used** (D-04.13);
+    - all 7 artifacts with sha256 and training years.
+
 ## Work log
 
 - `19:36` — `git checkout main && git pull` → `8c04afb`; branch `stage-04-model`. The Stage 3 part-2 worktree was removed (its branch is merged). Read the prompt and the inputs above.
@@ -356,6 +387,8 @@ The relay (trust table) and the official scorecard already stand on their own; t
 | `G_heldout_wy2026.pkl` | G | 2005–2025 (21 years, incl. 2022) | 6 | 184,080 | 692 s | 1522 MB | `846e2986d33f7926…` |
 | `oracle_heldout_wy2026.pkl` | oracle | 2005–2025 (21 years, incl. 2022) | 6 | 184,080 | 1088 s | 1762 MB | `b4a4be8bca65c782…` |
 | `GRF_heldout_wy2026.pkl` | G+R+F | 2005–2025 (21 years, incl. 2022) | 6 | 184,080 | 962 s | 1762 MB | `fb94ac0d61eac0d2…` |
+
+- `02:13–02:24` — The oracle ablation's development finished at 09:19Z. Full development report built (2 min 38 s, 1 CPU). Manifest built with the training image and copied into `docs/data/`; host paths are recorded.
 
 ## Measurements
 
