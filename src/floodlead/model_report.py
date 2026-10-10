@@ -28,6 +28,8 @@ P_GRID = tuple(round(0.1 * i, 1) for i in range(1, 10))
 K_GRID = (1, 2, 3)
 FAR_LIMIT = {"prepare": 0.5, "move": 0.2}
 SELECTION_H = (6, 12, 24)
+TIMING_NOTE = ("not assessable: no agency recorded when water reached the border or the farm's zone; protocol §6 "
+               "claims no accuracy without >= 3 verifiable arrival times. Hours before the overflow onset are shown")
 
 
 def ts(x: str) -> datetime:
@@ -306,15 +308,18 @@ def t_table(sc: dict[str, Any]) -> list[dict[str, Any]]:
                      "crossing per event; FAR <= 0.5", "events": d["events"], "pod": d["pod"],
                      "pod_ci95": d["pod_ci95"],
                      "far": d["far"], "far_ci95": d["far_ci95"], "leads_h": leads,
-                     "met": bool(d["far"] is not None and d["far"] <= 0.5 and len(leads) * 2 > d["events"]),
-                     "note": "border-arrival and City-alert comparisons exist for held-out 2021/2025 only"})
+                     "far_part_met": bool(d["far"] is not None and d["far"] <= 0.5),
+                     "fired_before_most_events": bool(len(leads) * 2 > d["events"]),
+                     "met": None, "timing_part": TIMING_NOTE,
+                     "note": "City-alert comparisons exist for held-out 2021/2025 only (amendment 1, A8)"})
     if "move" in al:
         d = al["move"].get("chosen_detail") or al["move"].get("detail")
         rows.append({"target": "T2", "what": "move (overflow within 12 h) alert: POD >= 0.8 and FAR <= 0.2",
                      "events": d["events"], "pod": d["pod"], "pod_ci95": d["pod_ci95"], "far": d["far"],
                      "far_ci95": d["far_ci95"], "leads_h": [e["lead_h"] for e in d["per_event"]],
-                     "met": bool(d["pod"] is not None and d["pod"] >= 0.8
-                                 and d["far"] is not None and d["far"] <= 0.2)})
+                     "pod_far_part_met": bool(d["pod"] is not None and d["pod"] >= 0.8
+                                              and d["far"] is not None and d["far"] <= 0.2),
+                     "met": None, "timing_part": TIMING_NOTE})
     for key, blk in sc.get("crossing", {}).items():
         if not key.startswith(("moderate", "major")) or not blk.get("n"):
             continue
