@@ -228,6 +228,8 @@ def isotonic_loyo(p: np.ndarray, o: np.ndarray, wy: np.ndarray) -> dict[str, Any
 
     ok = np.isfinite(p) & np.isfinite(o)
     p, o, wy = p[ok], o[ok], wy[ok]
+    if len(np.unique(wy)) < 2:
+        return {"n": int(len(p)), "isotonic_wins": False, "note": "needs at least 2 validation years"}
     cal = np.empty_like(p)
     for y in np.unique(wy):
         m = wy == y
@@ -351,8 +353,8 @@ def t_table(sc: dict[str, Any]) -> list[dict[str, Any]]:
             rows.append({"target": "T5", "what": f"{key}: BSS vs persistence >= 0.10; ECE <= 0.05 per horizon",
                          "bss_vs_persistence": blk["bss_vs_persistence"], "ci95": blk["bss_vs_persistence_ci95"],
                          "ece_by_target": eces,
-                         "met": bool((blk["bss_vs_persistence"] or -1) >= 0.10
-                                     and all(v <= 0.05 for v in eces.values()))})
+                         "met": None if blk["bss_vs_persistence"] is None else bool(
+                             blk["bss_vs_persistence"] >= 0.10 and all(v <= 0.05 for v in eces.values()))})
     for r in sc.get("T6_level", []):
         if r.get("h") in SELECTION_H and r.get("n"):
             rows.append({"target": "T6", "what": f"level at {r['h']} h{' (rising limbs)' if r['rising_only'] else ''}",
@@ -451,10 +453,25 @@ def development_report(datasets: Path, pred_dirs: list[Path], inputs_path: Path,
         sc["T_table"] = t_table(sc)
         sc["events"] = event_table(val, jp, sc, inputs, catalogue, relay)
         cands.append(sc)
-    ranked = sorted((c for c in cands if c["headline_fair_crps_6_12_24"] is not None and "_GR_" in c["candidate"]),
+    if chosen and chosen in files:  # the chosen model on the same rows as any candidate scored on fewer years
+        full_years = max((c["water_years"] for c in cands), key=len)
+        for yrs in sorted({tuple(c["water_years"]) for c in cands if c["water_years"] != full_years}):
+            idx, preds = model_dev.load_preds(files[chosen])
+            m = idx["wy"].isin(yrs).to_numpy()
+            name = "nooksack_hourly_honest_v1.csv.gz"
+            sc = score(frames[name], idx[m].reset_index(drop=True), {k: v[m] for k, v in preds.items()}, inputs,
+                       events)
+            sc["candidate"] = f"{chosen}@WY{'+'.join(str(y) for y in yrs)}"
+            sc["note"] = "the chosen model on the same rows as the candidates scored on these years only"
+            sc["T_table"] = t_table(sc)
+            cands.append(sc)
+    ranked = sorted((c for c in cands if c["headline_fair_crps_6_12_24"] is not None and "_GR_" in c["candidate"]
+                     and "@" not in c["candidate"]),
                     key=lambda c: c["headline_fair_crps_6_12_24"])
+    from floodlead import ledger
+
     return {"label": "development (walk-forward), used to choose the model; not the result",
-            "generated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "generated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "code_commit": ledger.code_commit(),
             "selection_rule": "amendment 4, item 6: lowest pooled validation fair CRPS averaged over 6/12/24 h among "
                               "the G+R candidates; within 1 %, the lower Brier for >= 148 ft within 24 h",
             "ranking_G+R": [{"candidate": c["candidate"], "headline_fair_crps_6_12_24": c["headline_fair_crps_6_12_24"],

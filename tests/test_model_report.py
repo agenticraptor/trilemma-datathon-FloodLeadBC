@@ -89,3 +89,28 @@ def test_development_report_end_to_end(tmp_path) -> None:  # noqa: ANN001
     assert {r["target"] for r in c["T_table"]} >= {"T1", "T2", "T3", "T5", "T6"}
     assert c["events"][0]["event_id"] == "e1" and "isotonic_wins" in c["isotonic_check_148ft_24h"]
     json.dumps(rep, default=float)
+
+
+def test_development_report_compares_the_chosen_model_on_fewer_years(tmp_path) -> None:  # noqa: ANN001
+    import json
+
+    df, idx, preds = synthetic()
+    df["holdout"] = False
+    df.to_csv(tmp_path / "nooksack_hourly_honest_v1.csv.gz", index=False)
+    d = tmp_path / "p"
+    d.mkdir()
+    np.savez_compressed(d / "preds-lgb_GR_full.npz", issue_time=idx["issue_time"].to_numpy(dtype=str),
+                        wy=idx["wy"].to_numpy(), **preds)
+    m = (idx["wy"] == 2019).to_numpy()
+    np.savez_compressed(d / "preds-lgb_GRF_full.npz", issue_time=idx["issue_time"].to_numpy(dtype=str)[m],
+                        wy=idx["wy"].to_numpy()[m], **{k: v[m] for k, v in preds.items()})
+    inputs = {"onset_levels_ft": [147.6, 147.92, 148.44], "validation_events": {"ge_148ft": [], "overflow_onset": []},
+              "development_events_ge_148ft": [], "development_overflow_onsets": []}
+    (tmp_path / "i.json").write_text(json.dumps(inputs))
+    (tmp_path / "c.json").write_text(json.dumps({"nooksack": []}))
+    (tmp_path / "r.json").write_text(json.dumps({"events": []}))
+    rep = model_report.development_report(tmp_path, [d], tmp_path / "i.json", tmp_path / "c.json",
+                                          tmp_path / "r.json", "lgb_GR_full")
+    names = {c["candidate"]: c for c in rep["candidates"]}
+    assert names["lgb_GR_full@WY2019"]["rows"] == names["lgb_GRF_full"]["rows"] == int(m.sum())
+    assert [r["candidate"] for r in rep["ranking_G+R"]] == ["lgb_GR_full"]
