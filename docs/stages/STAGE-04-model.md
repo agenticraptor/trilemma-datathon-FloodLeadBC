@@ -99,7 +99,7 @@ The relay (trust table) and the official scorecard already stand on their own; t
 - **Impact:** about 4 readings per site per year (≈ 0.01 % of rows). The frozen datasets (pinned sha256) are **not** rebuilt. A row whose target hour falls in such a gap has an empty target; features use the latest reading within 2 h.
 - **Fix later (Stage 5):** a bulk re-fetch with the margin, about 7 continuous sites × 22 years ≈ 154 NWIS requests. The pinned datasets stay as they are.
 
-### D-04.3 — F2–F5: scorecard corrections, README wording, and the final-run reader (Oct 10, 02:45–02:52 UTC)
+### D-04.3 — F2–F5: scorecard corrections, README wording, and the final-run reader (Oct 10, 02:38–02:43 UTC)
 
 - **F2.** The "after the crest" bin now carries `crest_time_mae_h = null` and `crest_time_note` ("not a forecast: issued after the observed crest"). The page shows "—" with the note.
 - **F3.** `scorecard.forecast_conditioned()`, in `/v1/official-scorecard` (`summary.<point>.forecast_conditioned`), the page ("Sorted by what was forecast") and the README. It uses OLS with a t-based slope interval: a t quantile from the regularised incomplete beta, checked at 2.0555 for 26 df and 2.306 for 8 df.
@@ -117,13 +117,29 @@ The relay (trust table) and the official scorecard already stand on their own; t
   - WY2022 is refused in `heldout_wy2022`, and allowed in `heldout_wy2026` and `live`;
   - a static test allows callers only in `train_data.py` and the final-run module, `model_final.py`.
 
+### D-04.4 — Amendment 4: the Stage 4 design, fixed before any model is fitted (Oct 10, 02:45 UTC)
+
+- **Context:** the prompt requires amendment 4 in its own commit, before any fit. No model code exists yet on this branch.
+- **Fixed, in brief:**
+  - NWS columns are comparators, never inputs.
+  - The targets are level changes at the 8 ledger horizons and window maxima M_12, M_24 and M_48.
+  - 19 sorted quantiles.
+  - Crossing probabilities come from M_H's CDF (`crps.py` tails). An isotonic map is allowed only if it wins a leave-one-validation-year-out Brier check.
+  - Overflow probability is the mean of P(M_H ≥ L_j) over the 3 development onsets, with a ≤ 3-input logistic as the only alternative.
+  - Two families, (a) linear quantile regression and (b) LightGBM quantiles, with fixed hyperparameters and an optional quiet-row subsample. The selection criterion is written in advance: pooled validation fair CRPS over 6/12/24 h, Brier as the tie-break.
+  - Feature groups G, G+R (primary), G+R+F (scored on WY2024–2025 and WY2026 only) and oracle.
+  - (p\*, k) chosen on validation.
+  - The re-run rule, the checkpoint and ledger card, and the compute limits.
+- **Why:** every choice that could be tuned towards the held-out answer is fixed now, while no model has been fitted.
+- **sha256 of the protocol after amendment 4: `fd6ecb6eee0ec0ee2fb3103ce73287b00f159d7634286347acdefffefcb103ab`.**
+
 ## Work log
 
 - `19:36` — `git checkout main && git pull` → `8c04afb`; branch `stage-04-model`. The Stage 3 part-2 worktree was removed (its branch is merged). Read the prompt and the inputs above.
 
 - `19:38–19:41` — Draft PR #7 opened. F1 (D-04.1, D-04.2): cause found in the archived payload; margin fetch and test; production re-fetch (9 → 13 rows); trust table unchanged; the Jan 1 gap measured.
 
-- `19:45–19:52` — F2–F5 (D-04.3). Production scorecard build 3 and web deployed from PR #7 (`.deployed-commit` `fb4c77d`).
+- `19:38–19:43` — F2–F5 (D-04.3). Production scorecard build 3 and web deployed from PR #7 (`.deployed-commit` `fb4c77d`).
 
 ## Measurements
 
