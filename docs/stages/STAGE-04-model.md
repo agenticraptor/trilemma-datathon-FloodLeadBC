@@ -258,6 +258,18 @@ The relay (trust table) and the official scorecard already stand on their own; t
 
 - `20:25–20:29` — Final-model code: `model_final.py`, the only caller of `final_training_rows()`; artifacts, manifest and ledger card; tests including hash refusal (`b9f8bc9`). D-04.11.
 
+- `20:33–22:03` — Selection fits (D-04.7):
+  - **LightGBM-sub** finished 03:49Z;
+  - **LightGBM-full** finished 04:59Z;
+  - **linear-sub** finished 04:29Z;
+  - **linear-full** is running.
+  - **The 04:15 issuance under full training load** was written at 04:16:39Z in 98.5 s. Seq 28240; 0 gaps.
+  - **Scored** (`model dev-score`, pooled validation over WY2016–2025 minus 2022; fair CRPS averaged over 6/12/24 h, then the Brier for ≥ 148 ft within 24 h):
+    - `lgb_GR_full` 0.08977 (0.00088);
+    - `lgb_GR_sub` 0.09017 (0.00089);
+    - `linear_GR_sub` 0.1278 (0.00093).
+  - **05:03Z:** started LightGBM-full's remaining targets (`d_1`, `d_3`, `d_18`, `d_36`, `d_48`, `m_12`, `m_48`) in the free container (`s4-complete`, image `floodlead-app:s4` at `df5134c`). This is **speculative**: the choice is final only once linear-full is scored. If linear-full won, this run would be reported as an extra run, and the winner would be completed instead.
+
 ## Measurements
 
 | What | Value | How measured | When |
@@ -270,7 +282,9 @@ The relay (trust table) and the official scorecard already stand on their own; t
 | Peak RSS of a fitting container | 917–940 MB | `getrusage` in the fit log | 03:19Z |
 | LightGBM-sub fold time, 4 targets, two containers in parallel | 153–201 s | fit log | 03:19–03:29Z |
 | Linear-sub fold time, 4 targets | 346–380 s | fit log | 03:22–03:29Z |
-| Issuance runtime while training | 101.6 s (03:15 run) | ingest log | 03:16Z |
+| Issuance runtime while training | 101.6 s (03:15, start of training); 98.5 s (04:15, two fitting containers) | ingest log | 03:16Z, 04:16Z |
+| LightGBM-full fold time, 4 targets, two containers in parallel | 326–490 s | fit log | 04:01–04:59Z |
+| `model dev-score`, 3 candidates (1 CPU) | about 2 min | wall clock | 04:59–05:01Z |
 
 ## Acceptance criteria
 
