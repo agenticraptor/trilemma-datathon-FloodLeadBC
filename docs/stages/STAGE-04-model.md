@@ -262,6 +262,15 @@ The relay (trust table) and the official scorecard already stand on their own; t
 
 | What | Value | How measured | When |
 |---|---|---|---|
+| SR 544 rows, Nov 13–16, 2015 (F1) | 9 → 13 | `backfill usgs-window` counts | 02:41Z |
+| Trust table after F1 | unchanged | rebuilt vs `trust-v2.json` | 02:42Z |
+| `rain_hourly` dead tuples (F6) | 150,397 → 0; size 394,485,760 B unchanged | `pg_stat_user_tables`, `pg_total_relation_size` | 02:44–02:45Z |
+| One LightGBM fit, 1 target × 7 levels, sub / full | 30.8 s / 69.7 s (33,605 / 111,696 rows) | capped probe | 02:55–03:07Z |
+| One linear QR fit, 30k rows, 1 quantile, dual simplex / IPM | 571.5 s for 7 levels / 16.3 s for 1 level | capped probe | 03:07–03:09Z |
+| Peak RSS of a fitting container | 917–940 MB | `getrusage` in the fit log | 03:19Z |
+| LightGBM-sub fold time, 4 targets, two containers in parallel | 153–201 s | fit log | 03:19–03:29Z |
+| Linear-sub fold time, 4 targets | 346–380 s | fit log | 03:22–03:29Z |
+| Issuance runtime while training | 101.6 s (03:15 run) | ingest log | 03:16Z |
 
 ## Acceptance criteria
 
@@ -272,6 +281,11 @@ The relay (trust table) and the official scorecard already stand on their own; t
 
 | File | What changed | Why |
 |---|---|---|
+| `README.md` | "13–19 %" wording; the forecast-conditioned view ("Sorted by what was forecast"); the long-lead sentence; 8 of 10 moderate-or-worse first crests came in lower (D-04.3) | F3, F4: the supervisor's QA finding |
+| `docs/evaluation-protocol.md` | Amendment 4 appended; the frozen text and amendments 1–3 unchanged (D-04.4) | Stage 4 design fixed before any fit |
+| `Dockerfile`, `pyproject.toml`, `uv.lock` | `libgomp1`; LightGBM, scikit-learn and pandas (D-04.6) | Model training |
+| `docs/data/stage4-inputs-v1.json` (new) | Validation events and onset levels from frozen sources (D-04.8) | Inputs pinned before any fit |
+| `docs/data/r1-case-study.json` (new) | R1 output (D-04.10) | Amendment 3 |
 
 ## Open issues and handoff to next stage
 
