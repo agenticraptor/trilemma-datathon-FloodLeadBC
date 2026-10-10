@@ -97,6 +97,11 @@ def build(pool: ConnectionPool, what: str, out: Path) -> int:
             return 0
         if what == "relay":
             res = relay.replay_all(conn)
+        elif what == "trust":
+            from floodlead import trust
+
+            res = trust.build(conn)
+            res["run_id"] = f"trust-{res['generated_at']}"
         elif what == "catalogue":
             res = {"nooksack": catalogue.nooksack(conn), "bc": catalogue.bc(conn)}
         else:

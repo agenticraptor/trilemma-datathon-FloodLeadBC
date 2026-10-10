@@ -68,7 +68,7 @@ def main(argv: list[str] | None = None) -> int:
     hl = hsub.add_parser("load", help="parse archived downloads into the history tables")
     hl.add_argument("what", choices=["peaks", "daily", "nws", "rain"])
     hb = hsub.add_parser("build", help="build a derived product from the history tables")
-    hb.add_argument("what", choices=["scorecard", "relay", "catalogue", "datasets"])
+    hb.add_argument("what", choices=["scorecard", "relay", "catalogue", "datasets", "trust"])
     hb.add_argument("--out", default="/srv/floodlead/datasets", help="output directory (datasets, json outputs)")
     hsub.add_parser("typical-peaks", help="compute the typical yearly peak per BC station (with datum checks)")
     fb = sub.add_parser("feedback", help="read the in-app feedback (decrypted only here, on the VM)")
