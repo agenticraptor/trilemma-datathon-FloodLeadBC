@@ -195,6 +195,33 @@ The relay (trust table) and the official scorecard already stand on their own; t
 - **T6 "met"** uses the point skill (> 0 on both scores), with the year-bootstrap interval shown beside it.
 - **Isotonic calibration:** if the leave-one-validation-year-out check on ≥ 148 ft within 24 h lowers the Brier score, isotonic maps are fitted on the pooled validation predictions for the **148 ft** probabilities at 12, 24 and 48 h. Otherwise everything stays raw. The 150-ft probabilities always stay raw: development has 0 events there, so an isotonic map would set them to 0. Overflow probabilities stay raw.
 
+### D-04.10 — R1, the AI-rainfall case study: one event, descriptive (Oct 10, 03:30–03:40 UTC)
+
+- **Run as fixed in amendment 3, with no new API calls.**
+  - Forecasts: R0's cached Previous Runs payloads (`/srv/floodlead/datasets/r0/{909,910,1011}.json`, sha256 values in the output).
+  - Truth: the SNOTEL hourly totals from `rain_hourly`, exported with constant bounds (Dec 7–13, 2025) to `/srv/floodlead/datasets/r1/snotel_truth.csv`.
+  - Command: `python3 scripts/r1_case_study.py /srv/floodlead/datasets/r0 /srv/floodlead/datasets/r1/snotel_truth.csv docs/data/r1-case-study.json`.
+- **Windows:** the hours ending 21:00Z Dec 9 … 20:00Z Dec 10 (24 h) and 21:00Z Dec 8 … 20:00Z Dec 10 (48 h), before North Cedarville's minor crossing at 20:15Z. Both sources label an hour by its end.
+- **24 h results.** Forecast ÷ SNOTEL gauge total across the three sites; gauge totals were 81.3, 109.2 and 104.1 mm:
+
+| Model | Day-1 lead | Day-2 lead |
+|---|---|---|
+| ECMWF AIFS (AI) | 0.48–0.70 | 0.45–0.66 |
+| ECMWF IFS | 0.49–0.79 | 0.43–0.69 |
+| GEM HRDPS | 0.95–1.17 | no values (run too short) |
+| NCEP HRRR | 0.99–1.31 | no values (run too short) |
+| NCEP NBM | 0.99–1.28 | 0.49–0.59 |
+
+- **Heaviest-6-h timing errors** in the 24 h window: −4 to +7 h.
+  - In the 48 h window, some models show errors near 36 h. The window holds two bursts (Dec 8 21Z–Dec 9 08Z and Dec 10), and those forecasts put their heaviest 6 h in the other burst.
+- **In plain words:** at the three gauges, the two global 0.25° models (AIFS and IFS) forecast about half to three quarters of the rain that fell in the 24 h before the minor crossing. The kilometre-scale models were close at day 1.
+  - **This is one storm at three gauges: no skill or ranking is claimed.** The label is "one event, descriptive".
+  - Caveats:
+    - SNOTEL gauges under-catch and report in 2.54 mm steps.
+    - AIFS is 6-hourly information. The cache shows 6-hour steps, e.g. 1.1 mm/h held for 6 h.
+    - Sites 910 and 1011 share an ECMWF cell, so their AIFS and IFS values are identical.
+  - Per amendment 3, this changes nothing in the product before Demo Day.
+
 ## Work log
 
 - `19:36` — `git checkout main && git pull` → `8c04afb`; branch `stage-04-model`. The Stage 3 part-2 worktree was removed (its branch is merged). Read the prompt and the inputs above.
@@ -210,6 +237,8 @@ The relay (trust table) and the official scorecard already stand on their own; t
   - launched 03:16:37Z into `/srv/floodlead/models/dev-20261010T0316/`.
 
 - `20:16–20:25` — Scoring module and tests (`3d99776`); D-04.9 written before any development result.
+
+- `20:25–20:40` — R1 (D-04.10) from the R0 cache: 0 API calls, output `docs/data/r1-case-study.json`. Track record at 03:23Z: 32 issuances, 0 gaps; the 03:15 issuance took 101.6 s (written 03:16:42Z).
 
 ## Measurements
 
