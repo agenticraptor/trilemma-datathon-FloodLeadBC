@@ -748,6 +748,26 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - Impact: none on any count. That episode is excluded by rule (D-03.23), and the onset of each later episode is unaffected.
   - The backfill skips recorded chunks, so a re-fetch needs a forced window: a change to live code, left as an open issue for Stage 4 rather than patched tonight.
 
+### D-03.25 — R0: AI rainfall is testable (Oct 10, 02:05 UTC)
+
+- **Run:** `scripts/r0_availability.py`, one Previous Runs request per SNOTEL site with all 5 models and `precipitation`, `_previous_day1` and `_previous_day2`, Dec 7–12, 2025.
+  - **3 requests (≈ 5 counted calls); no quota refusal.** The responses are cached in `/srv/floodlead/datasets/r0/`; the summary is `docs/data/r0-availability.json`.
+- Non-null hours out of 144 at each of the 3 sites:
+
+  | Model | Lead 0 | Day-1 lead | Day-2 lead |
+  |---|---|---|---|
+  | `ecmwf_aifs025_single` (AIFS, AI) | 144 | **144** | **144** |
+  | `ecmwf_ifs025` | 144 | 144 | 144 |
+  | `gem_hrdps_continental` | 144 | 144 | **0** |
+  | `ncep_hrrr_conus` | 144 | 144 | **0** |
+  | `ncep_nbm_conus` | 144 | 144 | 144 |
+
+- **Result: AI rainfall (AIFS) returns values at fixed day-1 and day-2 leads, so R1 can run in Stage 4.**
+  - HRDPS and HRRR have no day-2 values, so their comparison is day-1 only.
+  - The model names in addendum 2 were accepted as given; no substitution.
+- **Grid note:** Elbow Lake (910) and MF Nooksack (1011) fall in the same ECMWF 0.25° cell (48.75, −122.0), so AIFS and IFS give identical values there. That is effectively 2 ECMWF sample cells, against 3 for HRDPS, HRRR and NBM. This is stated with R1.
+- These are raw availability counts, not a forecast verification.
+
 ## Work log
 
 - `12:42` — `git checkout main && git pull` → `bd3d092`. Branch `stage-03-public`. Read the prompt and the inputs above.

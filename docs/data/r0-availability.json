@@ -1,0 +1,287 @@
+{
+ "requests": 3,
+ "sites": {
+  "909:WA:SNTL Wells Creek": {
+   "grid": [
+    48.75,
+    -121.75,
+    1229.0
+   ],
+   "models": {
+    "ecmwf_aifs025_single": {
+     "precipitation": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 230.8
+     },
+     "precipitation_previous_day1": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 219.6
+     },
+     "precipitation_previous_day2": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 220.6
+     }
+    },
+    "ecmwf_ifs025": {
+     "precipitation": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 217.2
+     },
+     "precipitation_previous_day1": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 238.1
+     },
+     "precipitation_previous_day2": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 229.7
+     }
+    },
+    "gem_hrdps_continental": {
+     "precipitation": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 242.1
+     },
+     "precipitation_previous_day1": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 288.3
+     },
+     "precipitation_previous_day2": {
+      "hours": 144,
+      "non_null": 0,
+      "total_mm": null
+     }
+    },
+    "ncep_hrrr_conus": {
+     "precipitation": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 224.5
+     },
+     "precipitation_previous_day1": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 268.2
+     },
+     "precipitation_previous_day2": {
+      "hours": 144,
+      "non_null": 0,
+      "total_mm": null
+     }
+    },
+    "ncep_nbm_conus": {
+     "precipitation": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 319.7
+     },
+     "precipitation_previous_day1": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 344.2
+     },
+     "precipitation_previous_day2": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 213.9
+     }
+    }
+   }
+  },
+  "910:WA:SNTL Elbow Lake": {
+   "grid": [
+    48.75,
+    -122.0,
+    945.0
+   ],
+   "models": {
+    "ecmwf_aifs025_single": {
+     "precipitation": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 216.4
+     },
+     "precipitation_previous_day1": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 199.3
+     },
+     "precipitation_previous_day2": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 201.4
+     }
+    },
+    "ecmwf_ifs025": {
+     "precipitation": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 177.7
+     },
+     "precipitation_previous_day1": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 206.5
+     },
+     "precipitation_previous_day2": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 189.9
+     }
+    },
+    "gem_hrdps_continental": {
+     "precipitation": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 319.4
+     },
+     "precipitation_previous_day1": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 348.6
+     },
+     "precipitation_previous_day2": {
+      "hours": 144,
+      "non_null": 0,
+      "total_mm": null
+     }
+    },
+    "ncep_hrrr_conus": {
+     "precipitation": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 322.5
+     },
+     "precipitation_previous_day1": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 333.1
+     },
+     "precipitation_previous_day2": {
+      "hours": 144,
+      "non_null": 0,
+      "total_mm": null
+     }
+    },
+    "ncep_nbm_conus": {
+     "precipitation": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 345.8
+     },
+     "precipitation_previous_day1": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 358.9
+     },
+     "precipitation_previous_day2": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 261.7
+     }
+    }
+   }
+  },
+  "1011:WA:SNTL MF Nooksack": {
+   "grid": [
+    48.75,
+    -122.0,
+    1488.0
+   ],
+   "models": {
+    "ecmwf_aifs025_single": {
+     "precipitation": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 216.4
+     },
+     "precipitation_previous_day1": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 199.3
+     },
+     "precipitation_previous_day2": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 201.4
+     }
+    },
+    "ecmwf_ifs025": {
+     "precipitation": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 177.7
+     },
+     "precipitation_previous_day1": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 206.5
+     },
+     "precipitation_previous_day2": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 189.9
+     }
+    },
+    "gem_hrdps_continental": {
+     "precipitation": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 322.4
+     },
+     "precipitation_previous_day1": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 383.6
+     },
+     "precipitation_previous_day2": {
+      "hours": 144,
+      "non_null": 0,
+      "total_mm": null
+     }
+    },
+    "ncep_hrrr_conus": {
+     "precipitation": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 337.7
+     },
+     "precipitation_previous_day1": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 354.9
+     },
+     "precipitation_previous_day2": {
+      "hours": 144,
+      "non_null": 0,
+      "total_mm": null
+     }
+    },
+    "ncep_nbm_conus": {
+     "precipitation": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 346.0
+     },
+     "precipitation_previous_day1": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 364.9
+     },
+     "precipitation_previous_day2": {
+      "hours": 144,
+      "non_null": 144,
+      "total_mm": 232.6
+     }
+    }
+   }
+  }
+ }
+}
