@@ -1,0 +1,1271 @@
+{
+ "generated_at": "2026-10-10T02:02:28Z",
+ "record_start": "2015-11-14T09:15:00Z",
+ "record_years": 10.9,
+ "nrkw1_warning_events": 18,
+ "overflow_episodes": [
+  {
+   "onset": "2015-11-18T06:45:00Z",
+   "end": "2015-11-18T15:30:00Z",
+   "peak_ft": 4.91,
+   "large": false
+  },
+  {
+   "onset": "2017-11-23T19:25:00Z",
+   "end": "2017-11-24T08:40:00Z",
+   "peak_ft": 4.76,
+   "large": false
+  },
+  {
+   "onset": "2020-02-01T16:55:00Z",
+   "end": "2020-02-02T09:55:00Z",
+   "peak_ft": 5.55,
+   "large": true
+  },
+  {
+   "onset": "2021-11-15T02:25:00Z",
+   "end": "2021-11-16T23:40:00Z",
+   "peak_ft": 7.75,
+   "large": true
+  },
+  {
+   "onset": "2021-11-28T22:50:00Z",
+   "end": "2021-11-29T16:55:00Z",
+   "peak_ft": 5.51,
+   "large": true
+  },
+  {
+   "onset": "2025-12-11T00:45:00Z",
+   "end": "2025-12-12T07:15:00Z",
+   "peak_ft": 6.91,
+   "large": true
+  },
+  {
+   "onset": "2026-03-21T01:30:00Z",
+   "end": "2026-03-21T08:00:00Z",
+   "peak_ft": 4.06,
+   "large": false
+  }
+ ],
+ "excluded_episodes": [
+  {
+   "onset": "2015-11-14T09:15:00Z",
+   "peak_ft": 3.84,
+   "reason": "its warning event began before the SR 544 record"
+  }
+ ],
+ "tiers": {
+  "watch": {
+   "alerts": 47,
+   "followed_by_overflow": 8,
+   "followed_by_large": 4,
+   "precision": 0.17,
+   "precision_ci95": [
+    0.076,
+    0.308
+   ],
+   "precision_large": 0.085,
+   "precision_large_ci95": [
+    0.024,
+    0.204
+   ],
+   "missed": [],
+   "list": [
+    {
+     "at": "2015-11-14T14:35:00Z",
+     "label": "FA.A ETN 6 (2015)",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2015-11-14T22:44:00Z",
+     "label": "FA.A ETN 7 (2015)",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": false,
+     "overflow_onset": "2015-11-18T06:45:00Z",
+     "overflow_peak_ft": 4.91,
+     "lead_h": 80.02
+    },
+    {
+     "at": "2015-11-15T05:02:00Z",
+     "label": "FA.A ETN 8 (2015)",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2015-11-15T05:02:00Z",
+     "label": "FA.A ETN 9 (2015)",
+     "daylight": false,
+     "followed_by_overflow": true,
+     "followed_by_large": false,
+     "overflow_onset": "2015-11-18T06:45:00Z",
+     "overflow_peak_ft": 4.91,
+     "lead_h": 73.72
+    },
+    {
+     "at": "2015-12-07T12:30:00Z",
+     "label": "FA.A ETN 10 (2015)",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2016-01-21T19:09:00Z",
+     "label": "FA.A ETN 2 (2016)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2016-01-27T11:22:00Z",
+     "label": "FA.A ETN 3 (2016)",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2016-02-14T23:22:00Z",
+     "label": "FA.A ETN 6 (2016)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2016-10-12T17:53:00Z",
+     "label": "FA.A ETN 12 (2016)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2016-10-14T22:17:00Z",
+     "label": "FA.A ETN 13 (2016)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2017-01-16T23:23:00Z",
+     "label": "FA.A ETN 1 (2017)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2017-02-09T18:01:00Z",
+     "label": "FA.A ETN 2 (2017)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2017-02-14T23:49:00Z",
+     "label": "FA.A ETN 4 (2017)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2017-02-15T19:10:00Z",
+     "label": "FA.A ETN 5 (2017)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2017-11-20T22:22:00Z",
+     "label": "FA.A ETN 6 (2017)",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": false,
+     "overflow_onset": "2017-11-23T19:25:00Z",
+     "overflow_peak_ft": 4.76,
+     "lead_h": 69.05
+    },
+    {
+     "at": "2018-01-28T16:44:00Z",
+     "label": "FA.A ETN 3 (2018)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2018-02-02T21:49:00Z",
+     "label": "FA.A ETN 4 (2018)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2018-11-01T20:57:00Z",
+     "label": "FA.A ETN 8 (2018)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2018-11-03T11:00:00Z",
+     "label": "FA.A ETN 9 (2018)",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2018-11-25T22:01:00Z",
+     "label": "FA.A ETN 10 (2018)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2019-01-01T21:20:00Z",
+     "label": "FA.A ETN 1 (2019)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2019-10-21T23:24:00Z",
+     "label": "FA.A ETN 5 (2019)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2019-12-18T19:20:00Z",
+     "label": "FA.A ETN 6 (2019)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2019-12-31T18:27:00Z",
+     "label": "FA.A ETN 7 (2019)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2020-01-01T06:43:00Z",
+     "label": "FA.A ETN 7 (2020)",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2020-01-06T11:31:00Z",
+     "label": "FA.A ETN 1 (2020)",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2020-01-21T22:26:00Z",
+     "label": "FA.A ETN 4 (2020)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2020-01-29T20:03:00Z",
+     "label": "FA.A ETN 5 (2020)",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2020-02-01T16:55:00Z",
+     "overflow_peak_ft": 5.55,
+     "lead_h": 68.87
+    },
+    {
+     "at": "2020-02-04T19:04:00Z",
+     "label": "FA.A ETN 6 (2020)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2020-12-18T11:12:00Z",
+     "label": "FA.A ETN 10 (2020)",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2021-01-01T19:58:00Z",
+     "label": "FA.A ETN 1 (2021)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2021-01-11T10:39:00Z",
+     "label": "FA.A ETN 2 (2021)",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2021-10-26T22:52:00Z",
+     "label": "FA.A ETN 8 (2021)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2021-11-10T20:56:00Z",
+     "label": "FA.A ETN 11 (2021)",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2021-11-15T02:25:00Z",
+     "overflow_peak_ft": 7.75,
+     "lead_h": 101.48
+    },
+    {
+     "at": "2021-11-25T10:53:00Z",
+     "label": "FA.A ETN 13 (2021)",
+     "daylight": false,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2021-11-28T22:50:00Z",
+     "overflow_peak_ft": 5.51,
+     "lead_h": 83.95
+    },
+    {
+     "at": "2021-11-29T23:29:00Z",
+     "label": "FA.A ETN 14 (2021)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2022-01-11T12:33:00Z",
+     "label": "FA.A ETN 2 (2022)",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2022-02-27T20:41:00Z",
+     "label": "FA.A ETN 5 (2022)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2022-11-03T23:01:00Z",
+     "label": "FA.A ETN 9 (2022)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2022-12-24T22:42:00Z",
+     "label": "FA.A ETN 10 (2022)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2022-12-27T07:03:00Z",
+     "label": "FA.A ETN 11 (2022)",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2023-12-04T00:52:00Z",
+     "label": "FA.A ETN 7 (2023)",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2025-10-31T20:34:00Z",
+     "label": "FA.A ETN 9 (2025)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2025-12-06T00:10:00Z",
+     "label": "FA.A ETN 12 (2025)",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2025-12-11T00:45:00Z",
+     "overflow_peak_ft": 6.91,
+     "lead_h": 120.58
+    },
+    {
+     "at": "2025-12-13T22:18:00Z",
+     "label": "FA.A ETN 13 (2025)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2026-01-12T22:52:00Z",
+     "label": "FA.A ETN 4 (2026)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2026-03-16T20:21:00Z",
+     "label": "FA.A ETN 9 (2026)",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": false,
+     "overflow_onset": "2026-03-21T01:30:00Z",
+     "overflow_peak_ft": 4.06,
+     "lead_h": 101.15
+    }
+   ],
+   "alerts_per_year": 4.31
+  },
+  "heads_up": {
+   "alerts": 18,
+   "followed_by_overflow": 7,
+   "followed_by_large": 4,
+   "precision": 0.389,
+   "precision_ci95": [
+    0.173,
+    0.643
+   ],
+   "precision_large": 0.222,
+   "precision_large_ci95": [
+    0.064,
+    0.476
+   ],
+   "missed": [],
+   "list": [
+    {
+     "at": "2015-11-17T23:40:00Z",
+     "label": "NRKW1 ETN 79 (WY2016) NEW",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": false,
+     "overflow_onset": "2015-11-18T06:45:00Z",
+     "overflow_peak_ft": 4.91,
+     "lead_h": 7.08
+    },
+    {
+     "at": "2015-12-08T18:45:00Z",
+     "label": "NRKW1 ETN 107 (WY2016) NEW",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2016-01-28T17:23:00Z",
+     "label": "NRKW1 ETN 9 (WY2016) NEW",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2017-10-19T04:23:00Z",
+     "label": "NRKW1 ETN 23 (WY2018) NEW",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2017-11-23T10:09:00Z",
+     "label": "NRKW1 ETN 60 (WY2018) NEW",
+     "daylight": false,
+     "followed_by_overflow": true,
+     "followed_by_large": false,
+     "overflow_onset": "2017-11-23T19:25:00Z",
+     "overflow_peak_ft": 4.76,
+     "lead_h": 9.27
+    },
+    {
+     "at": "2018-02-05T00:28:00Z",
+     "label": "NRKW1 ETN 12 (WY2018) NEW",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2018-11-02T14:29:00Z",
+     "label": "NRKW1 ETN 19 (WY2019) NEW",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2018-11-27T06:03:00Z",
+     "label": "NRKW1 ETN 76 (WY2019) NEW",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2020-02-01T04:55:00Z",
+     "label": "NRKW1 ETN 28 (WY2020) NEW",
+     "daylight": false,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2020-02-01T16:55:00Z",
+     "overflow_peak_ft": 5.55,
+     "lead_h": 12.0
+    },
+    {
+     "at": "2021-10-29T07:14:00Z",
+     "label": "NRKW1 ETN 43 (WY2022) NEW",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2021-11-14T19:50:00Z",
+     "label": "NRKW1 ETN 78 (WY2022) NEW",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2021-11-15T02:25:00Z",
+     "overflow_peak_ft": 7.75,
+     "lead_h": 6.58
+    },
+    {
+     "at": "2021-11-28T09:29:00Z",
+     "label": "NRKW1 ETN 88 (WY2022) NEW",
+     "daylight": false,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2021-11-28T22:50:00Z",
+     "overflow_peak_ft": 5.51,
+     "lead_h": 13.35
+    },
+    {
+     "at": "2022-11-05T06:57:00Z",
+     "label": "NRKW1 ETN 70 (WY2023) NEW",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2022-12-26T19:58:00Z",
+     "label": "NRKW1 ETN 77 (WY2023) NEW",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2023-12-05T19:04:00Z",
+     "label": "NRKW1 ETN 28 (WY2024) NEW",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2024-01-28T15:49:00Z",
+     "label": "NRKW1 ETN 4 (WY2024) NEW",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2025-12-10T06:17:00Z",
+     "label": "NRKW1 ETN 47 (WY2026) NEW",
+     "daylight": false,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2025-12-11T00:45:00Z",
+     "overflow_peak_ft": 6.91,
+     "lead_h": 18.47
+    },
+    {
+     "at": "2026-03-20T23:16:00Z",
+     "label": "NRKW1 ETN 33 (WY2026) NEW",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": false,
+     "overflow_onset": "2026-03-21T01:30:00Z",
+     "overflow_peak_ft": 4.06,
+     "lead_h": 2.23
+    }
+   ],
+   "alerts_per_year": 1.65
+  },
+  "prepare": {
+   "alerts": 8,
+   "followed_by_overflow": 6,
+   "followed_by_large": 4,
+   "precision": 0.75,
+   "precision_ci95": [
+    0.349,
+    0.968
+   ],
+   "precision_large": 0.5,
+   "precision_large_ci95": [
+    0.157,
+    0.843
+   ],
+   "missed": [
+    {
+     "onset": "2026-03-21T01:30:00Z",
+     "peak_ft": 4.06
+    }
+   ],
+   "list": [
+    {
+     "at": "2015-11-17T23:40:00Z",
+     "label": "NRKW1 ETN 79 (WY2016) first severity 2 (NEW)",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": false,
+     "overflow_onset": "2015-11-18T06:45:00Z",
+     "overflow_peak_ft": 4.91,
+     "lead_h": 7.08
+    },
+    {
+     "at": "2015-12-08T18:45:00Z",
+     "label": "NRKW1 ETN 107 (WY2016) first severity 2 (NEW)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2017-11-23T16:22:00Z",
+     "label": "NRKW1 ETN 60 (WY2018) first severity 2 (EXT)",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": false,
+     "overflow_onset": "2017-11-23T19:25:00Z",
+     "overflow_peak_ft": 4.76,
+     "lead_h": 3.05
+    },
+    {
+     "at": "2018-11-27T06:03:00Z",
+     "label": "NRKW1 ETN 76 (WY2019) first severity 2 (NEW)",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2020-02-01T12:54:00Z",
+     "label": "NRKW1 ETN 28 (WY2020) first severity 2 (EXT)",
+     "daylight": false,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2020-02-01T16:55:00Z",
+     "overflow_peak_ft": 5.55,
+     "lead_h": 4.02
+    },
+    {
+     "at": "2021-11-14T19:50:00Z",
+     "label": "NRKW1 ETN 78 (WY2022) first severity 2 (NEW)",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2021-11-15T02:25:00Z",
+     "overflow_peak_ft": 7.75,
+     "lead_h": 6.58
+    },
+    {
+     "at": "2021-11-28T09:29:00Z",
+     "label": "NRKW1 ETN 88 (WY2022) first severity 2 (NEW)",
+     "daylight": false,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2021-11-28T22:50:00Z",
+     "overflow_peak_ft": 5.51,
+     "lead_h": 13.35
+    },
+    {
+     "at": "2025-12-10T06:17:00Z",
+     "label": "NRKW1 ETN 47 (WY2026) first severity 2 (NEW)",
+     "daylight": false,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2025-12-11T00:45:00Z",
+     "overflow_peak_ft": 6.91,
+     "lead_h": 18.47
+    }
+   ],
+   "alerts_per_year": 0.73
+  },
+  "everson_overflow_fa_w": {
+   "alerts": 7,
+   "followed_by_overflow": 4,
+   "followed_by_large": 3,
+   "precision": 0.571,
+   "precision_ci95": [
+    0.184,
+    0.901
+   ],
+   "precision_large": 0.429,
+   "precision_large_ci95": [
+    0.099,
+    0.816
+   ],
+   "missed": [
+    {
+     "onset": "2015-11-18T06:45:00Z",
+     "peak_ft": 4.91
+    },
+    {
+     "onset": "2017-11-23T19:25:00Z",
+     "peak_ft": 4.76
+    },
+    {
+     "onset": "2020-02-01T16:55:00Z",
+     "peak_ft": 5.55
+    }
+   ],
+   "list": [
+    {
+     "at": "2021-11-14T23:40:00Z",
+     "label": "FA.W ETN 2 (2021)",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2021-11-15T02:25:00Z",
+     "overflow_peak_ft": 7.75,
+     "lead_h": 2.75
+    },
+    {
+     "at": "2021-11-16T03:20:00Z",
+     "label": "FA.W ETN 3 (2021)",
+     "daylight": false,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2021-11-28T22:51:00Z",
+     "label": "FA.W ETN 4 (2021)",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2021-11-28T22:50:00Z",
+     "overflow_peak_ft": 5.51,
+     "lead_h": -0.02
+    },
+    {
+     "at": "2024-01-28T20:17:00Z",
+     "label": "FA.W ETN 1 (2024)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2024-01-29T00:03:00Z",
+     "label": "FA.W ETN 2 (2024)",
+     "daylight": true,
+     "followed_by_overflow": false,
+     "followed_by_large": false,
+     "overflow_onset": null,
+     "overflow_peak_ft": null,
+     "lead_h": null
+    },
+    {
+     "at": "2025-12-10T18:26:00Z",
+     "label": "FA.W ETN 1 (2025)",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2025-12-11T00:45:00Z",
+     "overflow_peak_ft": 6.91,
+     "lead_h": 6.32
+    },
+    {
+     "at": "2026-03-21T00:12:00Z",
+     "label": "FA.W ETN 1 (2026)",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": false,
+     "overflow_onset": "2026-03-21T01:30:00Z",
+     "overflow_peak_ft": 4.06,
+     "lead_h": 1.3
+    }
+   ],
+   "alerts_per_year": 0.64
+  },
+  "move_now_5.0ft": {
+   "alerts": 4,
+   "followed_by_overflow": 4,
+   "followed_by_large": 4,
+   "precision": 1.0,
+   "precision_ci95": [
+    0.398,
+    1.0
+   ],
+   "precision_large": 1.0,
+   "precision_large_ci95": [
+    0.398,
+    1.0
+   ],
+   "missed": [
+    {
+     "onset": "2015-11-18T06:45:00Z",
+     "peak_ft": 4.91
+    },
+    {
+     "onset": "2017-11-23T19:25:00Z",
+     "peak_ft": 4.76
+    },
+    {
+     "onset": "2026-03-21T01:30:00Z",
+     "peak_ft": 4.06
+    }
+   ],
+   "list": [
+    {
+     "at": "2020-02-01T17:45:00Z",
+     "label": "SR 544 >= 5.0 ft",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2020-02-01T16:55:00Z",
+     "overflow_peak_ft": 5.55,
+     "lead_h": -0.83
+    },
+    {
+     "at": "2021-11-15T04:00:00Z",
+     "label": "SR 544 >= 5.0 ft",
+     "daylight": false,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2021-11-15T02:25:00Z",
+     "overflow_peak_ft": 7.75,
+     "lead_h": -1.58
+    },
+    {
+     "at": "2021-11-29T00:10:00Z",
+     "label": "SR 544 >= 5.0 ft",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2021-11-28T22:50:00Z",
+     "overflow_peak_ft": 5.51,
+     "lead_h": -1.33
+    },
+    {
+     "at": "2025-12-11T04:15:00Z",
+     "label": "SR 544 >= 5.0 ft",
+     "daylight": false,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2025-12-11T00:45:00Z",
+     "overflow_peak_ft": 6.91,
+     "lead_h": -3.5
+    }
+   ],
+   "alerts_per_year": 0.37
+  },
+  "move_now_4.0ft": {
+   "alerts": 7,
+   "followed_by_overflow": 7,
+   "followed_by_large": 4,
+   "precision": 1.0,
+   "precision_ci95": [
+    0.59,
+    1.0
+   ],
+   "precision_large": 0.571,
+   "precision_large_ci95": [
+    0.184,
+    0.901
+   ],
+   "missed": [],
+   "list": [
+    {
+     "at": "2015-11-18T06:45:00Z",
+     "label": "SR 544 >= 4.0 ft",
+     "daylight": false,
+     "followed_by_overflow": true,
+     "followed_by_large": false,
+     "overflow_onset": "2015-11-18T06:45:00Z",
+     "overflow_peak_ft": 4.91,
+     "lead_h": 0.0
+    },
+    {
+     "at": "2017-11-23T19:30:00Z",
+     "label": "SR 544 >= 4.0 ft",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": false,
+     "overflow_onset": "2017-11-23T19:25:00Z",
+     "overflow_peak_ft": 4.76,
+     "lead_h": -0.08
+    },
+    {
+     "at": "2020-02-01T16:55:00Z",
+     "label": "SR 544 >= 4.0 ft",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2020-02-01T16:55:00Z",
+     "overflow_peak_ft": 5.55,
+     "lead_h": 0.0
+    },
+    {
+     "at": "2021-11-15T02:30:00Z",
+     "label": "SR 544 >= 4.0 ft",
+     "daylight": false,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2021-11-15T02:25:00Z",
+     "overflow_peak_ft": 7.75,
+     "lead_h": -0.08
+    },
+    {
+     "at": "2021-11-28T23:10:00Z",
+     "label": "SR 544 >= 4.0 ft",
+     "daylight": true,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2021-11-28T22:50:00Z",
+     "overflow_peak_ft": 5.51,
+     "lead_h": -0.33
+    },
+    {
+     "at": "2025-12-11T01:15:00Z",
+     "label": "SR 544 >= 4.0 ft",
+     "daylight": false,
+     "followed_by_overflow": true,
+     "followed_by_large": true,
+     "overflow_onset": "2025-12-11T00:45:00Z",
+     "overflow_peak_ft": 6.91,
+     "lead_h": -0.5
+    },
+    {
+     "at": "2026-03-21T02:45:00Z",
+     "label": "SR 544 >= 4.0 ft",
+     "daylight": false,
+     "followed_by_overflow": true,
+     "followed_by_large": false,
+     "overflow_onset": "2026-03-21T01:30:00Z",
+     "overflow_peak_ft": 4.06,
+     "lead_h": -1.25
+    }
+   ],
+   "alerts_per_year": 0.64
+  }
+ },
+ "abbotsford_2021_2025": {
+  "2021": {
+   "watch": {
+    "at": "2021-11-10T20:56:00Z",
+    "daylight": true,
+    "before_first_alert_h": [
+     107.6,
+     107.6
+    ],
+    "before_first_order_h": [
+     124.1,
+     127.1
+    ]
+   },
+   "heads_up": {
+    "at": "2021-11-14T19:50:00Z",
+    "daylight": true,
+    "before_first_alert_h": [
+     12.7,
+     12.7
+    ],
+    "before_first_order_h": [
+     29.2,
+     32.2
+    ]
+   },
+   "prepare": {
+    "at": "2021-11-14T19:50:00Z",
+    "daylight": true,
+    "before_first_alert_h": [
+     12.7,
+     12.7
+    ],
+    "before_first_order_h": [
+     29.2,
+     32.2
+    ]
+   },
+   "everson_overflow_fa_w": {
+    "at": "2021-11-14T23:40:00Z",
+    "daylight": true,
+    "before_first_alert_h": [
+     8.8,
+     8.8
+    ],
+    "before_first_order_h": [
+     25.3,
+     28.3
+    ]
+   },
+   "move_now_5.0ft": {
+    "at": "2021-11-15T04:00:00Z",
+    "daylight": false,
+    "before_first_alert_h": [
+     4.5,
+     4.5
+    ],
+    "before_first_order_h": [
+     21.0,
+     24.0
+    ]
+   },
+   "move_now_4.0ft": {
+    "at": "2021-11-15T02:30:00Z",
+    "daylight": false,
+    "before_first_alert_h": [
+     6.0,
+     6.0
+    ],
+    "before_first_order_h": [
+     22.5,
+     25.5
+    ]
+   }
+  },
+  "2025": {
+   "watch": {
+    "at": "2025-12-06T00:10:00Z",
+    "daylight": true,
+    "before_first_alert_h": [
+     119.8,
+     121.2
+    ],
+    "before_first_order_h": [
+     126.8,
+     126.8
+    ]
+   },
+   "heads_up": {
+    "at": "2025-12-10T06:17:00Z",
+    "daylight": false,
+    "before_first_alert_h": [
+     17.7,
+     19.1
+    ],
+    "before_first_order_h": [
+     24.7,
+     24.7
+    ]
+   },
+   "prepare": {
+    "at": "2025-12-10T06:17:00Z",
+    "daylight": false,
+    "before_first_alert_h": [
+     17.7,
+     19.1
+    ],
+    "before_first_order_h": [
+     24.7,
+     24.7
+    ]
+   },
+   "everson_overflow_fa_w": {
+    "at": "2025-12-10T18:26:00Z",
+    "daylight": true,
+    "before_first_alert_h": [
+     5.6,
+     6.9
+    ],
+    "before_first_order_h": [
+     12.6,
+     12.6
+    ]
+   },
+   "move_now_5.0ft": {
+    "at": "2025-12-11T04:15:00Z",
+    "daylight": false,
+    "before_first_alert_h": [
+     -4.2,
+     -2.9
+    ],
+    "before_first_order_h": [
+     2.8,
+     2.8
+    ]
+   },
+   "move_now_4.0ft": {
+    "at": "2025-12-11T01:15:00Z",
+    "daylight": false,
+    "before_first_alert_h": [
+     -1.2,
+     0.1
+    ],
+    "before_first_order_h": [
+     5.8,
+     5.8
+    ]
+   }
+  }
+ },
+ "labels": {
+  "relay_v2": "descriptive and in-sample: the Prepare tier and the 5.0 ft Move-now level were chosen after seeing every year, including the held-out ones",
+  "move_now_5.0ft": "chosen after seeing the data",
+  "move_now_4.0ft": "the NWS minor stage at SR 544; not chosen from the data"
+ },
+ "method": "Relay v2 and the trust table (protocol amendment 2; supervisor addendum 3; D-03.23).\n\nCounting rules are fixed in docs/evaluation-protocol.md, amendment 2, before these numbers were computed:\n- record period from the first SR 544 record; alerts before it and overflow episodes whose warning event began before\n  it are not counted;\n- overflow episode: SR 544 records before 2026-10-01 (then readings >= 3.6 ft), split at gaps > 48 h; onset = first\n  record, peak = max, large = peak >= 5.0 ft;\n- an alert's window: its event's first product - 12 h to the event's end (latest VTEC end, else its last product)\n  + 24 h; \"followed by an overflow\" = an onset in that window; lead = onset - alert time;\n- missed = an overflow episode with no alert of that tier whose window contains its onset;\n- precision with an exact Clopper-Pearson 95 % interval; day/night at Abbotsford.\nRelay v2 is descriptive and in-sample: Prepare and the 5.0 ft level were chosen after seeing every year.",
+ "run_id": "trust-2026-10-10T02:02:28Z"
+}

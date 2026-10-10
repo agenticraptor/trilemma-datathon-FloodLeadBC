@@ -213,7 +213,7 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - The rain load's first run failed after 2.9 s, with nothing written: `relation "_stage" already exists`. The same transaction bug as the CRPS recompute: without autocommit, the per-payload `ON COMMIT DROP` temp table outlived each payload.
     - Fixed with autocommit per payload. `test_load_two_overlapping_payloads` **fails without the fix and passes with it**.
     - Rerun: `{'eccc-climate': 1007776, 'ncei': 188757, 'openmeteo-archive': 660264, 'openmeteo-histfc': 475008, 'openmeteo-prevruns': 264576, 'snotel': 587425}` rows in 450.5 s. The Open-Meteo reanalysis download was still running, so it is reloaded at the end.
-  - Relay tiers, 13 North Cedarville minor-stage events since the SR 544 gauge began (7 with overflow). The prepare window was first 7 days, which let in a warning from an earlier event (a 106.8 h "lead"). It is now 72 h before the minor crossing, as in the catalogue:
+  - **Superseded: addendum 1 examples, kept for the record (relay v1, counted by minor-stage event; see D-03.23 for relay v2, counted by alert).** Relay tiers, 13 North Cedarville minor-stage events since the SR 544 gauge began (7 with overflow). The prepare window was first 7 days, which let in a warning from an earlier event (a 106.8 h "lead"). It is now 72 h before the minor crossing, as in the catalogue:
 
     | Tier | Fired | Hits / overflow events | False alarms | POD | FAR | Lead before overflow onset (h) | Daylight share |
     |---|---|---|---|---|---|---|---|
@@ -248,7 +248,7 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - `typical_peaks`: 256 kB;
   - `nws_products` 14 MB, `nws_vtec` 9.1 MB.
 
-- **Relay tiers against Abbotsford and the 7-hour rule** (`relay.json`). Abbotsford's times come from the status-quo review: reconstructed, with ranges, PST shown as UTC.
+- **Superseded: addendum 1 examples, kept for the record.** **Relay tiers against Abbotsford and the 7-hour rule** (`relay.json`). Abbotsford's times come from the status-quo review: reconstructed, with ranges, PST shown as UTC.
 
   | | Nov 2021 | Dec 2025 |
   |---|---|---|
@@ -674,6 +674,64 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - the Open-Meteo quota rule.
   - R1 and R2 are Stage 4 work; R3 is optional.
 - **sha256 of the protocol after amendment 3: `c78bed9fc7af5b04ef8df0c0f273f4ed31776c2ab8bb532d353a62f1bc46ec7c`.**
+
+### D-03.23 — Relay v2 and the trust table, counted by alert; the supervisor's count reproduced (Oct 10, 02:05–02:15 UTC)
+
+- **Code:**
+  - `src/floodlead/trust.py` (`floodlead history build trust`) implements amendment 2's rules, written before any number was computed.
+  - Tests in `tests/test_trust.py` (8): Clopper–Pearson against published intervals (7/18, 6/8, 4/8, 4/4, 5/5 → 0.48, 3/3 → 0.29), episode splitting, alert scoring.
+  - Output `docs/data/trust-v2.json` (sha256 `4d10b858…7202`); `run_id = trust-<generated_at>`.
+- **Record:** SR 544 from 2015-11-14 09:15Z, 10.9 years; 18 NRKW1 warning events.
+  - Overflow episodes: 7, of which 4 are ≥ 5 ft:
+
+    | Onset | Peak (ft) |
+    |---|---|
+    | 2015-11-18 | 4.91 |
+    | 2017-11-23 | 4.76 |
+    | 2020-02-01 | 5.55 |
+    | 2021-11-15 | 7.75 |
+    | 2021-11-28 | 5.51 |
+    | 2025-12-11 | 6.91 |
+    | 2026-03-21 | 4.06 |
+
+  - Excluded, per amendment 2: the 2015-11-14 episode (3.84 ft), whose warning (ETN 55) began 13 h before the record.
+
+  | Tier | Alerts | Followed by any overflow (precision, 95 % CI) | By a ≥ 5 ft overflow | Overflows missed | Leads before onset of the large ones (h) |
+  |---|---|---|---|---|---|
+| Watch (NWS flood watch naming Whatcom) | 47 (4.31/yr) | 8 (17 %, 8–31 %) | 4 (8 %, 2–20 %) | 0 | +68.9, +84.0, +101.5, +120.6 |
+| Heads-up (NRKW1 warning, NEW) | 18 (1.65/yr) | 7 (39 %, 17–64 %) | 4 (22 %, 6–48 %) | 0 | +6.6, +12.0, +13.3, +18.5 |
+| Prepare (first NRKW1 product, severity ≥ 2) | 8 (0.73/yr) | 6 (75 %, 35–97 %) | 4 (50 %, 16–84 %) | 1 | +4.0, +6.6, +13.3, +18.5 |
+| Move now, SR 544 ≥ 5.0 ft (chosen after seeing the data) | 4 (0.37/yr) | 4 (100 %, 40–100 %) | 4 (100 %, 40–100 %) | 3 | -3.5, -1.6, -1.3, -0.8 |
+| Move now, SR 544 ≥ 4.0 ft (NWS minor stage; not chosen from the data) | 7 (0.64/yr) | 7 (100 %, 59–100 %) | 4 (57 %, 18–90 %) | 0 | -0.5, -0.3, -0.1, +0.0 |
+| Everson-overflow areal warning (FA.W), descriptive | 7 (0.64/yr) | 4 (57 %, 18–90 %) | 3 (43 %, 10–82 %) | 3 | -0.0, +2.8, +6.3 |
+
+  - **Relay v2 is descriptive and in-sample.** The Prepare tier and the 5.0 ft level were chosen after seeing every year (amendment 2).
+  - A negative Move-now lead means the reading came after the onset, by construction.
+  - Every alert, with its outcome (✔ followed by an overflow, ✘ not; lead before onset; night at Abbotsford):
+    - **Heads-up (NRKW1 warning, NEW):** 2015-11-17 23:40Z ✔ (+7.1 h); 2015-12-08 18:45Z ✘; 2016-01-28 17:23Z ✘; 2017-10-19 04:23Z ✘ night; 2017-11-23 10:09Z ✔ (+9.3 h) night; 2018-02-05 00:28Z ✘; 2018-11-02 14:29Z ✘ night; 2018-11-27 06:03Z ✘ night; 2020-02-01 04:55Z ✔ large (+12.0 h) night; 2021-10-29 07:14Z ✘ night; 2021-11-14 19:50Z ✔ large (+6.6 h); 2021-11-28 09:29Z ✔ large (+13.3 h) night; 2022-11-05 06:57Z ✘ night; 2022-12-26 19:58Z ✘; 2023-12-05 19:04Z ✘; 2024-01-28 15:49Z ✘; 2025-12-10 06:17Z ✔ large (+18.5 h) night; 2026-03-20 23:16Z ✔ (+2.2 h)
+    - **Prepare (first NRKW1 product, severity ≥ 2):** 2015-11-17 23:40Z ✔ (+7.1 h); 2015-12-08 18:45Z ✘; 2017-11-23 16:22Z ✔ (+3.0 h); 2018-11-27 06:03Z ✘ night; 2020-02-01 12:54Z ✔ large (+4.0 h) night; 2021-11-14 19:50Z ✔ large (+6.6 h); 2021-11-28 09:29Z ✔ large (+13.3 h) night; 2025-12-10 06:17Z ✔ large (+18.5 h) night
+    - **Move now, SR 544 ≥ 5.0 ft (chosen after seeing the data):** 2020-02-01 17:45Z ✔ large (-0.8 h); 2021-11-15 04:00Z ✔ large (-1.6 h) night; 2021-11-29 00:10Z ✔ large (-1.3 h); 2025-12-11 04:15Z ✔ large (-3.5 h) night
+    - **Move now, SR 544 ≥ 4.0 ft (NWS minor stage; not chosen from the data):** 2015-11-18 06:45Z ✔ (+0.0 h) night; 2017-11-23 19:30Z ✔ (-0.1 h); 2020-02-01 16:55Z ✔ large (+0.0 h); 2021-11-15 02:30Z ✔ large (-0.1 h) night; 2021-11-28 23:10Z ✔ large (-0.3 h); 2025-12-11 01:15Z ✔ large (-0.5 h) night; 2026-03-21 02:45Z ✔ (-1.2 h) night
+    - **Everson-overflow areal warning (FA.W), descriptive:** 2021-11-14 23:40Z ✔ large (+2.8 h); 2021-11-16 03:20Z ✘ night; 2021-11-28 22:51Z ✔ large (-0.0 h); 2024-01-28 20:17Z ✘; 2024-01-29 00:03Z ✘; 2025-12-10 18:26Z ✔ large (+6.3 h); 2026-03-21 00:12Z ✔ (+1.3 h)
+  - **Rule artefact (reported, not adjusted):** a warning re-issued while an overflow is under way counts ✘, because the onset precedes its window. Example: FA.W ETN 3, 03:20Z Nov 16, 2021, issued while the Nov 15 overflow was still flowing.
+  - The FA.W row matches on the product text. The first segment-head match missed the 10:26 AM PST Dec 10, 2025 warning; it was fixed and rerun. In 2021 (twice) and 2025, the Everson-overflow warning came after Prepare, as addendum 3 says.
+- **Reproduction of the supervisor's count (addendum 3, section 2):**
+
+  | Item | Supervisor | Worker (`trust-v2.json`) |
+  |---|---|---|
+  | NRKW1 warning events, Nov 14, 2015 → Oct 9, 2026 | 18 (10.9 years) | 18 (10.9 years) |
+  | Overflows at SR 544 / ≥ 5 ft | 7 / 4 | 7 / 4 (plus 1 record-start episode excluded by rule) |
+  | Heads-up: alerts; followed by overflow; by ≥ 5 ft | 18; 7 (39 %, 17–64 %); 4 (22 %) | 18; 7 (39 %, 17–64 %); 4 (22 %, 6–48 %) |
+  | Prepare: alerts; followed by overflow; by ≥ 5 ft | 8; 6 (75 %, 35–97 %); 4 (50 %, 16–84 %) | 8; 6 (75 %, 35–97 %); 4 (50 %, 16–84 %) |
+  | Prepare: leads before the 4 large onsets | 4.0, 6.6, 13.3, 18.5 h | +4.0, +6.6, +13.3, +18.5 h |
+  | Prepare: alerts with no overflow | Dec 2015, Nov 2018 | 2015-12-08, 2018-11-27 |
+  | Move now 5.0 ft | 4 of 4 (40–100 %), 0.8–3.5 h after onset | 4 of 4 (40–100 %), 0.8–3.5 h after onset |
+  | Move now 4.0 ft | 7 alerts, 4 large | 7 alerts, 4 large |
+
+  **Every number agrees.** The only rule I had to state that the supervisor did not is the exclusion of the record-start episode. Their "from Nov 14, 2015" count implies the same.
+- **2021 and 2025 against Abbotsford (2 events only, amendment 1 A8):**
+  - Prepare came 12.7 h (2021, daylight) and 17.7–19.1 h (2025, night) before the City's first alert.
+  - Move now at 5.0 ft came 4.5 h before the alert in 2021, but 2.9–4.2 h after it in 2025.
 
 ## Work log
 
