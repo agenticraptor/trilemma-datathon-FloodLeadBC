@@ -675,7 +675,7 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
   - R1 and R2 are Stage 4 work; R3 is optional.
 - **sha256 of the protocol after amendment 3: `c78bed9fc7af5b04ef8df0c0f273f4ed31776c2ab8bb532d353a62f1bc46ec7c`.**
 
-### D-03.23 — Relay v2 and the trust table, counted by alert; the supervisor's count reproduced (Oct 10, 02:05–02:15 UTC)
+### D-03.23 — Relay v2 and the trust table, counted by alert; the supervisor's count reproduced (Oct 10, 02:00–02:03 UTC)
 
 - **Code:**
   - `src/floodlead/trust.py` (`floodlead history build trust`) implements amendment 2's rules, written before any number was computed.
@@ -732,6 +732,21 @@ Part 2 (PR 2, `stage-03-history`, Oct 10 ~12:00 UTC):
 - **2021 and 2025 against Abbotsford (2 events only, amendment 1 A8):**
   - Prepare came 12.7 h (2021, daylight) and 17.7–19.1 h (2025, night) before the City's first alert.
   - Move now at 5.0 ft came 4.5 h before the alert in 2021, but 2.9–4.2 h after it in 2025.
+
+### D-03.24 — Archive completeness test, and the SR 544 record start (addendum 3, sections 3 and 6; Oct 10, 02:04 UTC)
+
+- **Whole years:**
+  - every IEM task is one calendar year (`sdate` YYYY-01-01, `edate` YYYY+1-01-01);
+  - production `history_downloads` holds all 23 years (2004–2026), `ok`, for each of FLWSEW, FLSSEW, FFASEW and ESFSEW, with 0 failures.
+- **Test** (`tests/test_nws_archive.py`):
+  - the fixture `tests/fixtures/iem_nrkw1_2015_2026.txt` holds every archived product naming NRKW1 from 2015-11-14 to 2026-10-09: 75 products, 290 kB, cut from the whole-year downloads;
+  - the test asserts **all 18 warning events**, with the supervisor's anchors: ETN 78 at 19:50Z Nov 14, 2021; **ETN 88 at 09:29Z (1:29 AM PST) Nov 28, 2021**, the event a partial-year pull once missed; ETN 47 at 06:17Z Dec 10, 2025;
+  - and whole-year coverage without gaps, for all four PILs.
+- **SR 544 record start (§6):**
+  - USGS NWIS IV gives the first records at 00:15 PST, 2015-11-14 (08:15Z): 3.59, 3.73, 3.80 and 3.83 ft, at 08:15–09:00Z.
+  - **Our backfill lacks those four**, and starts at 09:15Z (3.84 ft), although its chunk is recorded from 08:15Z with 45 rows. The cause is not yet known.
+  - Impact: none on any count. That episode is excluded by rule (D-03.23), and the onset of each later episode is unaffected.
+  - The backfill skips recorded chunks, so a re-fetch needs a forced window: a change to live code, left as an open issue for Stage 4 rather than patched tonight.
 
 ## Work log
 
