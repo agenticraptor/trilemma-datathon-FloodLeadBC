@@ -1,5 +1,8 @@
 FROM python:3.12.15-slim-bookworm
 
+# libgomp1: OpenMP runtime needed by LightGBM (Stage 4 model training)
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
+
 COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /uvx /bin/
 
 ENV UV_COMPILE_BYTECODE=1 \
