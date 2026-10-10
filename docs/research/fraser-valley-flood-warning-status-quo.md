@@ -1,4 +1,11 @@
 > **About this document:** an AI-assisted research report (Claude, Oct 9, 2026) answering "what do Sumas Prairie farmers actually have today, how did warnings perform in 2021 and 2025, and where can FloodLead honestly help?". Every claim links to its source. The supervisor re-checked the key NWS warning times and crest forecasts against the archived warning texts (IEM `FLWSEW`): first North Cedarville warning 11:50 AM PST Nov 14, 2021 (crest forecast 148.9 ft) and 10:17 PM PST Dec 9, 2025 (148.4 ft); upgrades to major 2:07 AM PST Nov 15, 2021 and 5:32 PM PST Dec 10, 2025. Proposed targets in the last section are hypotheses, not yet validated with farmers.
+>
+> **Correction, Oct 10, 2026 (supervisor).** This report describes the official crest error as "systematic (low above flood stage)". That reading sorts warnings by how big the flood turned out, and any forecast looks low for the biggest outcomes when sorted that way. Sorted by what was forecast, it is not one-way. FloodLead's scorecard has 28 North Cedarville warnings with both a first forecast crest and an observed crest. For them:
+> - the observed crest = 15.2 + 0.89 × the first forecast, with a 95% interval on the slope of 0.35–1.44;
+> - the typical miss is 1.19 ft either way;
+> - when the first forecast was 148 ft or more (10 warnings), the river came in lower 8 times, and about 2 ft higher in 2021 and 2025.
+>
+> The text below is unchanged. Read its "low bias" claims as true of the two disasters, not as a correctable bias. The honest gap is the missing range.
 
 # Closing the Everson-to-barn warning gap
 

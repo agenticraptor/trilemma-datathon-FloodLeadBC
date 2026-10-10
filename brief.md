@@ -10,7 +10,7 @@ Farmers on Sumas Prairie need to know, early enough and in daylight, **whether w
 
 Upstream forecasting is not the weak link any more. US forecasters flagged the December 2025 Nooksack flood about 5 days ahead, and their first North Cedarville flood warning came about 14 hours before the river crossed flood stage. The weak link is **the last mile, from the Everson overflow to the barn**:
 - **No probabilities.** No official product gives a calibrated probability.
-- **Low crest forecasts.** The first official crest forecasts were about 2 ft too low a day ahead, in both floods: 148.9 ft forecast against 150.76 ft observed in 2021, and 148.4 ft against about 150.5 ft in 2025.
+- **Crest forecasts with no range.** In both disasters the first official crest forecast was about 2 ft too low: 148.9 ft forecast against 150.76 ft observed in 2021, and 148.4 ft against 150.44 ft in 2025. The error is not one-way. Since 2007, NWS's first warning forecast moderate flooding or worse 10 times, and the river came in lower than forecast in 8 of them. Across 28 warnings the first crest missed by about 1.2 ft (one standard deviation) either way. What farmers lack is that range, not a fixed correction.
 - **No arrival times.** Nobody forecasts when overflow water reaches the border or a given road. In 2025 the City's 7-hour rule of thumb was off: the water took roughly 10–20 hours.
 - **No night-time phone push.** Abbotsford's own alerts are web, email and door-knocking.
 - **No track record.** Nobody publishes how accurate their forecasts have been.
@@ -44,7 +44,7 @@ Pranay lives in Vancouver, not on a farm. He chose this problem after asking how
 
 | Alternative | What it gives | What is missing |
 |---|---|---|
-| NOAA NWS (Nooksack) | Flood watch days ahead; official forecast at North Cedarville (6-hourly steps, about 7 days) and Ferndale; river flood warnings with a forecast crest; an Everson overflow warning toward the border | Probabilities; first crests about 2 ft low in both big floods; no forecast at the overflow gauges; no phone alerts for river warnings; no published accuracy record |
+| NOAA NWS (Nooksack) | Flood watch days ahead; official forecast at North Cedarville (6-hourly steps, about 7 days) and Ferndale; river flood warnings with a forecast crest; an Everson overflow warning toward the border | Probabilities or a range (first crests about 2 ft low in both big floods, but higher than the outcome in 8 of 10 moderate-or-worse first forecasts); no forecast at the overflow gauges; no phone alerts for river warnings; no published accuracy record |
 | BC River Forecast Centre | Basin advisories, watches and warnings; station forecasts for Sumas at Huntingdon and Chilliwack at Vedder (COFFEE 5-day, CLEVER 10-day) | Deterministic, in daily steps, and COFFEE runs only during rain events; no forecast of the Nooksack overflow reaching Canada (its Dec 2025 warning relayed the US forecast); no push alerts |
 | City of Abbotsford | Evacuation alerts and orders (web, email, door-knocking); a 7-hour overflow-to-Abbotsford rule of thumb | Night-time phone push; arrival-time estimates that held in 2025 |
 | FVRD and Chilliwack (Alertable), BC Emergency Alerts | Opt-in app and SMS alerts; province-wide alerts reserved for imminent threats to life (never used for a Fraser Valley flood) | One channel covering all of Sumas Prairie |
@@ -80,3 +80,11 @@ No one publishes a scored record of their own forecasts. And none of these chann
 - **Quote attribution.** Earlier versions quoted "a Sumas Way farm-market owner" saying they "had little time to prepare". The article does not say Sumas Way, and the wording was a paraphrase (the article has "barely had any time to prepare"). That quote has been removed.
 - **BC station forecasts.** Earlier versions said BC offers only basin-level products. The River Forecast Centre also publishes station forecasts (COFFEE and CLEVER).
 - **The 147.5 ft overflow level.** Earlier versions suggested the overflow begins near 147.5 ft, based on two floods. Across 7 overflows the level ranged from 146.2 to 148.4 ft.
+
+### Correction on Oct 10, 2026
+
+- **Crest bias.** Earlier versions implied that official crest forecasts run low in big floods, and that a model could correct this. That pattern appears when warnings are sorted by how big the flood turned out, and any forecast shows it when sorted that way. Sorted by what was forecast, it disappears.
+  - **The data:** 28 North Cedarville warnings with a first forecast crest and an observed crest, from FloodLead's official-forecast scorecard.
+  - **The fit:** the observed crest = 15.2 + 0.89 × the first forecast. The slope's 95% interval is 0.35–1.44, which includes 1. The typical miss is 1.19 ft either way.
+  - **The big forecasts:** when the first forecast was 148 ft or more (10 warnings), the river came in lower 8 times and about 2 ft higher twice, in 2021 and 2025.
+  - **So** the honest gap is the missing range, not a bias to correct.
